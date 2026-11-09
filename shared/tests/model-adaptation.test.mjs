@@ -35,3 +35,8 @@ test('real usage distinguishes a thinking-only failure from truncated visible ou
  assert.match(generationFeedback({finishReason:'length',completionTokens:32768,reasoningTokens:32768}).message,/raisonnement/i);
  assert.match(generationFeedback({finishReason:'length',completionTokens:32768,reasoningTokens:1000}).message,/incompl/i);
 });
+test('a provider content filter is diagnosed without inventing a budget or policy cause',()=>{
+ const feedback=generationFeedback({finishReason:'content_filter',completionTokens:37113,reasoningTokens:37113,cost:.74624});
+ assert.equal(feedback?.kind,'content-filtered');assert.equal(feedback.nextProfile,undefined);
+ assert.match(feedback.message,/filtrage/i);assert.match(feedback.message,/non communiqué/i);
+});

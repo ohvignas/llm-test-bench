@@ -12,7 +12,7 @@
 
 // settings-sync used to restore LS values from cookies; loaded first to
 // preserve that behaviour while we work through the wider settings migration.
-import { normalizeOpenRouterModel } from './model-capabilities.js';
+import { normalizeOpenRouterModel, generationFeedback } from './model-capabilities.js';
 import { withHttpDetails } from './provider-errors.js';
 import './settings-sync.js';
 import { applyParams, withUsageReporting, createRunStats } from './gen-params.js';
@@ -431,6 +431,9 @@ async function streamChatCompletionRaw({ modelId, messages, tools, appTitle, onC
 
 // Empty, completed answers must not silently trigger another paid attempt.
 function requireCompletionContent(content, stats) {
+  if (stats.finishReason === 'content_filter') {
+    throw Object.assign(new Error(generationFeedback(stats).message), {code:'CONTENT_FILTERED',retryable:false,stats});
+  }
   if (content.trim()) return;
   const exhausted = stats.finishReason === 'length';
   const detail = stats.reasoningTokens != null ? ` (${stats.reasoningTokens} tokens de raisonnement)` : '';

@@ -70,6 +70,7 @@ export function resolveModelSettings({model,profile='code',params={},budget={},r
     supportedEfforts:reasoning?.supported_efforts===null?EFFORTS:reasoning?.supported_efforts||[],params:out,adjustments};
 }
 export function generationFeedback(stats={}) {
+  if(stats.finishReason==='content_filter')return {kind:'content-filtered',message:'Arrêt signalé par le fournisseur : filtrage de contenu (content_filter). Motif précis non communiqué. Aucun nouvel appel automatique.'};
   if(stats.finishReason!=='length')return null;
   const visible=Number.isFinite(stats.completionTokens)&&Number.isFinite(stats.reasoningTokens)?stats.completionTokens-stats.reasoningTokens:null;
   return visible===0?{kind:'reasoning-exhausted',nextProfile:'code',message:'Budget consommé par le raisonnement sans code. Passez au profil Génération de code ou réduisez le périmètre ; aucun appel automatique.'}

@@ -106,3 +106,18 @@ test('a streamed provider error still reports any charge sent with that error',a
  await assert.rejects(raw.streamChat({...args,onStats:value=>{stats=value;}}),/Provider failed/);
  assert.equal(stats?.cost,.04);
 });
+
+test('a content-filtered stream reports the provider stop and preserves the exact billed usage',async()=>{
+ let stats;
+ globalThis.fetch=async()=>new Response('data: {"choices":[{"delta":{},"finish_reason":"content_filter"}]}\n\ndata: {"choices":[],"usage":{"completion_tokens":37113,"completion_tokens_details":{"reasoning_tokens":37113},"cost":0.74624}}\n\ndata: [DONE]\n\n');
+ await assert.rejects(raw.streamChat({...args,onStats:value=>{stats=value;}}),error=>error.code==='CONTENT_FILTERED'&&error.retryable===false&&error.stats.finishReason==='content_filter');
+ assert.equal(stats.cost,.74624);assert.equal(stats.reasoningTokens,37113);
+});
+test('a content filter cannot turn a partial or complete-looking document into a successful generation',async()=>{
+ globalThis.fetch=async()=>new Response('data: {"choices":[{"delta":{"content":"<!doctype html><html><body>partial</body></html>"}}]}\n\ndata: {"choices":[{"delta":{},"finish_reason":"content_filter"}]}\n\ndata: [DONE]\n\n');
+ await assert.rejects(raw.streamChat(args),error=>error.code==='CONTENT_FILTERED'&&error.retryable===false);
+});
+test('a non-streamed provider content filter has the same explicit non-retryable result',async()=>{
+ globalThis.fetch=async()=>Response.json({choices:[{message:{content:''},finish_reason:'content_filter'}],usage:{cost:.74624}});
+ await assert.rejects(raw.streamChat({...args,onChunk:null}),error=>error.code==='CONTENT_FILTERED'&&error.stats.cost===.74624);
+});

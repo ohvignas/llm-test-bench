@@ -72,6 +72,8 @@ Le routage exige la prise en charge des paramètres envoyés (`provider.require_
 
 Le lot affiche le **coût réel communiqué par l’API** pour chaque appel, le cumul par prompt et modèle et le total confirmé. Il se met à jour à la réception de l’usage, généralement à la fin d’un appel. Les appels de génération, d’audit, de correction et les échecs facturés sont inclus. Aucun coût n’est estimé : une valeur absente reste « en attente » ou « non communiquée », jamais zéro. Les coûts sont inclus dans l’export du journal et dans les métadonnées des résultats sauvegardés. Les variantes d’un même prompt peuvent contenir les mêmes identifiants d’appels : dédupliquez-les avant de totaliser plusieurs variantes. Les anciens résultats et appels déjà lancés ne sont pas recalculés.
 
+Un arrêt `content_filter` est affiché comme un **filtrage signalé par le fournisseur**, avec conservation des coûts communiqués, même sans HTML. Le motif précis n’est pas déduit lorsqu’il n’est pas fourni. Une réponse interrompue par ce filtre reste en échec même si du texte a déjà été reçu, et ne déclenche aucune relance automatique.
+
 Les nouvelles tentatives sont désactivées par défaut. Vous pouvez activer des tentatives supplémentaires après une erreur de connexion, mais une réponse vide, un budget épuisé ou un document HTML incomplet ne déclenche jamais une relance automatique. Examinez l’erreur et les mesures avant de relancer manuellement. Les tokens de raisonnement peuvent être facturés même si aucun site n’est produit ([documentation OpenRouter](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens)).
 
 ## Bibliothèque de prompts en français
