@@ -4,6 +4,8 @@
 
 Give several AI models the same prompt, run generations in parallel, preview their websites side by side, and keep results and available timing/token/cost metrics. Bring your own OpenRouter API key.
 
+During a batch, each row shows its model's live phase, including reasoning before HTML arrives. Select a row to switch the single preview and HTML stream; other models continue in parallel. After saving, use **Comparer** to view two to four generations side by side.
+
 This MIT-licensed fork of [Techdread/llm-test-bench](https://github.com/Techdread/llm-test-bench) adds local sign-in, an encrypted server-side OpenRouter vault, persistent Docker storage and a French main interface. Everyone can install their own copy with their own credentials and key. Each installation has **one administrator account**; this is not an isolated multi-user hosted service.
 
 ## Requirements

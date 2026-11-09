@@ -423,7 +423,8 @@ async function streamChatCompletionRaw({ modelId, messages, tools, appTitle, onC
 
 // ── Generic streaming chat completion ──
 
-async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onChunk, params, onStats, telemetry }) {
+async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onChunk, params, onStats, telemetry, signal }) {
+  signal?.throwIfAborted();
   const apiKey = await getApiKeyForRequest();
   if (!apiKey) throw new Error('OpenRouter API key not set');
   if (!userPrompt) throw new Error('Prompt is empty');
@@ -442,6 +443,7 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
   telemetry?.mark('dispatched');
   const res = await providerFetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
+    signal,
     headers: {
       'Content-Type': 'application/json',
       ...(!SERVER_VAULT ? { 'Authorization': `Bearer ${apiKey}` } : {}),
@@ -463,44 +465,49 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
     let full = '';
     let buffer = '';
 
+    function consume(line) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data:')) return false;
+      const data = trimmed.slice(5).trimStart();
+      if (data === '[DONE]') return true;
+      let parsed;
+      try { parsed = JSON.parse(data); } catch { return false; }
+      // A provider can report an error after HTTP 200 and after partial output.
+      // Surface it instead of leaving the batch looking successful or idle.
+      const error = parsed.error || parsed.choices?.[0]?.error;
+      if (error) throw new Error(typeof error === 'string' ? error : error.message || 'Le fournisseur a interrompu la génération.');
+      const choice = parsed.choices?.[0];
+      if (choice?.delta?.reasoning) stats.markReasoning();
+      if (choice?.finish_reason) stats.setFinishReason(choice.finish_reason);
+      if (parsed.usage) stats.setUsage(parsed.usage);
+      const delta = choice?.delta?.content;
+      if (delta) {
+        stats.markFirstToken();
+        full += delta;
+        onChunk(full);
+      }
+      return false;
+    }
+
     try {
-      while (true) {
+      readLoop: while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          buffer += decoder.decode();
+          if (buffer.trim()) consume(buffer);
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
         for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith('data: ')) continue;
-          const data = trimmed.slice(6);
-          if (data === '[DONE]') break;
-          let delta, parsed;
-          try {
-            parsed = JSON.parse(data);
-            delta = parsed.choices?.[0]?.delta?.content;
-          } catch (e) { continue; /* skip malformed chunks */ }
-
-          // OpenRouter streams thinking on `delta.reasoning`; keep it out of the
-          // answer text and just record that the model thought.
-          if (parsed.choices?.[0]?.delta?.reasoning) stats.markReasoning();
-          if (parsed.choices?.[0]?.finish_reason) stats.setFinishReason(parsed.choices[0].finish_reason);
-          if (parsed.usage) stats.setUsage(parsed.usage);
-
-          if (delta) {
-            stats.markFirstToken();
-            full += delta;
-            // Outside the parse guard: a consumer throwing from onChunk
-            // (e.g. a runaway-output cap) must abort the stream, not be
-            // swallowed as a malformed chunk.
-            onChunk(full);
-          }
+          if (consume(line)) break readLoop;
         }
       }
     } finally {
-      try { reader.cancel(); } catch { /* already closed */ }
+      try { await reader.cancel(); } catch { /* already closed */ }
     }
     onStats?.(stats.finish());
     return full;

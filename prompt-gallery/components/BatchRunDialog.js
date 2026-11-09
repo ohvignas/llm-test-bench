@@ -5,6 +5,8 @@ import { ExecutorModelSelector } from '../../shared/components/ExecutorModelSele
 import { CellEditor } from '../../shared/components/CellEditor.js';
 import { HtmlLightbox } from './BatchReview.js';
 import { runBatch } from '../services/batchRunner.js';
+import { getInFlight, subscribeInFlight } from '../../shared/services/generation-telemetry.js';
+import { batchLiveStatus, batchItemRunning } from '../services/batchLiveProgress.js';
 import { PROMPT_SETS, promptSetOf } from '../services/library.js';
 import {
   addBatchModel,
@@ -80,6 +82,8 @@ export function BatchRunDialog({
 }) {
   // phase: 'config' | 'running' | 'done'
   const [phase, setPhase] = useState('config');
+  const [liveCalls, setLiveCalls] = useState(getInFlight);
+  useEffect(() => subscribeInFlight(setLiveCalls), []);
 
   // Selection — start with everything ticked so "just press Go" runs all.
   const [selectedIds, setSelectedIds] = useState(() => new Set(prompts.map(p => p.id)));
@@ -340,7 +344,7 @@ export function BatchRunDialog({
             if (event.type === 'done') return;
             handleEvent(typeof event.index === 'number' ? { ...event, index: event.index + lane.offset } : event);
           },
-          shouldArrêt : () => stopRef.current,
+          shouldStop: () => stopRef.current,
           shouldPause: () => pauseRequestedRef.current,
           waitIfPaused: waitAtPauseBoundary,
         });
@@ -357,7 +361,7 @@ export function BatchRunDialog({
     };
 
     try {
-      const summaries = await runLanes({ lanes: plan.lanes, mode: laneMode, runOne, shouldArrêt : () => stopRef.current });
+      const summaries = await runLanes({ lanes: plan.lanes, mode: laneMode, runOne, shouldStop: () => stopRef.current });
       setSummary(combineSummaries(summaries.filter(Boolean)));
     } catch (e) {
       addToast('Erreur d’exécution par lot : ' + e.message, 'error');
@@ -401,14 +405,15 @@ export function BatchRunDialog({
 
   const doneCount = items.filter(it => ['saved', 'skipped', 'error', 'stopped', 'verified', 'warned', 'no_progress'].includes(it.status)).length;
   const progressPct = runList.length ? Math.round((doneCount / runList.length) * 100) : 0;
-  const activeStatus = items[activeIndex]?.status || '';
+  const activeStatus = items[inspectedIndex >= 0 ? inspectedIndex : activeIndex]?.status || '';
   const isStreaming = ['generating', 'healing', 'repairing'].includes(activeStatus);
   const displayedHtml = inspectedIndex >= 0 ? (outputs[inspectedIndex] || '') : '';
   const displayedCharacters = displayedHtml.length;
   const reportedTokens = inspectedIndex >= 0 ? completionTokenCount(outputStats[inspectedIndex]) : null;
   const displayedTokens = reportedTokens ?? estimatedTokenCount(displayedHtml);
-  const displayedTokenLabel = `${displayedTokens.toLocaleString()} token${displayedTokens === 1 ? '' : 's'} généré${displayedTokens === 1 ? '' : 's'}`;
-  const viewingActive = inspectedIndex >= 0 && inspectedIndex === activeIndex;
+  const displayedTokenLabel = reportedTokens == null && !displayedCharacters ? 'tokens non communiqués'
+    : `${displayedTokens.toLocaleString()} token${displayedTokens === 1 ? '' : 's'}${reportedTokens == null ? ' estimés' : ''}`;
+  const viewingActive = inspectedIndex >= 0 && batchItemRunning(items[inspectedIndex]);
   const displayedTokenRate = tokensPerSecond(
     inspectedIndex >= 0 ? outputStats[inspectedIndex] : null,
     displayedTokens,
@@ -419,9 +424,11 @@ export function BatchRunDialog({
   const runIsMulti = useMemo(() => new Set(runList.map(p => p.laneIndex ?? 0)).size > 1, [runList]);
   const rowTitle = (p) => (p ? (runIsMulti && p.modelLabel ? `${p.title} · ${p.modelLabel}` : p.title) : '');
   const inspectedTitle = inspectedIndex >= 0 ? rowTitle(runList[inspectedIndex]) : '';
+  const liveStatus = inspectedIndex >= 0
+    ? batchLiveStatus(liveCalls, runModels[runList[inspectedIndex]?.laneIndex ?? 0], rateClock) : null;
   const fullscreenHtml = fullscreenIndex >= 0 ? (outputs[fullscreenIndex] || '') : '';
   const fullscreenTitle = fullscreenIndex >= 0 ? (rowTitle(runList[fullscreenIndex]) || 'Generation') : '';
-  const fullscreenIsActive = phase === 'running' && fullscreenIndex === activeIndex;
+  const fullscreenIsActive = phase === 'running' && batchItemRunning(items[fullscreenIndex]);
   const fullscreenSubtitle = fullscreenIsActive
     ? 'Génération en direct · le lot continue en arrière-plan'
     : phase === 'running'
@@ -429,16 +436,16 @@ export function BatchRunDialog({
       : 'Génération du lot enregistrée';
 
   useEffect(() => {
-    if (phase !== 'running' || !viewingActive || !isStreaming || !displayedCharacters) return undefined;
+    if (phase !== 'running') return undefined;
     const timer = window.setInterval(() => setRateClock(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [phase, viewingActive, isStreaming, displayedCharacters]);
+  }, [phase]);
 
   const inspectOutput = useCallback((index) => {
-    if (index < 0 || (!outputs[index] && index !== activeIndexRef.current)) return;
+    if (index < 0 || (!outputs[index] && !batchItemRunning(items[index]))) return;
     followActiveRef.current = index === activeIndexRef.current;
     setInspectedIndex(index);
-  }, [outputs]);
+  }, [outputs, items]);
 
   const returnToLive = useCallback(() => {
     if (activeIndexRef.current < 0) return;
@@ -701,11 +708,14 @@ export function BatchRunDialog({
                 <i class=${`fa-solid ${isStreaming ? 'fa-spinner fa-spin' : displayedCharacters ? 'fa-code' : 'fa-hourglass-half'}`}></i>
                 ${displayedCharacters
                   ? `${displayedCharacters.toLocaleString()} caractère${displayedCharacters === 1 ? '' : 's'} reçus · ${displayedTokenLabel} · ${displayedTokenRateLabel}`
-                  : 'En attente du premier fragment de code…'}
+                  : liveStatus ? `${liveStatus.label} · ${liveStatus.elapsed}${liveStatus.outputChars ? ` · ${liveStatus.outputChars.toLocaleString()} caractères de réponse reçus` : ''}`
+                    : 'En attente du premier fragment de code…'}
               `}
           </div>
         </div>
       </div>
+
+      ${runIsMulti && html`<div class="batch-note">Les modèles tournent en parallèle. Sélectionnez une ligne pour changer l’aperçu et le flux HTML affichés.</div>`}
 
       ${pauseState !== 'running' && html`
         <div class=${`batch-pause-state ${pauseState}`} role="status" aria-live="polite">
@@ -724,10 +734,12 @@ export function BatchRunDialog({
           ${runList.map((p, idx) => {
             const it = items[idx] || { status: 'queued' };
             const m = STATUS_META[it.status] || STATUS_META.queued;
-            const isActive = idx === activeIndex;
+            const isActive = batchItemRunning(it);
             const isInspected = idx === inspectedIndex;
             const canInspect = showLiveOutput && (!!outputs[idx] || isActive);
             const canOpenFullscreen = isActive || !!outputs[idx] || !!it.savedIds?.length;
+            const rowLive = it.status === 'generating'
+              ? batchLiveStatus(liveCalls, runModels[p.laneIndex ?? 0], rateClock) : null;
             return html`
               <div
                 class=${`batch-run-item ${m.cls} ${isActive ? 'is-active' : ''} ${isInspected ? 'is-inspected' : ''} ${canInspect ? 'is-inspectable' : ''}`}
@@ -748,7 +760,8 @@ export function BatchRunDialog({
                 <span class="batch-run-title" title=${rowTitle(p)}>${p.title}${runIsMulti && p.modelLabel ? html`<span class="batch-run-model">${p.modelLabel}</span>` : null}</span>
                 <span class="batch-run-status">
                   ${it.status === 'healing' && it.healAttempt ? `correction ${it.healAttempt}`
-                    : it.status === 'repairing' && it.repairRound ? `Réparation · cycle ${it.repairRound}` : m.label}
+                    : it.status === 'repairing' && it.repairRound ? `Réparation · cycle ${it.repairRound}`
+                    : rowLive ? `${rowLive.label} · ${rowLive.elapsed}` : m.label}
                   ${it.healed && it.status === 'saved' ? html` <span class="batch-healed-chip">corrigé</span>` : null}
                   ${canOpenFullscreen ? html`
                     <button class="batch-fullscreen-button" title="Ouvrir la génération interactive en plein écran"
@@ -801,7 +814,7 @@ export function BatchRunDialog({
         <section class="batch-code-stream" aria-label="Sortie HTML en direct">
           <div class="batch-code-stream-head">
             <span><i class="fa-solid fa-code"></i> ${viewingActive && pauseState === 'running' ? 'Flux HTML en direct' : 'HTML généré'}${inspectedTitle ? ` · ${inspectedTitle}` : ''}</span>
-            <span>${displayedCharacters.toLocaleString()} car. · ${displayedTokens.toLocaleString()} tokens · ${displayedTokenRateLabel}</span>
+            <span>${displayedCharacters.toLocaleString()} car. · ${displayedTokenLabel} · ${displayedTokenRateLabel}</span>
           </div>
           <${CellEditor}
             className="batch-stream-editor"

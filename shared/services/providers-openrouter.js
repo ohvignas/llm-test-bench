@@ -67,7 +67,7 @@ export async function fetchModels(provider, { freeOnly = false } = {}) {
 /**
  * Stream a chat completion through OpenRouter.
  */
-export async function streamChat({ provider, modelId, systemPrompt, userPrompt, onChunk, appTitle, params, onStats, telemetry }) {
+export async function streamChat({ provider, modelId, systemPrompt, userPrompt, onChunk, appTitle, params, onStats, telemetry, signal }) {
   return openRouterStreamChat({
     systemPrompt,
     userPrompt,
@@ -77,6 +77,7 @@ export async function streamChat({ provider, modelId, systemPrompt, userPrompt, 
     params,
     onStats,
     telemetry,
+    signal,
   });
 }
 

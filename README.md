@@ -49,10 +49,12 @@ La clé est chiffrée côté serveur et n'est jamais réaffichée par une route 
 
 1. Ouvrir **Lots** et sélectionner le prompt à tester.
 2. Sélectionner chaque modèle et l'ajouter à la liste des modèles à exécuter.
-3. Choisir **Tous en même temps**, puis lancer.
+3. Choisir **Simultanément**, puis lancer.
 4. Retrouver les résultats sauvegardés dans **Exécutions**, **Galerie** et **Comparer**.
 
 Les métriques dépendent des informations transmises par le modèle ou le fournisseur. Une donnée absente ne doit pas être interprétée comme un coût ou une durée nuls.
+
+Pendant le lot, chaque ligne indique la phase de son modèle, notamment le raisonnement avant l'arrivée du HTML. Sélectionner une ligne change l'aperçu et le flux de code affichés ; les autres modèles continuent en parallèle. Pour voir les rendus côte à côte, ouvrir **Comparer** après leur enregistrement et sélectionner deux à quatre générations.
 
 ## Changer le port si nécessaire
 
