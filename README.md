@@ -66,7 +66,7 @@ Les nouvelles tentatives sont désactivées par défaut. Vous pouvez activer des
 
 ## Bibliothèque de prompts en français
 
-La bibliothèque propose **164 prompts** : 92 de base, 40 avancés, 8 simulations complexes et **24 nouveaux tests « Sites web »**. Ouvrir **Prompts → Sites web** pour les parcourir ; dans **Lots**, choisir cette même série pour les comparer sur plusieurs modèles.
+La bibliothèque propose **165 prompts** : 92 de base, 40 avancés, 9 simulations complexes et **24 nouveaux tests « Sites web »**. Ouvrir **Prompts → Sites web** pour les parcourir ; dans **Lots**, choisir cette même série pour les comparer sur plusieurs modèles.
 
 Les 140 fiches d’origine ont un titre, une description et un résumé des points de contrôle en français. Développer une fiche affiche la consigne originale exacte : son texte et ses notes d’évaluation restent conservés pour comparer les résultats historiques. Les noms de dossiers et les identifiants d’origine ne changent pas. Les descriptions personnelles peuvent être modifiées dans le formulaire d’édition.
 
@@ -154,3 +154,9 @@ Cette configuration n'est pas un service public avec comptes et données sépar�
 [Contribuer](CONTRIBUTING.md) · [Documentation anglaise](README.en.md) · [Licence MIT](LICENSE) · [Licences tierces](THIRD_PARTY_NOTICES.md) · [Documentation historique amont](README.upstream.md)
 
 Projet original : **Techdread / Peter Edwards**. Les mentions originales et les licences des bibliothèques sont conservées. Ce fork ajoute l'installation Docker, l'authentification locale, le coffre serveur et la traduction française de l'interface principale.
+
+## Défi GTA VI en monde ouvert
+
+La série **Simulations complexes** propose **GTA VI — monde ouvert réaliste, défi extrême** : un cahier des charges original en français de 24 exigences, couvrant neuf secteurs, quatre classes de véhicules, huit missions, police, trois intérieurs, économie, météo, sauvegarde et diagnostics. Les variantes Base et Avancés restent disponibles avec leurs consignes d’origine.
+
+Ce défi vise un prototype navigateur ambitieux en un document HTML ; il ne promet ni le contenu complet ni la qualité graphique du jeu commercial de Rockstar. Les points de contrôle exigent une validation du gameplay et du rendu. Ajouter le prompt ne lance aucune génération et ne modifie pas les budgets de tokens ; les appels et éventuelles corrections restent soumis aux réglages du lot.

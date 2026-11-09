@@ -10,7 +10,7 @@ const lib=await import('../../prompt-gallery/services/library.js');
 
 test('all shipped prompts have French display information and 24 website tasks load separately',async()=>{
   const seeds=await lib.loadSeeds();
-  assert.equal(seeds.length,164);
+  assert.equal(seeds.length,165);
   const web=seeds.filter(p=>lib.promptSetOf(p)==='web');
   assert.equal(web.length,24);
   assert.equal(new Set(seeds.map(p=>p.id)).size,seeds.length);

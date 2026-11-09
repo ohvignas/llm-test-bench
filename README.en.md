@@ -93,7 +93,7 @@ Original project by Techdread/Peter Edwards. Original notices and vendored-libra
 
 ## French prompt library
 
-The library now contains 164 prompts: 92 core, 40 advanced, 8 flagship simulations and 24 original French website briefs in **Prompts → Sites web** (also available in **Lots**). The original 140 entries have French titles, descriptions and summaries of evaluation points. Expanding a card reveals the exact original model instruction. Original instructions, evaluation notes, identifiers and generation folders are preserved for historical comparisons. Personal descriptions can be edited.
+The library now contains 165 prompts: 92 core, 40 advanced, 9 flagship simulations and 24 original French website briefs in **Prompts → Sites web** (also available in **Lots**). The original 140 entries have French titles, descriptions and summaries of evaluation points. Expanding a card reveals the exact original model instruction. Original instructions, evaluation notes, identifiers and generation folders are preserved for historical comparisons. Personal descriptions can be edited.
 
 The new website set covers storefronts, portfolios, reservations, dashboards, forms, CSV handling and accessible interactions. Every brief requests a standalone HTML document with fictional data and no external network calls. Checkpoints and sample numeric results support manual verification; they are not a new automated scoring suite.
 
@@ -106,3 +106,5 @@ The batch dialog opens its **Journal de génération** view by default. It shows
 Last-signal timing distinguishes current traffic from silence. After 60 seconds without a signal the log reports an unconfirmed wait, without declaring a failure or retrying. It never copies full prompts, response bodies, private reasoning or request headers; error messages redact common credential formats. Up to 400 local entries remain in the dialog after completion and can be exported as JSON. The journal cannot reconstruct activity from an older, already-running browser page.
 
 Batch prompt selection includes a search field for French titles, original titles, descriptions and tags. Empty results offer links to matching prompt sets. Only visible, checked results are launched; Select all/None apply to that filtered list. GTA remains available in Core and Advanced as **GTA VI — jeu urbain en monde ouvert**; its original instruction and generation folder are unchanged.
+
+The Flagship set also includes **GTA VI — monde ouvert réaliste, défi extrême**, an original French brief with 24 requirements for a demanding standalone browser prototype: nine districts, four vehicle classes, eight missions, police, three interiors, economy, weather, saves and measured diagnostics. It does not promise the complete commercial game or AAA visual fidelity. Core and Advanced prompts remain unchanged. Adding this task makes no model calls and does not raise generation budgets.
