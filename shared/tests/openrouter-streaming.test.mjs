@@ -91,3 +91,18 @@ test('reasoning-details and streamed traffic update live diagnostics without exp
   assert.deepEqual(chunks,['<html>ok</html>']);
   assert.doesNotMatch(JSON.stringify({activity,marks,chunks}),/PRIVATE INTERNAL CONTENT/);
 });
+
+test('final usage after finish_reason reaches the caller exactly, even for a paid empty answer',async()=>{
+ let stats;
+ globalThis.fetch=async()=>new Response('data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\ndata: {"choices":[],"usage":{"completion_tokens":32768,"completion_tokens_details":{"reasoning_tokens":32768},"cost":0.674272}}\n\ndata: [DONE]\n\n');
+ await assert.rejects(raw.streamChat({...args,onStats:value=>{stats=value;}}),error=>error.code==='OUTPUT_TOKEN_LIMIT');
+ assert.equal(stats.cost,.674272);
+ assert.equal(stats.reasoningTokens,32768);
+});
+
+test('a streamed provider error still reports any charge sent with that error',async()=>{
+ let stats;
+ globalThis.fetch=async()=>new Response('data: {"error":{"message":"Provider failed"},"usage":{"cost":0.04}}\n\n');
+ await assert.rejects(raw.streamChat({...args,onStats:value=>{stats=value;}}),/Provider failed/);
+ assert.equal(stats?.cost,.04);
+});

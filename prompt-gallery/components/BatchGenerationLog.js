@@ -3,10 +3,10 @@ import {batchLiveStatus} from '../services/batchLiveProgress.js';
 import {generationActivity, logModelKey} from '../services/batchGenerationLog.js';
 
 function clock(at) { return new Date(at).toLocaleTimeString('fr-FR', {hour12:false}); }
-export function BatchGenerationLog({entries, models, calls, startedAt, now, filter, onFilterChange, done = false}) {
+export function BatchGenerationLog({entries, models, calls, startedAt, now, filter, onFilterChange, done = false, costCalls = []}) {
   const visible = filter === 'all' ? entries : entries.filter(e => e.modelKey === filter);
   function download() {
-    const blob = new Blob([JSON.stringify({version:1,exportedAt:new Date().toISOString(),entries:visible},null,2)],{type:'application/json'});
+    const blob = new Blob([JSON.stringify({version:1,exportedAt:new Date().toISOString(),currency:'USD',costCalls:costCalls.filter(c=>filter==='all'||c.modelKey===filter),entries:visible},null,2)],{type:'application/json'});
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url; link.download = 'journal-generation.json'; link.click();

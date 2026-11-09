@@ -3035,3 +3035,17 @@ button.create-run-label:hover { text-decoration: underline; }
 .batch-prompt-search-input input { min-width:0; flex:1; }
 .batch-search-summary { font-size:12px; color:var(--text-secondary); }
 .batch-empty .btn { margin:8px 6px 0 0; }
+
+/* Provider-reported charges stay visible independently of the preview. */
+.batch-costs {border:1px solid var(--border-color,#444);border-radius:8px;padding:10px 14px;margin:12px 0;}
+.batch-cost-total {display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.batch-costs p {font-size:12px;color:var(--text-secondary,#aaa);margin:6px 0;}
+.batch-costs details {font-size:13px;}
+.batch-costs summary {cursor:pointer;}
+.batch-costs ul {list-style:none;padding:0;max-height:180px;overflow:auto;}
+.batch-costs li {display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid #444;}
+.batch-run-cost {font-size:12px;white-space:nowrap;margin:0 8px;}
+.batch-costs { flex-shrink:0; }
+.batch-done > .batch-summary { flex-shrink:0; }
+.batch-done > .batch-run-list-done { flex:0 0 auto; }
+.batch-done > .batch-generation-log { flex:0 0 auto; height:380px; }

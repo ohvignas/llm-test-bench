@@ -12,6 +12,8 @@
 //   'log'     — a human-readable note: { index, message }
 //   'done'    — the whole run finished: { summary }
 
+import { withPromptCosts } from './batchCosts.js';
+
 import { runVerifiedGeneration } from './verifiedGeneration.js';
 
 function sleep(ms) {
@@ -50,7 +52,7 @@ function hasRuntimeErrors(runStatus) {
  * @param {Function} cfg.waitIfPaused async safe-boundary gate; resolves on resume
  * @returns {Promise<object>} summary
  */
-export async function runBatch({ prompts, model, options, deps, onEvent, shouldStop, shouldPause, waitIfPaused }) {
+export async function runBatch({ prompts, model, options, deps: providedDeps, onEvent, shouldStop, shouldPause, waitIfPaused }) {
   const opts = {
     mode: null,
     heal: false,
@@ -92,6 +94,7 @@ export async function runBatch({ prompts, model, options, deps, onEvent, shouldS
   for (let i = 0; i < prompts.length; i++) {
     await pauseGate({ phase: 'before-prompt', index: i, prompt: prompts[i] });
     if (stop()) { summary.stopped = true; emit({ type: 'item', index: i, status: 'stopped' }); break; }
+    const deps = withPromptCosts(providedDeps, event => emit({...event,index:i}));
     const p = prompts[i];
     emit({ type: 'item', index: i, status: 'start' });
 

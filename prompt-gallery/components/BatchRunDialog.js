@@ -3,10 +3,12 @@ import { Fragment } from 'preact';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'preact/hooks';
 import { ExecutorModelSelector } from '../../shared/components/ExecutorModelSelector.js';
 import { CellEditor } from '../../shared/components/CellEditor.js';
+import { BatchCosts } from './BatchCosts.js';
+import { costTotals, formatUsd } from '../services/batchCosts.js';
 import { BatchGenerationLog } from './BatchGenerationLog.js';
-import { createBatchJournal, logModelKey } from '../services/batchGenerationLog.js';
+import { createBatchJournal, logModelKey, safeLogText } from '../services/batchGenerationLog.js';
 import { HtmlLightbox } from './BatchReview.js';
-import { DEFAULT_HTML_BUDGET, htmlGenerationParams } from '../services/generationBudget.js';
+import { DEFAULT_HTML_BUDGET, htmlGenerationParams, usesAdaptiveReasoning } from '../services/generationBudget.js';
 import { batchPromptChoices } from '../services/batchPromptSearch.js';
 import { runBatch } from '../services/batchRunner.js';
 import { getInFlight, subscribeInFlight } from '../../shared/services/generation-telemetry.js';
@@ -90,6 +92,7 @@ export function BatchRunDialog({
   const [logFilter, setLogFilter] = useState('all');
   const [logEntries, setLogEntries] = useState([]);
   const [logModels, setLogModels] = useState([]);
+  const [costCalls, setCostCalls] = useState([]);
   const journalRef = useRef(null);
   const journalStartedAtRef = useRef(0);
   const journalRunListRef = useRef([]);
@@ -129,6 +132,7 @@ export function BatchRunDialog({
   const [apiRetries, setApiRetries] = useState(0);
   const [totalTokens, setTotalTokens] = useState(DEFAULT_HTML_BUDGET.totalTokens);
   const [reasoningTokens, setReasoningTokens] = useState(DEFAULT_HTML_BUDGET.reasoningTokens);
+  const [reasoningEffort, setReasoningEffort] = useState(DEFAULT_HTML_BUDGET.reasoningEffort);
   const [delaySec, setDelaySec] = useState(0);
   const [showLiveOutput, setShowLiveOutput] = useState(true);
   // Several models in one launch: empty means "just the model picked above".
@@ -229,6 +233,11 @@ export function BatchRunDialog({
   const handleEvent = useCallback((event) => {
     journalRef.current?.event(event, {model:event.model, index:event.index, title:journalRunListRef.current[event.index]?.title});
     syncJournal();
+    if (event.type === 'cost') {
+      const call = {...event.call,index:event.index,modelKey:logModelKey(event.model),modelLabel:safeLogText(event.model?.label || event.model?.modelId || ''),promptTitle:safeLogText(journalRunListRef.current[event.index]?.title || '')};
+      setCostCalls(prev => [...prev.filter(c => c.id !== call.id),call]);
+      return;
+    }
     if (event.type === 'item') {
       if (event.status === 'start') {
         activeIndexRef.current = event.index;
@@ -329,9 +338,9 @@ export function BatchRunDialog({
     const list = selectedPrompts;
     if (list.length === 0) { addToast('Sélectionnez au moins un prompt', 'error'); return; }
 
-    const generationBudget = { totalTokens, reasoningTokens };
+    const generationBudget = { totalTokens, reasoningTokens, reasoningEffort };
     try {
-      htmlGenerationParams({ providerType: 'openrouter', modelId: 'anthropic/validation', budget: generationBudget });
+      for (const selected of runModels) htmlGenerationParams({ providerType: 'openrouter', modelId: selected.modelId, budget: generationBudget });
     } catch (error) { addToast(error.message, 'error'); return; }
     const plan = planBatchLanes({ prompts: list, models: runModels.map(m => ({ ...m, generationBudget })), runId });
     const startedAt = Date.now();
@@ -341,6 +350,7 @@ export function BatchRunDialog({
     journalRef.current = createBatchJournal({models:runModels,startedAt});
     setLogModels(runModels);
     setLogEntries([]);
+    setCostCalls([]);
     setLogFilter('all');
     setOutputView('log');
     setRunList(plan.runList);
@@ -418,7 +428,7 @@ export function BatchRunDialog({
       setPhase('done');
     }
   }, [canRun, hasDirectory, selectedPrompts, runModels, laneMode, mode, healAttempts, maxRepairRounds, saveBothOnHeal,
-      skipExisting, delaySec, apiRetries, totalTokens, reasoningTokens, showLiveOutput, runId, deps, handleEvent, waitAtPauseBoundary, addToast]);
+      skipExisting, delaySec, apiRetries, totalTokens, reasoningTokens, reasoningEffort, showLiveOutput, runId, deps, handleEvent, waitAtPauseBoundary, addToast]);
 
   const pause = useCallback(() => {
     if (pauseRequestedRef.current || stopRef.current) return;
@@ -745,12 +755,18 @@ export function BatchRunDialog({
             <input class="form-input" style=${{ width: '110px' }} type="number" min="2048" max="200000" step="1"
               value=${totalTokens} onChange=${e => setTotalTokens(Number(e.target.value))} />
           </label>
-          <label class="batch-opt">
-            <span>Dont raisonnement Claude (tokens)</span>
+          ${runModels.some(m => /^~?anthropic\//i.test(m.modelId || '') && !usesAdaptiveReasoning(m.modelId)) && html`<label class="batch-opt">
+            <span>Raisonnement des anciens Claude (tokens)</span>
             <input class="form-input" style=${{ width: '110px' }} type="number" min="1024" max=${totalTokens - 1} step="1"
               value=${reasoningTokens} onChange=${e => setReasoningTokens(Number(e.target.value))} />
-          </label>
-          <div class="batch-opt-hint">Le total comprend le raisonnement et le code généré. Limites par appel, appliquées uniquement à OpenRouter ; le raisonnement séparé concerne Claude. Les modèles peuvent appliquer leurs propres contraintes. Ce n’est pas un plafond de coût du lot.</div>
+          </label>`}
+          ${runModels.some(m => usesAdaptiveReasoning(m.modelId)) && html`<label class="batch-opt">
+            <span>Effort des Claude adaptatifs</span>
+            <select class="form-input" value=${reasoningEffort} onChange=${e=>setReasoningEffort(e.target.value)}>
+              <option value="low">Faible — par défaut</option><option value="medium">Moyen</option><option value="high">Élevé</option>
+            </select>
+          </label>`}
+          <div class="batch-opt-hint">Le total comprend le raisonnement et le code. Les Claude récents utilisent un effort adaptatif : leur limite séparée de tokens de raisonnement est ignorée et ne leur est pas envoyée. L’effort faible réduit le raisonnement sans garantir un résultat. Ces réglages OpenRouter ne constituent pas un plafond monétaire.</div>
           <label class="batch-opt">
             <span>Délai entre les prompts</span>
             <input class="form-input batch-num" type="number" min="0" max="120" step="1"
@@ -769,9 +785,16 @@ export function BatchRunDialog({
     </div>
   `;
 
+  const generationCostLabel = index => {
+    const total = costTotals(costCalls.filter(call => call.index === index));
+    if (!total.calls.length && items[index]?.status === 'skipped') return 'Aucun appel';
+    if (total.confirmedUsd == null) return total.calls.some(call=>call.status==='pending') || phase==='running' && !total.calls.length ? 'Coût en attente' : 'Coût non communiqué';
+    return `${formatUsd(total.confirmedUsd)}${total.missingCosts ? ` + ${total.missingCosts} coût(s) manquant(s)` : ''}`;
+  };
+
   const renderJournal = (done = false) => html`<${BatchGenerationLog}
     entries=${logEntries} models=${logModels} calls=${liveCalls} startedAt=${journalStartedAtRef.current}
-    now=${rateClock} filter=${logFilter} onFilterChange=${setLogFilter} done=${done} />`;
+    now=${rateClock} filter=${logFilter} onFilterChange=${setLogFilter} done=${done} costCalls=${costCalls} />`;
 
   const renderRunning = () => html`
     <div class="modal-body batch-running">
@@ -797,6 +820,7 @@ export function BatchRunDialog({
         </div>
       </div>
 
+      <${BatchCosts} calls=${costCalls} />
       ${runIsMulti && html`<div class="batch-note">Les modèles tournent en parallèle. Sélectionnez une ligne pour changer l’aperçu et le flux HTML affichés.</div>`}
 
       ${pauseState !== 'running' && html`
@@ -844,6 +868,7 @@ export function BatchRunDialog({
               >
                 <i class=${`batch-run-icon fa ${m.icon} ${m.cls === 'active' ? 'fa-fade' : ''}`}></i>
                 <span class="batch-run-title" title=${rowTitle(p)}>${p.title}${runIsMulti && p.modelLabel ? html`<span class="batch-run-model">${p.modelLabel}</span>` : null}</span>
+                <span class="batch-run-cost">${generationCostLabel(idx)}</span>
                 <span class="batch-run-status">
                   ${it.status === 'healing' && it.healAttempt ? `correction ${it.healAttempt}`
                     : it.status === 'repairing' && it.repairRound ? `Réparation · cycle ${it.repairRound}`
@@ -957,6 +982,7 @@ export function BatchRunDialog({
         ${summary?.stopped ? html`<div class="batch-note"><i class="fa-solid fa-hand"></i> Exécution interrompue.</div>` : null}
       </div>
 
+      <${BatchCosts} calls=${costCalls} done=${true} />
       <div class="batch-run-list batch-run-list-done">
         ${runList.map((p, idx) => {
           const it = items[idx] || { status: 'queued' };
@@ -965,7 +991,8 @@ export function BatchRunDialog({
             <div class=${`batch-run-item ${m.cls}`} key=${p.runKey || p.id}>
               <i class=${`batch-run-icon fa ${m.icon}`}></i>
               <span class="batch-run-title" title=${rowTitle(p)}>${p.title}${runIsMulti && p.modelLabel ? html`<span class="batch-run-model">${p.modelLabel}</span>` : null}</span>
-              <span class="batch-run-status">
+              <span class="batch-run-cost">${generationCostLabel(idx)}</span>
+                <span class="batch-run-status">
                 ${m.label}${it.healed ? html` <span class="batch-healed-chip">corrigé</span>` : null}
                 ${it.repairRound ? html` <span class="batch-healed-chip">${it.repairRound} correction${it.repairRound === 1 ? '' : 's'}</span>` : null}
                 ${it.status === 'error' && it.message ? html`<span class="batch-run-err" title=${it.message}> — ${it.message}</span>` : null}

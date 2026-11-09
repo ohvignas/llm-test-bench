@@ -486,6 +486,7 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
       try { parsed = JSON.parse(data); } catch { return false; }
       // A provider can report an error after HTTP 200 and after partial output.
       // Surface it instead of leaving the batch looking successful or idle.
+      if (parsed.usage) stats.setUsage(parsed.usage);
       const error = parsed.error || parsed.choices?.[0]?.error;
       if (error) throw new Error(typeof error === 'string' ? error : error.message || 'Le fournisseur a interrompu la génération.');
       const choice = parsed.choices?.[0];
@@ -494,7 +495,6 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
         stats.markReasoning();
       }
       if (choice?.finish_reason) stats.setFinishReason(choice.finish_reason);
-      if (parsed.usage) stats.setUsage(parsed.usage);
       const delta = choice?.delta?.content;
       if (delta) {
         stats.markFirstToken();
@@ -504,6 +504,7 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
       return false;
     }
 
+    let resultStats;
     try {
       readLoop: while (true) {
         const { done, value } = await reader.read();
@@ -524,9 +525,9 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
       }
     } finally {
       try { await reader.cancel(); } catch { /* already closed */ }
+      resultStats = stats.finish();
+      onStats?.(resultStats);
     }
-    const resultStats = stats.finish();
-    onStats?.(resultStats);
     requireCompletionContent(full, resultStats);
     return full;
   }
