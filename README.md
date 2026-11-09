@@ -1,220 +1,136 @@
-<div align="center">
+# LLM Test Bench — compare tes modèles IA en local
 
-# LLM Test Bench
+**Français** · [English](README.en.md) · [Sauvegarde et récupération](docs/OPERATIONS.md)
 
-> **Fork local sécurisé et interface française : [démarrage Docker et documentation française](README.fr.md).** Connexion par identifiant, clé OpenRouter chiffrée côté serveur et volumes persistants. Le reste de ce document décrit la distribution statique d'origine.
+Donne le même prompt à plusieurs modèles, lance-les en parallèle, compare leurs sites côte à côte et conserve les résultats avec les mesures disponibles de temps, de tokens et de coût. **Chacun utilise sa propre clé OpenRouter.**
 
-**Generate it. Compare it. Keep the evidence.**
+Ce fork de [Techdread/llm-test-bench](https://github.com/Techdread/llm-test-bench) ajoute une connexion, un coffre chiffré côté serveur, des données persistantes dans Docker et une interface principale en français. Le code est distribué sous [licence MIT](LICENSE).
 
-A browser-based workbench for testing how language models turn the same idea into
-interactive HTML, p5.js sketches, and SVG artwork — plus agentic builders that write
-whole games, WebXR projects and 3D assets, and a set of developer tools.
+Tout le monde peut installer sa propre copie avec ses identifiants et sa clé. **Chaque installation possède un compte administrateur unique** : cette version ne sépare pas les données de plusieurs comptes sur un serveur partagé.
 
-[**Open the live site**](https://neuroviz.uk) · [The benches](#the-three-benches) · [Agentic builders](#agentic-builders) · [Developer tools](#developer-tools) · [Quick start](#quick-start)
+## Ce que tu peux faire
 
-![Licence](https://img.shields.io/badge/licence-MIT-blue) ![No build step](https://img.shields.io/badge/build-none-brightgreen) ![Browsers](https://img.shields.io/badge/browsers-Chrome%20%7C%20Edge-informational)
+- Générer une page HTML/CSS/JavaScript avec le modèle de ton choix.
+- Lancer le même prompt sur plusieurs modèles simultanément et comparer leurs rendus.
+- Sauvegarder les variantes, noter les résultats et retrouver les exécutions et leurs métriques disponibles.
+- Utiliser les autres outils amont : SVG, p5.js, jeux, notebooks, visualisations et outils de code.
+- Retrouver tes projets et ta clé après un redémarrage, sans la ressaisir.
 
-</div>
+## Prérequis
 
----
+- **Docker en marche** : [Docker Desktop](https://docs.docker.com/desktop/) sur macOS/Windows, ou [Docker Engine](https://docs.docker.com/engine/install/) avec le [plugin Compose](https://docs.docker.com/compose/install/) sur Linux. Sous Windows, utiliser les conteneurs Linux.
+- **Git**, disponible sur [git-scm.com](https://git-scm.com/downloads), ou le ZIP du dépôt via **Code → Download ZIP** sur GitHub.
+- Un navigateur récent ; Chrome ou Edge sont recommandés pour la sélection de dossiers et la capture vidéo.
+- Une connexion Internet pour la première construction et les appels aux modèles distants. Aucun GPU local n'est nécessaire pour appeler OpenRouter.
 
-Three focused test benches, one shared workflow: pick a prompt, run it through any
-model you like, and keep every result with the model, seed, and parameters that
-produced it. No accounts, no database, no telemetry — your work is written to a
-folder you choose on your own machine.
+Docker installe Python, les dépendances et SQLite : aucun Python, Node.js ou serveur de base de données n'est nécessaire sur ton ordinateur. Le code du projet est sous MIT ; Docker Desktop possède ses propres conditions de licence. Les appels aux modèles peuvent être payants selon les tarifs OpenRouter et le modèle choisi.
 
-<!-- VIDEO: replace with a 20–40s overview clip once recorded. See "Adding the videos" below. -->
+## Installation
 
-## What you can do
+Dans Terminal sur macOS/Linux ou PowerShell sur Windows :
 
-| | |
-|---|---|
-| **Bring your own model** | OpenRouter with your key, or a local LM Studio / OpenAI-compatible server. The browser talks to it directly — nothing is relayed through the site. |
-| **Keep the evidence** | Every save records the prompt, provider, model, seed, and parameters. Saves are append-only by default, so a run never overwrites an earlier one. |
-| **Compare properly** | Run one prompt across several models, put the results side by side, rate them, and export what you find. |
-| **Own your files** | Pick a folder once; the apps create their own subfolders inside it and write there through the File System Access API. |
-| **Record a walkthrough** | Each app has a built-in screen recorder for capturing what a model produced. |
-
-## The three benches
-
-### Prompt Gallery
-
-Generate standalone interactive HTML from a prompt, preview it in a sandboxed
-frame, and keep the ones worth keeping.
-
-- 62 starter prompts covering simulations, tools, games, and visualisations
-- Streaming generation, batch runs across a whole prompt set, and self-healing retries
-- Gallery, side-by-side comparison, ratings, refinement, and full metadata
-
-<!-- VIDEO: Prompt Gallery walkthrough -->
-
-### p5 Sketch Gallery
-
-Generate instance-mode p5.js sketches with reproducible seeds and live parameter
-controls.
-
-- 24 ambitious starter prompts aimed at generative and emergent work
-- Sandboxed live canvas, seed control, and tunable `ctx.params`
-- Remix a sketch into a variant, explain it, compare lineages, capture video
-
-<!-- VIDEO: p5 Sketch Gallery walkthrough -->
-
-### SVG Generation Gallery
-
-Ask a model for vector artwork, then measure how close it got.
-
-- 63 starter prompts, from simple icons to detailed illustrations
-- Pixel-diff scoring against a reference image, plus manual scoring
-- Structure inspection, batch runs across the full prompt set, and export
-
-<!-- VIDEO: SVG Generation Gallery walkthrough -->
-
-## Agentic builders
-
-A model is given tools and a budget, writes a multi-file project, and the app checks
-the result instead of trusting it.
-
-| App | What it does |
-|---|---|
-| **Game Forge** (`game-forge-v2/`) | Builds a complete multi-file game through an agentic file-writing loop, from a library of 339 briefs. Engines are copied into each project from a hash-pinned set. |
-| **VR Forge** (`vr-forge/`) | Builds WebXR projects for the Meta Quest 3, then runs each in an emulated immersive session to measure whether it really entered VR and rendered both eyes. |
-| **Understory Studio** (`understory-studio/`) | Turns one to three reference pictures into an editable 3D asset at five levels of detail; the model reviews renders of its own result against the reference. |
-| **Code Morph Lab** (`code-morph-lab-v3/`) | Iterative write → run → fix loop in HTML or in-browser Python (Pyodide). Prompt Gallery and SVG bench results can be sent to it with **Morph**. |
-
-## Interactive computing
-
-| App | What it does |
-|---|---|
-| **Notebook Lab** (`notebook-lab/`) | Notebooks whose cells can be JavaScript, Python (Pyodide, with NumPy, pandas and matplotlib), C, Lua, HTML, live controls or Vega-Lite charts, all sharing one set of variables. A model writes cells, builds whole notebooks from one request, and repairs cells that fail. Ships 56 runnable tutorials and examples. |
-
-## Developer tools
-
-| App | What it does |
-|---|---|
-| **C Machine Lab** | Steps a subset of C through a teaching machine with source, assembly, registers, stack, heap and memory side by side. |
-| **Algorithm Visualizer** | Instruments JavaScript or Python and replays variable changes as an animated array, graph, tree or grid. |
-| **SQL Playground** | SQLite in WebAssembly with a schema viewer, ER diagram, query plans and an SQL assistant. |
-| **AST Explorer & Refactor Lab** | Syntax trees for JavaScript, TypeScript and Python, with model-proposed refactors reviewed as diffs. |
-
-## Quick start
-
-Nothing to install and nothing to build.
-
-```bash
-git clone https://github.com/Techdread/llm-test-bench.git
+```sh
+git clone https://github.com/ohvignas/llm-test-bench.git
 cd llm-test-bench
-python3 -m http.server 8080
+docker compose up -d --build --wait
 ```
 
-Open <http://localhost:8080> in Chrome or Edge.
+Ouvrir **[http://127.0.0.1:8085](http://127.0.0.1:8085)**. La première construction peut prendre quelques minutes. Avec le ZIP, entrer dans le dossier extrait avant d'exécuter la commande Compose.
 
-> Do not open the files with a `file://` URL. ES modules and folder access need an
-> HTTP(S) origin.
+### Premier démarrage
 
-Then:
+1. Choisir un identifiant et un mot de passe d'au moins **12 caractères**. Il n'y a pas de mot de passe par défaut. La création de comptes est fermée après ce premier compte.
+2. Ouvrir **Mon compte et ma clé API** et enregistrer ta [clé OpenRouter](https://openrouter.ai/settings/keys).
+3. Revenir à la galerie, choisir un modèle et saisir un prompt.
 
-1. **Settings → Choose folder.** Pick a folder you are happy for the apps to
-   organise. Each app creates its own subfolder inside it (`prompt-gallery/`,
-   `game-forge-v2/`, …) as you go.
-2. **Settings → connect a model.** Either add your OpenRouter key inside an app, or
-   point the Settings page at a local server (below).
-3. **Open a bench and generate.**
+La clé est chiffrée côté serveur et n'est jamais réaffichée par une route de lecture. Elle reste disponible après un arrêt ou une reconstruction du conteneur. Aucun identifiant ni secret de l'auteur n'est inclus dans l'image.
 
-### Using a local model
+### Comparer deux modèles
 
-For LM Studio:
+1. Ouvrir **Lots** et sélectionner le prompt à tester.
+2. Sélectionner chaque modèle et l'ajouter à la liste des modèles à exécuter.
+3. Choisir **Tous en même temps**, puis lancer.
+4. Retrouver les résultats sauvegardés dans **Exécutions**, **Galerie** et **Comparer**.
 
-1. Load a model and start the server with CORS enabled — Developer settings, or
-   `lms server start --cors`.
-2. On the **Settings** page, add `http://localhost:1234`.
-3. Click **Add & test** and allow the browser's local-network permission prompt.
-4. Open any bench and pick the discovered model from its normal model picker.
-   Batch mode uses the same selection.
+Les métriques dépendent des informations transmises par le modèle ou le fournisseur. Une donnée absente ne doit pas être interprétée comme un coût ou une durée nuls.
 
-Any OpenAI-compatible server works with the LM Studio endpoint type as long as it
-exposes `/v1/models` and `/v1/chat/completions` and allows the site's origin
-through CORS. Unsloth Studio has its own endpoint type.
+## Changer le port si nécessaire
 
-> **Never commit an API key**, and never paste one into an issue, screenshot, or
-> recording. Keys live in your browser and are sent only to the provider you pick.
+Le lancement par défaut ne nécessite aucun fichier `.env`. Si le port 8085 est occupé, copier `.env.example` vers `.env` :
 
-## How it is built
+- macOS/Linux : `cp .env.example .env`
+- Windows PowerShell : `Copy-Item .env.example .env`
 
-Native ES modules, Preact, and HTM tagged templates. No JSX, no bundler, no
-transpilation, no `package.json` at the app level. Every runtime dependency is
-vendored under `shared/lib/` and served from the same origin — the site makes no
-third-party requests at all.
+Modifier ensuite cette ligne dans `.env` :
 
-```text
-prompt-gallery/             HTML generation and comparison
-p5-sketch-gallery/          p5.js generation and gallery
-svg-benchmark/              SVG generation and scoring
-game-forge-v2/              agentic multi-file game builder
-vr-forge/                   agentic WebXR builder with emulated-session checks
-understory-studio/          reference pictures → editable 3D asset
-code-morph-lab-v3/          iterative code generation (HTML / Python)
-notebook-lab/               polyglot notebooks with AI-written cells
-c-machine-lab/              C on a visible teaching machine
-algorithm-visualizer/       traced algorithm playback
-sql-playground/             SQLite in the browser
-ast-explorer-refactor-lab/  syntax trees and model-driven refactors
-shared/                     components, services, styles, and vendored runtimes
+```dotenv
+BENCH_PORT=8090
 ```
 
-Tests use Node's built-in runner:
+Puis relancer :
 
-```bash
-node --test prompt-gallery/tests/*.test.mjs
-node --test p5-sketch-gallery/tests/*.test.mjs
-node --test svg-benchmark/tests/*.test.mjs
+```sh
+docker compose up -d --build --wait
 ```
 
-## Browser support
+L'adresse devient `http://127.0.0.1:8090`. Le port publié et l'origine acceptée par l'application sont modifiés ensemble. Garder le même dossier de projet pour réutiliser ses volumes. **Ne mettre aucun mot de passe ni clé API dans `.env`.**
 
-Chrome and Edge are recommended. Other modern browsers can open the editors and
-previews, but folder access and screen recording vary. The site must be served over
-HTTPS or `localhost` — folder access, local-network access, and recording are all
-secure-context features.
+## Utilisation quotidienne
 
-## Hosted edition versus the local hub
+Toutes les commandes se lancent depuis le dossier contenant `compose.yaml`.
 
-This repository is the static, hosted-safe edition. It supports local **model
-servers** but not local **CLI coding agents**, the Wan2GP image/video nodes or the
-Blender bridge, which depend on a Python bridge outside this release. Cross-app
-handoffs work between apps in this release (for example Prompt Gallery → Code Morph
-Lab) and are hidden where the target app is not included. Local models and local CLI
-agents are different connection types; only the latter is absent here.
+| Action | Commande |
+|---|---|
+| Relancer | `docker compose up -d --wait` |
+| Arrêter sans effacer les données | `docker compose stop` |
+| Vérifier l'état et le port | `docker compose ps` |
+| Voir les logs récents du serveur | `docker compose logs --tail=100 bench` |
+| Mettre à jour un clone Git | `git pull --ff-only`, puis `docker compose up -d --build --wait` |
+| Récupérer un mot de passe oublié | `docker compose exec bench python -m server.manage reset-password` |
+| Exécuter les tests serveur sans Python installé | `docker compose exec -T bench python -m unittest discover -s server/tests -v` |
 
-## Adding the videos
+Les logs ci-dessus servent au diagnostic du serveur local. Les résultats des modèles et les statistiques d'exécution se consultent dans l'application.
 
-Each app's toolbar has a **Record** button that captures a walkthrough. To put one
-in this README:
+Pour une installation obtenue en ZIP, sauvegarder les volumes avant une mise à jour et suivre le [guide de migration](docs/OPERATIONS.md) : un dossier renommé peut désigner un autre projet Compose et donc d'autres volumes.
 
-1. Record the walkthrough in the app and save the file (the recorder produces MP4
-   where the browser supports it, otherwise WebM).
-2. Open this README in GitHub's web editor and **drag the file into the text area**.
-   GitHub uploads it and inserts a `https://github.com/user-attachments/assets/…`
-   URL.
-3. Leave that URL on its own line where the matching `<!-- VIDEO: … -->` comment is
-   and delete the comment. GitHub renders it as an inline player.
+## Données, sauvegarde et migration
 
-Notes: GitHub caps attachment size (10 MB on free plans at the time of writing), so
-keep clips short or trim them. Repo-relative `<video>` tags do **not** render in a
-README — a committed animated GIF referenced with normal image syntax does, and is a
-good fallback for anything longer.
+| Volume Docker | Contenu |
+|---|---|
+| `bench-data` | SQLite : compte, empreinte du mot de passe, sessions et clé API chiffrée ; fichiers des projets, réglages et métriques |
+| `bench-secrets` | Clé de chiffrement du coffre, générée au premier démarrage |
 
-## Contributing
+Les noms complets des volumes sont préfixés par le nom du projet Compose. Ils ne dépendent pas d'un chemin propre à l'ordinateur de l'auteur.
 
-Start with [CONTRIBUTING.md](CONTRIBUTING.md). Small, focused pull requests with a
-short reproduction or test are easiest to review.
+**Sauvegarder les deux volumes ensemble.** Le [guide d'exploitation](docs/OPERATIONS.md) donne les commandes pour sauvegarder, restaurer sur une nouvelle machine et réinitialiser un mot de passe sans perdre les projets ou la clé API. Les mises à jour et redémarrages conservent les volumes. Les supprimer efface leurs données.
 
-## Security and privacy
+## Dépannage
 
-Generated code is untrusted input even when a model produced it. Previews run in
-sandboxed iframes, but review generated code before running it elsewhere or sharing
-it. See [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), and
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+| Problème | Vérification |
+|---|---|
+| Docker ne répond pas | Démarrer Docker Desktop ; sous Linux, vérifier l'accès au daemon. |
+| La commande `docker compose` manque | Installer le plugin Compose ou mettre Docker Desktop à jour. |
+| Le port est déjà occupé | Définir un autre `BENCH_PORT` dans `.env`, puis relancer `up`. |
+| La page ne s'ouvre pas | Vérifier `docker compose ps` et les logs ; utiliser `127.0.0.1` et le port configuré. |
+| Clé refusée ou génération en échec | Vérifier la clé, le crédit, la disponibilité du modèle et les limites de tokens sur OpenRouter. |
+| Les données semblent avoir disparu | Vérifier le dossier/nom du projet Compose et la présence des deux volumes ; ne pas les supprimer. |
+| Identifiants oubliés | Lancer `reset-password` ; la commande affiche aussi l'identifiant du compte. |
 
-## Licence
+Pour signaler un problème : [ouvrir une issue dans ce fork](https://github.com/ohvignas/llm-test-bench/issues), avec le système utilisé, les étapes et des logs relus pour en retirer toute donnée sensible. Ne pas joindre de clé, de mot de passe ni de sauvegarde.
 
-[MIT](LICENSE). Vendored dependencies keep their own licences.
+## Périmètre et sécurité
+
+- Le port est publié uniquement sur `127.0.0.1` ; l'application est destinée à l'ordinateur local.
+- Connexion avec cookie HttpOnly/SameSite, contrôles Origin/CSRF sur les écritures, limitation des tentatives et conteneur exécuté sans root.
+- Clé OpenRouter chiffrée au repos, injectée par le serveur uniquement dans son relais vers l'API OpenRouter officielle.
+- Statistiques Cloudflare retirées des pages distribuées localement ; aperçus HTML isolés et routes de fichiers protégées.
+
+Une personne contrôlant Docker ou les deux volumes peut déchiffrer la clé. Notebook Lab et Algorithm Visualizer exécutent encore du JavaScript avec les privilèges de la page : y utiliser du code de confiance. Les aperçus HTML de Prompt Gallery conservent leur isolation. Les autres fournisseurs gardent les mécanismes de configuration de l'amont ; le coffre ajouté concerne OpenRouter.
+
+Cette configuration n'est pas un service public avec comptes et données séparés. Le pont privé des agents CLI de l'auteur n'est pas inclus. La galerie de sites et les réglages principaux sont en français ; certaines autres applications, les aides et les prompts d'exemple restent en anglais. Consulter [SECURITY.md](SECURITY.md) pour les détails.
+
+## Contribuer et crédits
+
+[Contribuer](CONTRIBUTING.md) · [Documentation anglaise](README.en.md) · [Licence MIT](LICENSE) · [Licences tierces](THIRD_PARTY_NOTICES.md) · [Documentation historique amont](README.upstream.md)
+
+Projet original : **Techdread / Peter Edwards**. Les mentions originales et les licences des bibliothèques sont conservées. Ce fork ajoute l'installation Docker, l'authentification locale, le coffre serveur et la traduction française de l'interface principale.

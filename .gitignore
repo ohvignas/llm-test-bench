@@ -9,6 +9,9 @@ __pycache__/
 *.pyc
 .env
 .env.*
+!.env.example
+backup/
+backups/
 data/
 secrets/
 *.sqlite*

@@ -1,3 +1,5 @@
+> **This fork:** use the [Docker installation guide](README.md) ([English](README.en.md)) for authentication, the server vault and persistent data. The static hosting instructions below describe the historical upstream edition and bypass this fork’s server protections. They are not the supported launch path for the authenticated fork.
+
 # Deploying your own copy
 
 This project is a plain static site: HTML, CSS, and native ES modules with no

@@ -1,47 +1,38 @@
-# Contributing
+# Contributing / Contribuer
 
-Thank you for helping improve LLM Test Bench. Beginner contributions are welcome.
+Contributions are welcome in French or English. This fork adds an authenticated Docker edition to the original static LLM Test Bench.
 
-## Before starting
+## Run the project
 
-1. Search existing issues to see whether the idea or bug is already being discussed.
-2. For a substantial feature, open an issue before writing the implementation so scope and browser behaviour can be agreed.
-3. Keep pull requests focused on one change.
+Follow [README.md](README.md) or [README.en.md](README.en.md). No host Python is required for the Docker path. Use dummy credentials and a separate Compose project/port for development; never use a real key in tests.
 
-## Run the site
+## Validate changes
 
-```bash
-python3 -m http.server 8080
+Backend tests inside the running image:
+
+```sh
+docker compose exec -T bench python -m unittest discover -s server/tests -v
 ```
 
-Open `http://localhost:8080` in Chrome or Edge. There is no npm install or compilation step.
+Browser-service tests with Node.js 22 or newer installed locally:
 
-## Code conventions
-
-- Use native browser ES modules and keep Preact components in HTM tagged templates; do not add JSX or a build pipeline.
-- Import browser libraries from the vendored paths under `shared/lib/`, not from public CDNs.
-- Put reusable, DOM-free logic in `services/` and keep components thin.
-- Saves are append-only unless the interface explicitly says Update or Replace.
-- Keep generated standalone artefacts portable; do not make them depend on this repository's `shared/lib/` folder.
-- Never commit credentials, personal paths, private IP addresses, model caches, or generated run archives.
-
-## Tests
-
-Tests use Node's built-in test runner. Run a specific suite with, for example:
-
-```bash
-node --test prompt-gallery/tests/*.test.mjs
-node --test p5-sketch-gallery/tests/*.test.mjs
-node --test svg-benchmark/tests/*.test.mjs
+```sh
+node --test shared/tests/secure-session.test.mjs shared/tests/openrouter-vault.test.mjs shared/tests/providers-openai-compatible.test.mjs shared/tests/gen-params.test.mjs shared/tests/distribution.test.mjs
 ```
 
-Also test the changed workflow in Chrome. In your pull request, say what you tested and which browser/version you used.
+Validate Compose and rebuild after source changes:
+
+```sh
+docker compose config --quiet
+docker compose up -d --build --wait
+```
+
+Check changed flows in a browser and describe actual verification in the PR. Preserve technical identifiers, system prompts and generated/user-authored content when translating UI text. No paid model calls are required by the tests.
 
 ## Pull requests
 
-- Explain the user-visible outcome first.
-- Include screenshots or a short recording for interface changes.
-- Mention security or privacy effects, especially for generated code, API calls, browser storage, and filesystem access.
-- Do not include unrelated formatting or generated files.
+Target `ohvignas/llm-test-bench`, explain the user-visible change and include relevant tests. Add screenshots for UI changes and mention effects on credentials, storage or request boundaries. Never commit secrets, local databases, Docker data or backups. New code follows the repository's MIT license; preserve upstream attribution and third-party notices.
 
-By contributing, you agree that your contribution is licensed under the repository's MIT Licence.
+## Security reports
+
+See [SECURITY.md](SECURITY.md). Do not put real credentials or private data in a public issue.

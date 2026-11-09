@@ -1,25 +1,25 @@
-# Security policy
+# Security policy — local Docker fork
 
-## Reporting a vulnerability
+## Reporting
 
-Please use GitHub's private **Report a vulnerability** feature on the repository Security tab. Do not open a public issue for a vulnerability that could expose API keys, local files, or a user's browser session.
+Use GitHub's private vulnerability reporting in the repository Security tab if available. If it is unavailable, contact the maintainer through their GitHub profile before sharing technical details. Do not publish an exploit involving API credentials or private data in a public issue. Always use dummy credentials and a minimal reproduction.
 
-Include:
-
-- the affected tool and browser;
-- a minimal reproduction;
-- the impact you observed;
-- whether generated content or a provider response is required to trigger it.
-
-Do not include real API keys, personal files, or private prompts. Use obvious dummy values and a minimal test file.
+Include the commit/version, affected tool, browser and OS, reproduction steps, whether generated content is required, and the impact observed. Never attach an API key, password, session cookie, database or backup.
 
 ## Security model
 
-- This is a static, local-first application. It does not provide authentication or a server-side secret store.
-- Provider keys are browser-side credentials. Anyone with access to the browser profile, page context, or developer tools may be able to retrieve them.
-- Generated HTML, JavaScript, p5.js, and SVG must be treated as untrusted.
-- Local CLI-agent endpoints are not part of the hosted edition and must never be exposed to the public internet.
+This fork's Docker edition adds single-account authentication, server-side sessions, request Origin/CSRF validation, encrypted OpenRouter storage and a fixed-target API relay. The browser cannot read back the persisted OpenRouter key. Other providers retain their original credential mechanisms.
 
-## Supported version
+The application binds to loopback by default. Each installation has one administrator; it does not isolate multiple users or tenants. It is not ready to be exposed as a public shared service merely by changing a port binding. Remote deployments require their own HTTPS, proxy, identity, storage and isolation review.
 
-Security fixes are made on the latest release. Older snapshots may not receive patches.
+The encryption key is in a separate Docker volume from SQLite. Someone controlling Docker or both volumes can decrypt the credential. Protect backups of both volumes. Local password recovery requires access to Docker and invalidates existing sessions; it has no public HTTP endpoint.
+
+Treat generated or imported code as untrusted. Prompt Gallery HTML previews use sandboxed contexts. Notebook Lab and Algorithm Visualizer still execute JavaScript with the page's privileges; such code can act through the authenticated session even though it cannot directly read the vault secret. Use trusted code in those modules.
+
+Cloudflare analytics is removed from locally served application pages. The local file API constrains paths to the data root and excludes secrets; it is not an arbitrary system filesystem API. The upstream private CLI-agent bridge is not included.
+
+The historical static edition described in README.upstream.md has a different storage and security model. Serving this fork with a generic static server bypasses the new authentication and server vault; use the documented Docker entry point.
+
+## Maintenance
+
+Run a current reviewed commit, back up both volumes before updates, and keep Docker and dependencies maintained. The project does not claim a complete security certification. See README.md and docs/OPERATIONS.md for operation and recovery commands.
