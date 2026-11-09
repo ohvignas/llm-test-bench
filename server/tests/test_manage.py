@@ -13,7 +13,8 @@ class PasswordRecoveryTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         root = Path(self.temp.name)
         self.app = create_app({'TESTING': True, 'DATA_DIR': root / 'data',
-            'SECRETS_DIR': root / 'secrets', 'SERVER_NAME': '127.0.0.1:8085'})
+            'SECRETS_DIR': root / 'secrets', 'SERVER_NAME': '127.0.0.1:8085',
+            'PUBLIC_ORIGIN': 'http://127.0.0.1:8085'})
         self.client = self.app.test_client()
         self.origin = {'Origin': 'http://127.0.0.1:8085'}
 
