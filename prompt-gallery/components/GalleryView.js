@@ -125,9 +125,9 @@ function LazyThumb({ id, srcdoc, title, genId, loadHtml, hasThumbnail = false, l
 }
 
 function formatDate(dateStr, includeTime = false) {
-  if (!dateStr) return 'Unknown date';
+  if (!dateStr) return 'Date inconnue';
   try {
-    return new Date(dateStr).toLocaleDateString('en-GB', includeTime
+    return new Date(dateStr).toLocaleDateString('fr-FR', includeTime
       ? { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }
       : { day: 'numeric', month: 'short', year: 'numeric' });
   } catch (e) {
@@ -148,7 +148,7 @@ function ProjectCard({ project, onOpen, loadHtml, loadThumbnail }) {
       class=${`gallery-card project-card ${project.archived ? 'is-archived' : ''}`}
       role="button"
       tabIndex="0"
-      aria-label=${`Open project ${project.title}`}
+      aria-label=${`Ouvrir le projet ${project.title}`}
       onClick=${() => onOpen(project.folderId)}
       onKeyDown=${event => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -169,16 +169,16 @@ function ProjectCard({ project, onOpen, loadHtml, loadThumbnail }) {
       <div class="gallery-card-body">
         <div class="project-card-heading">
           <div class="gallery-card-title" title=${project.title}>${project.title}</div>
-          ${project.archived && html`<span class="status-badge archived"><i class="fa-solid fa-box-archive"></i> Archived</span>`}
+          ${project.archived && html`<span class="status-badge archived"><i class="fa-solid fa-box-archive"></i> Archivé</span>`}
         </div>
         <div class="project-summary">
-          <span><i class="fa-solid fa-code-branch"></i> ${project.variantCount} variant${project.variantCount === 1 ? '' : 's'}</span>
-          <span><i class="fa-solid fa-robot"></i> ${project.models.length} model${project.models.length === 1 ? '' : 's'}</span>
-          ${project.unreviewedCount > 0 && html`<span class="needs-review"><i class="fa-solid fa-inbox"></i> ${project.unreviewedCount} unreviewed</span>`}
+          <span><i class="fa-solid fa-code-branch"></i> ${project.variantCount} variante${project.variantCount === 1 ? '' : 's'}</span>
+          <span><i class="fa-solid fa-robot"></i> ${project.models.length} modèle${project.models.length === 1 ? '' : 's'}</span>
+          ${project.unreviewedCount > 0 && html`<span class="needs-review"><i class="fa-solid fa-inbox"></i> ${project.unreviewedCount} non évalués</span>`}
         </div>
         <div class="gallery-card-meta">
           <${RatingWidget} rating=${project.bestRating} readonly size=${12} />
-          <span class="gallery-card-date">Updated ${formatDate(project.latestAt)}</span>
+          <span class="gallery-card-date">Mise à jour : ${formatDate(project.latestAt)}</span>
           ${project.refinedCount > 0 && html`<span class="status-badge"><i class="fa-solid fa-screwdriver-wrench"></i> ${project.refinedCount}</span>`}
           ${project.verifiedCount > 0 && html`<span class="verification-badge passed"><i class="fa-solid fa-shield-circle-check"></i> ${project.verifiedCount}</span>`}
         </div>
@@ -213,7 +213,7 @@ function VariantCard({ generation, projectTitle, onSelect, onMorph, onDelete, on
             onSelect(generation.id, generation.folderId);
           }
         }}
-        title="Open generation"
+        title="Ouvrir la génération"
       >
         <${LazyThumb} id=${generation.id} genId=${generation.id} loadHtml=${loadHtml}
           hasThumbnail=${!!generation.hasThumbnail} loadThumbnail=${loadThumbnail}
@@ -225,13 +225,13 @@ function VariantCard({ generation, projectTitle, onSelect, onMorph, onDelete, on
             <div class="gallery-card-title" title=${projectTitle}>${projectTitle}</div>
             <div class="variant-model" title=${model}><i class="fa-solid fa-robot"></i> ${model}</div>
           </div>
-          <span class="variant-key" title=${generation.variantKey || 'Legacy generation'}>#${shortVariantKey(generation.variantKey)}</span>
+          <span class="variant-key" title=${generation.variantKey || 'Ancienne génération'}>#${shortVariantKey(generation.variantKey)}</span>
         </div>
         <div class="gallery-card-meta">
           <${RatingWidget} rating=${ratingOf(meta)} readonly size=${12} />
           <span class="gallery-card-date">${formatDate(meta.createdAt, true)}</span>
-          ${refined && html`<span class="status-badge"><i class="fa-solid fa-screwdriver-wrench"></i> Refined</span>`}
-          ${archived && html`<span class="status-badge archived"><i class="fa-solid fa-box-archive"></i> Archived</span>`}
+          ${refined && html`<span class="status-badge"><i class="fa-solid fa-screwdriver-wrench"></i> Amélioré</span>`}
+          ${archived && html`<span class="status-badge archived"><i class="fa-solid fa-box-archive"></i> Archivé</span>`}
           ${meta.verification && html`<${VerificationBadge} verification=${meta.verification} />`}
         </div>
         ${(meta.tags || []).length > 0 && html`
@@ -241,15 +241,15 @@ function VariantCard({ generation, projectTitle, onSelect, onMorph, onDelete, on
           </div>
         `}
         <div class="variant-card-actions">
-          <button class="btn-icon" onClick=${() => onSelect(generation.id, generation.folderId)} title="Open generation"><i class="fa-solid fa-up-right-from-square"></i></button>
-          ${onCompare && html`<button class="btn-icon" onClick=${() => onCompare(generation.id)} title="Add to comparison"><i class="fa-solid fa-columns"></i></button>`}
-          ${onMorph && html`<button class="btn-icon" onClick=${() => onMorph(generation.id)} title="Morph"><i class="fa-solid fa-wand-magic-sparkles"></i></button>`}
+          <button class="btn-icon" onClick=${() => onSelect(generation.id, generation.folderId)} title="Ouvrir la génération"><i class="fa-solid fa-up-right-from-square"></i></button>
+          ${onCompare && html`<button class="btn-icon" onClick=${() => onCompare(generation.id)} title="Ajouter à la comparaison"><i class="fa-solid fa-columns"></i></button>`}
+          ${onMorph && html`<button class="btn-icon" onClick=${() => onMorph(generation.id)} title="Transformer"><i class="fa-solid fa-wand-magic-sparkles"></i></button>`}
           ${onArchive && html`
-            <button class="btn-icon" onClick=${() => onArchive([generation.id], !archived)} title=${archived ? 'Restore from archive' : 'Archive'}>
+            <button class="btn-icon" onClick=${() => onArchive([generation.id], !archived)} title=${archived ? 'Restaurer depuis les archives' : 'Archiver'}>
               <i class=${`fa-solid ${archived ? 'fa-box-open' : 'fa-box-archive'}`}></i>
             </button>
           `}
-          ${onDelete && html`<button class="btn-icon btn-icon-danger" onClick=${() => onDelete(generation.id)} title="Delete"><i class="fa-solid fa-trash"></i></button>`}
+          ${onDelete && html`<button class="btn-icon btn-icon-danger" onClick=${() => onDelete(generation.id)} title="Supprimer"><i class="fa-solid fa-trash"></i></button>`}
         </div>
       </div>
     </article>
@@ -263,30 +263,30 @@ function ProjectDetail({ project, onBack, onSelect, onMorph, onDelete, onArchive
   return html`
     <div class="project-detail">
       <header class="project-detail-header">
-        <button class="btn-icon project-back" onClick=${onBack} title="Back to projects"><i class="fa-solid fa-arrow-left"></i></button>
+        <button class="btn-icon project-back" onClick=${onBack} title="Retour aux projets"><i class="fa-solid fa-arrow-left"></i></button>
         <div class="project-detail-copy">
           <div class="project-detail-title-row">
             <h2>${project.title}</h2>
-            ${project.archived && html`<span class="status-badge archived"><i class="fa-solid fa-box-archive"></i> Archived</span>`}
+            ${project.archived && html`<span class="status-badge archived"><i class="fa-solid fa-box-archive"></i> Archivé</span>`}
           </div>
           <div class="project-detail-stats">
-            <span>${project.variantCount} variant${project.variantCount === 1 ? '' : 's'}</span>
-            <span>${project.models.length} model${project.models.length === 1 ? '' : 's'}</span>
-            <span>Best ${project.bestRating || 0}/${RATING_MAX}</span>
-            <span>Updated ${formatDate(project.latestAt)}</span>
+            <span>${project.variantCount} variante${project.variantCount === 1 ? '' : 's'}</span>
+            <span>${project.models.length} modèle${project.models.length === 1 ? '' : 's'}</span>
+            <span>Meilleure note : ${project.bestRating || 0}/${RATING_MAX}</span>
+            <span>Mise à jour : ${formatDate(project.latestAt)}</span>
           </div>
         </div>
         <div class="project-detail-actions">
           ${project.containsArchived && html`
             <label class="archive-toggle">
               <input type="checkbox" checked=${showArchived} onChange=${event => setShowArchived(event.target.checked)} />
-              Show archived
+              Afficher les archives
             </label>
           `}
           ${onArchive && html`
             <button class="btn" onClick=${() => onArchive(project.variants.map(generation => generation.id), !project.archived)}>
               <i class=${`fa-solid ${project.archived ? 'fa-box-open' : 'fa-box-archive'}`}></i>
-              ${project.archived ? 'Restore project' : 'Archive project'}
+              ${project.archived ? 'Restaurer le projet' : 'Archiver le projet'}
             </button>
           `}
         </div>
@@ -294,17 +294,17 @@ function ProjectDetail({ project, onBack, onSelect, onMorph, onDelete, onArchive
 
       ${project.prompt && html`
         <details class="project-prompt" open>
-          <summary>Original prompt</summary>
+          <summary>Prompt d’origine</summary>
           <p>${project.prompt}</p>
         </details>
       `}
 
       <div class="project-variant-heading">
-        <h3>Variants</h3>
+        <h3>Variantes</h3>
         <span>${visibleVariants.length} shown</span>
       </div>
       ${visibleVariants.length === 0
-        ? html`<div class="gallery-empty compact"><i class="fa-solid fa-box-archive"></i><p>All variants are archived</p></div>`
+        ? html`<div class="gallery-empty compact"><i class="fa-solid fa-box-archive"></i><p>Toutes les variantes sont archivées</p></div>`
         : html`
           <div class="gallery-grid variant-grid">
             ${visibleVariants.map(generation => html`
@@ -403,13 +403,13 @@ export function GalleryView({
     const connect = hasDirectory ? html`
       <div class="gallery-empty">
         <i class="fa-solid fa-images"></i>
-        <p>No generations yet. Create your first one!</p>
+        <p>Aucune génération. Créez la première !</p>
       </div>
     ` : html`
       <div class="gallery-empty">
         <i class="fa-solid fa-folder-open"></i>
-        <p>Connect a directory to browse your prompt generations</p>
-        <button class="btn btn-primary" onClick=${onPickDirectory}><i class="fa-solid fa-folder-plus"></i> Pick Directory</button>
+        <p>Connectez un dossier pour parcourir vos générations</p>
+        <button class="btn btn-primary" onClick=${onPickDirectory}><i class="fa-solid fa-folder-plus"></i> Choisir un dossier</button>
       </div>
     `;
     return html`
@@ -468,8 +468,8 @@ export function GalleryView({
         ? html`
           <div class="gallery-empty">
             <i class="fa-solid fa-images"></i>
-            ${generations.length === 0 ? html`<p>No generations yet. Create your first one!</p>` : html`<p>No generations match your filters</p>`}
-            ${generations.length > 0 && html`<button class="btn" onClick=${clearFilters}><i class="fa-solid fa-filter-circle-xmark"></i> Clear filters</button>`}
+            ${generations.length === 0 ? html`<p>Aucune génération. Créez la première !</p>` : html`<p>Aucune génération ne correspond aux filtres</p>`}
+            ${generations.length > 0 && html`<button class="btn" onClick=${clearFilters}><i class="fa-solid fa-filter-circle-xmark"></i> Effacer les filtres</button>`}
           </div>
         `
         : viewMode === 'projects'

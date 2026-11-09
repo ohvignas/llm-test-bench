@@ -14,13 +14,13 @@ export const CATEGORIES = [
   { id: 'p5js', label: 'p5.js', icon: 'fa-paintbrush' },
   { id: 'html-js', label: 'HTML / JavaScript', icon: 'fa-code' },
   { id: 'shader', label: 'Shader', icon: 'fa-fire' },
-  { id: 'games-graphics', label: 'Games & Graphics', icon: 'fa-gamepad' },
+  { id: 'games-graphics', label: 'Jeux et graphismes', icon: 'fa-gamepad' },
   { id: 'webxr', label: 'VR / WebXR', icon: 'fa-vr-cardboard' },
   { id: 'simulation', label: 'Simulations', icon: 'fa-city' },
 ];
 
 export function categoryLabel(id) {
-  return CATEGORIES.find(c => c.id === id)?.label || id || 'Uncategorized';
+  return CATEGORIES.find(c => c.id === id)?.label || id || 'Sans catégorie';
 }
 
 export function categoryIcon(id) {
@@ -49,9 +49,9 @@ function normalizeText(text) {
 // runs one set at a time and every batch generation records which set it came
 // from. A prompt without `set` is core — that covers the user's own prompts.
 export const PROMPT_SETS = [
-  { id: 'core', label: 'Core', icon: 'fa-layer-group', hint: 'The original prompts' },
-  { id: 'advanced', label: 'Advanced', icon: 'fa-mountain', hint: 'Harder briefs: each builds on a core prompt with numbered requirements' },
-  { id: 'flagship', label: 'Flagship Sims', icon: 'fa-rocket', hint: 'Large, graphically ambitious simulations written for the strongest models' },
+  { id: 'core', label: 'Base', icon: 'fa-layer-group', hint: 'Les prompts d’origine' },
+  { id: 'advanced', label: 'Avancés', icon: 'fa-mountain', hint: 'Sujets plus difficiles : chaque prompt de base est enrichi d’exigences numérotées' },
+  { id: 'flagship', label: 'Simulations complexes', icon: 'fa-rocket', hint: 'Grandes simulations graphiques destinées aux modèles les plus puissants' },
 ];
 
 export function promptSetOf(prompt) {
@@ -59,7 +59,7 @@ export function promptSetOf(prompt) {
 }
 
 export function promptSetLabel(id) {
-  return PROMPT_SETS.find(s => s.id === id)?.label || id || 'Core';
+  return PROMPT_SETS.find(s => s.id === id)?.label || id || 'Base';
 }
 
 // Each seed file loads on its own, so a missing advanced file never costs the
@@ -107,7 +107,7 @@ export async function loadUserLibrary(rootHandle) {
 }
 
 async function saveUserLibrary(rootHandle, data) {
-  if (!rootHandle) throw new Error('Connect a directory first');
+  if (!rootHandle) throw new Error('Connectez d’abord un dossier');
   await fs.saveFile(rootHandle, LIBRARY_DIR, LIBRARY_FILE, JSON.stringify(data, null, 2));
 }
 
@@ -174,7 +174,7 @@ export async function updatePrompt(rootHandle, id, changes) {
     };
   } else {
     const entry = user.prompts.find(p => p.id === id);
-    if (!entry) throw new Error(`Prompt not found: ${id}`);
+    if (!entry) throw new Error(`Prompt introuvable : ${id}`);
     if (changes.prompt !== undefined && normalizeText(changes.prompt) !== normalizeText(entry.prompt)) {
       entry.revisions = entry.revisions || [];
       entry.revisions.push({ title: entry.title, prompt: entry.prompt, replacedAt: new Date().toISOString() });
@@ -195,7 +195,7 @@ export async function removePrompt(rootHandle, id) {
     if (!user.hiddenSeedIds.includes(id)) user.hiddenSeedIds.push(id);
   } else {
     const idx = user.prompts.findIndex(p => p.id === id);
-    if (idx === -1) throw new Error(`Prompt not found: ${id}`);
+    if (idx === -1) throw new Error(`Prompt introuvable : ${id}`);
     const [entry] = user.prompts.splice(idx, 1);
     user.trash.push({ ...entry, trashedAt: new Date().toISOString() });
   }

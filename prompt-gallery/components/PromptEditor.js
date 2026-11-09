@@ -44,7 +44,7 @@ export function PromptEditor({
   const liveEntries = isGenerating ? [] : consoleEntries;
   const liveCounts = consoleCounts(liveEntries);
   const checkErrors = checkStatus && !checkStatus.running
-    ? (checkStatus.timedOut ? ['The automatic check timed out — possible infinite loop or blocked load'] : (checkStatus.errors || []))
+    ? (checkStatus.timedOut ? ['Délai de vérification automatique dépassé : boucle infinie ou chargement bloqué possible'] : (checkStatus.errors || []))
     : [];
   const errorTotal = liveCounts.errors + checkErrors.length;
   const showErrors = responseView === 'errors';
@@ -72,7 +72,7 @@ export function PromptEditor({
       scrollPastEnd: 0.5,
     });
     // Ace's hidden textarea is what screen readers and axe see.
-    editor.textInput.getElement().setAttribute('aria-label', 'HTML code editor');
+    editor.textInput.getElement().setAttribute('aria-label', 'Éditeur de code HTML');
 
     editor.setValue(response, -1);
 
@@ -182,7 +182,7 @@ export function PromptEditor({
             <button
               class=${`btn-icon copy-btn ${copiedTarget === 'prompt' ? 'copied' : ''}`}
               onClick=${() => copyText(prompt, 'prompt')}
-              title=${copiedTarget === 'prompt' ? 'Copied prompt' : 'Copy prompt'}
+              title=${copiedTarget === 'prompt' ? 'Prompt copié' : 'Copier le prompt'}
               disabled=${!prompt}
               style=${{ fontSize: '12px' }}
             >
@@ -192,7 +192,7 @@ export function PromptEditor({
               <button
                 class="btn-icon"
                 onClick=${onSavePromptToLibrary}
-                title="Save this prompt to the library"
+                title="Enregistrer ce prompt dans la bibliothèque"
                 disabled=${!prompt}
                 style=${{ fontSize: '12px' }}
               >
@@ -205,21 +205,21 @@ export function PromptEditor({
           class="prompt-textarea"
           value=${prompt}
           onInput=${(e) => onPromptChange(e.target.value)}
-          placeholder="Enter your prompt here (supports Markdown)..."
+          placeholder="Saisissez votre prompt ici (Markdown accepté)…"
         ></textarea>
       </div>
       <!-- Response Section -->
       <div class="response-section">
         <div class="section-header">
           ${showErrors
-            ? html`<span><i class="fa-solid fa-bug"></i> Errors</span>`
-            : html`<span><i class="fa-solid fa-code"></i> HTML Response</span>`}
+            ? html`<span><i class="fa-solid fa-bug"></i> Erreurs</span>`
+            : html`<span><i class="fa-solid fa-code"></i> Réponse HTML</span>`}
           <div class="section-header-actions">
             ${responseCharacters > 0 && html`
-              <div class="response-metrics" aria-label="HTML response generation metrics">
-                <span>${responseCharacters.toLocaleString()} characters streamed</span>
+              <div class="response-metrics" aria-label="Statistiques de génération de la réponse HTML">
+                <span>${responseCharacters.toLocaleString()} caractères reçus</span>
                 <span class="response-metric-divider">·</span>
-                <span>${responseTokens.toLocaleString()} tokens generated</span>
+                <span>${responseTokens.toLocaleString()} tokens générés</span>
                 <span class="response-metric-divider">·</span>
                 <span>${formatTokensPerSecond(responseTokenRate)}</span>
               </div>
@@ -228,10 +228,10 @@ export function PromptEditor({
               class=${`btn-icon response-view-toggle ${showErrors ? 'active' : ''} ${errorTotal ? 'has-errors' : liveCounts.warnings ? 'has-warnings' : ''}`}
               onClick=${() => onResponseViewChange?.(showErrors ? 'code' : 'errors')}
               title=${showErrors
-                ? 'Show the generated code'
+                ? 'Afficher le code généré'
                 : errorTotal
-                  ? `Show errors (${errorTotal})`
-                  : liveCounts.warnings ? `Show warnings (${liveCounts.warnings})` : 'Show errors (none so far)'}
+                  ? `Afficher les erreurs (${errorTotal})`
+                  : liveCounts.warnings ? `Afficher les avertissements (${liveCounts.warnings})` : 'Afficher les erreurs (aucune pour le moment)'}
               aria-pressed=${showErrors}
               style=${{ fontSize: '12px' }}
             >
@@ -243,7 +243,7 @@ export function PromptEditor({
             <button
               class=${`btn-icon copy-btn ${copiedTarget === 'response' ? 'copied' : ''}`}
               onClick=${() => copyText(response, 'response')}
-              title=${copiedTarget === 'response' ? 'Copied HTML response' : 'Copy HTML response'}
+              title=${copiedTarget === 'response' ? 'Réponse HTML copiée' : 'Copier la réponse HTML'}
               disabled=${!response}
               style=${{ fontSize: '12px' }}
             >
@@ -252,7 +252,7 @@ export function PromptEditor({
             <button
               class=${`btn-icon ${showFullscreenPreview ? 'active' : ''}`}
               onClick=${() => setShowFullscreenPreview(true)}
-              title="Full screen preview"
+              title="Aperçu en plein écran"
               disabled=${!response}
               style=${{ fontSize: '12px' }}
             >
@@ -262,7 +262,7 @@ export function PromptEditor({
               <button
                 class="btn-icon"
                 onClick=${onMorph}
-                title="Send to Code Morph Lab"
+                title="Envoyer vers Code Morph Lab"
                 disabled=${!response}
                 style=${{ fontSize: '12px' }}
               >
@@ -273,27 +273,27 @@ export function PromptEditor({
         </div>
         <div class="editor-container" ref=${containerRef} hidden=${showErrors}></div>
         ${showErrors && html`
-          <div class="response-errors" aria-label="Errors from the generated page">
+          <div class="response-errors" aria-label="Erreurs de la page générée">
             <div class="response-errors-bar">
               <span>
                 ${isGenerating
-                  ? 'Errors appear once the generation finishes.'
-                  : `Preview: ${liveCounts.errors} error${liveCounts.errors === 1 ? '' : 's'}, ${liveCounts.warnings} warning${liveCounts.warnings === 1 ? '' : 's'}`}
+                  ? 'Les erreurs apparaissent à la fin de la génération.'
+                  : `Aperçu : ${liveCounts.errors} erreur${liveCounts.errors === 1 ? '' : 's'}, ${liveCounts.warnings} avertissement${liveCounts.warnings === 1 ? '' : 's'}`}
               </span>
               <span class="library-card-actions-spacer"></span>
               <button
                 class=${`btn btn-sm ${copiedTarget === 'errors' ? 'copied' : ''}`}
                 onClick=${() => copyText([
                   formatConsoleForCopy(liveEntries),
-                  checkErrors.length ? `Automatic check:\n${checkErrors.join('\n')}` : '',
+                  checkErrors.length ? `Vérification automatique :\n${checkErrors.join('\n')}` : '',
                 ].filter(Boolean).join('\n\n'), 'errors')}
                 disabled=${!liveEntries.length && !checkErrors.length}
-                title="Copy every error and warning as text"
+                title="Copier toutes les erreurs et tous les avertissements"
               >
-                <i class=${`fa-solid ${copiedTarget === 'errors' ? 'fa-check' : 'fa-copy'}`}></i> Copy
+                <i class=${`fa-solid ${copiedTarget === 'errors' ? 'fa-check' : 'fa-copy'}`}></i> Copier
               </button>
-              <button class="btn btn-sm" onClick=${onClearConsole} disabled=${!liveEntries.length} title="Clear the preview's list (it refills as the page runs)">
-                <i class="fa-solid fa-eraser"></i> Clear
+              <button class="btn btn-sm" onClick=${onClearConsole} disabled=${!liveEntries.length} title="Effacer la liste de l’aperçu (elle se remplit pendant l’exécution)">
+                <i class="fa-solid fa-eraser"></i> Effacer
               </button>
             </div>
             <div class="response-errors-list">
@@ -301,8 +301,8 @@ export function PromptEditor({
                 <div class="response-errors-empty">
                   <i class="fa-solid fa-circle-check"></i>
                   ${response
-                    ? 'No errors or warnings from the preview so far. Anything it reports while you use it appears here.'
-                    : 'Generate or paste HTML; its errors appear here.'}
+                    ? 'Aucune erreur ni aucun avertissement pour le moment. Les messages de l’aperçu apparaîtront ici pendant son utilisation.'
+                    : 'Générez ou collez du HTML ; ses erreurs apparaîtront ici.'}
                 </div>
               `}
               ${liveEntries.map(entry => {
@@ -314,15 +314,15 @@ export function PromptEditor({
                       <div class="response-error-message">${entry.message}</div>
                       <div class="response-error-meta">
                         ${at && html`
-                          <button class="response-error-line" onClick=${() => jumpToLine(at)} title="Show this line in the code">
-                            line ${at.line}${at.col ? `:${at.col}` : ''}
+                          <button class="response-error-line" onClick=${() => jumpToLine(at)} title="Afficher cette ligne dans le code">
+                            ligne ${at.line}${at.col ? `:${at.col}` : ''}
                           </button>
                         `}
                         ${entry.count > 1 && html`<span class="response-error-count">×${entry.count.toLocaleString()}</span>`}
                       </div>
                       ${entry.stack && entry.stack !== entry.message && html`
                         <details class="response-error-stack">
-                          <summary>Stack</summary>
+                          <summary>Pile d’appels</summary>
                           <pre>${entry.stack}</pre>
                         </details>
                       `}
@@ -331,7 +331,7 @@ export function PromptEditor({
                 `;
               })}
               ${checkErrors.length > 0 && html`
-                <div class="response-errors-heading">Automatic check (hidden run after generating)</div>
+                <div class="response-errors-heading">Vérification automatique (exécution masquée après génération)</div>
                 ${checkErrors.map((message, i) => html`
                   <div class="response-error error" key=${`check-${i}`}>
                     <i class="fa-solid fa-circle-xmark"></i>
@@ -346,16 +346,16 @@ export function PromptEditor({
         `}
       </div>
       ${showFullscreenPreview && html`
-        <div class="html-fullscreen-preview" role="dialog" aria-modal="true" aria-label="Rendered HTML preview">
+        <div class="html-fullscreen-preview" role="dialog" aria-modal="true" aria-label="Aperçu du rendu HTML">
           <div class="html-fullscreen-toolbar">
-            <span><i class="fa-solid fa-eye"></i> Rendered HTML</span>
+            <span><i class="fa-solid fa-eye"></i> Rendu HTML</span>
             <button
               class="btn"
               onClick=${() => setShowFullscreenPreview(false)}
-              title="Back to editor"
+              title="Retour à l’éditeur"
             >
               <i class="fa-solid fa-arrow-left"></i>
-              Back
+              Retour
             </button>
           </div>
           <div class="html-fullscreen-frame">
@@ -363,12 +363,12 @@ export function PromptEditor({
               ? html`<iframe
                   srcdoc=${response}
                   sandbox="allow-scripts allow-modals allow-pointer-lock"
-                  title="Rendered HTML full screen preview"
+                  title="Aperçu du rendu HTML en plein écran"
                 />`
               : html`
                   <div class="gallery-empty" style=${{ background: 'var(--bg-primary)' }}>
                     <i class="fa-solid fa-eye"></i>
-                    <p>Paste or type HTML in the response editor to see a live preview</p>
+                    <p>Collez ou saisissez du HTML dans l’éditeur de réponse pour afficher l’aperçu</p>
                   </div>
                 `
             }

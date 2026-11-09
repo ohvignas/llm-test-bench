@@ -39,7 +39,7 @@ export function ImportPromptsDialog({ items, onImport, onClose }) {
     <div class="modal-overlay" onKeyDown=${(e) => e.key === 'Escape' && onClose()}>
       <div class="modal import-prompts-dialog" onClick=${(e) => e.stopPropagation()} style=${{ width: '720px' }}>
         <div class="modal-header">
-          <h2>Import Prompts</h2>
+          <h2>Importer des prompts</h2>
           <button class="btn-icon" onClick=${onClose}>
             <i class="fa-solid fa-xmark"></i>
           </button>
@@ -50,7 +50,7 @@ export function ImportPromptsDialog({ items, onImport, onClose }) {
             ? html`
                 <div class="gallery-empty" style=${{ padding: '32px 0' }}>
                   <i class="fa-solid fa-file-import"></i>
-                  <p>No prompts found in saved generations or Three Prompt Lab</p>
+                  <p>Aucun prompt trouvé dans les générations enregistrées ni dans Three Prompt Lab</p>
                 </div>
               `
             : html`
@@ -61,7 +61,7 @@ export function ImportPromptsDialog({ items, onImport, onClose }) {
                       checked=${checked.size === importable.length && importable.length > 0}
                       onChange=${toggleAll}
                     />
-                    Select all (${importable.length} new, ${items.length - importable.length} already in library)
+                    Tout sélectionner (${importable.length} nouveaux, ${items.length - importable.length} déjà dans la bibliothèque)
                   </label>
                 </div>
                 <div class="import-list">
@@ -76,7 +76,7 @@ export function ImportPromptsDialog({ items, onImport, onClose }) {
                       <div class="import-item-body" onClick=${() => !item.alreadyInLibrary && toggle(item.key)}>
                         <div class="import-item-title">
                           ${item.title}
-                          ${item.alreadyInLibrary && html`<span class="library-badge">already in library</span>`}
+                          ${item.alreadyInLibrary && html`<span class="library-badge">déjà dans la bibliothèque</span>`}
                         </div>
                         <div class="import-item-prompt">${item.prompt}</div>
                         <div class="import-item-source">${item.sourceLabel}</div>
@@ -97,9 +97,9 @@ export function ImportPromptsDialog({ items, onImport, onClose }) {
         </div>
 
         <div class="modal-footer">
-          <button class="btn" onClick=${onClose}>Cancel</button>
+          <button class="btn" onClick=${onClose}>Annuler</button>
           <button class="btn btn-primary" onClick=${handleImport} disabled=${checked.size === 0}>
-            <i class="fa-solid fa-file-import"></i> Import ${checked.size > 0 ? checked.size : ''} Prompt${checked.size === 1 ? '' : 's'}
+            <i class="fa-solid fa-file-import"></i> Importer ${checked.size > 0 ? checked.size : ''} prompt${checked.size === 1 ? '' : 's'}
           </button>
         </div>
       </div>

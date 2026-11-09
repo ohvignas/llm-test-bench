@@ -804,8 +804,8 @@ function App() {
     ${showApiKeyDialog && html`
       <${ApiKeyDialog}
         currentKey=${llm.getApiKey()}
-        onSave=${(key) => {
-          llm.saveApiKey(key);
+        onSave=${async (key) => {
+          await llm.saveApiKey(key);
           setApiKeyPresent(!!key);
           setShowApiKeyDialog(false);
           if (key) loadModels();

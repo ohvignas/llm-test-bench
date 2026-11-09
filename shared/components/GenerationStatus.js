@@ -16,6 +16,12 @@ import { html, render } from 'htm/preact';
 import { useEffect, useState } from 'preact/hooks';
 import { subscribeInFlight, fetchTypical } from '../services/generation-telemetry.js';
 
+const PHASE_LABELS = {
+  queued: 'En attente', dispatched: 'Envoi', spawned: 'Démarrage', firstOutput: 'Démarrage',
+  sessionReady: 'Attente du modèle', firstThought: 'Raisonnement', firstToken: 'Rédaction',
+  firstTool: 'Utilisation des outils', done: 'Terminé',
+};
+
 const ICONS = {
   queued: 'fa-hourglass-start',
   dispatched: 'fa-paper-plane',
@@ -54,7 +60,7 @@ function modelLabel(snapshot) {
 /** The p25–p75 hint relevant to the phase a call is in, if any. */
 export function typicalHint(snapshot, typical) {
   if (!typical) return '';
-  const range = (stat) => (stat && stat.n >= 3 ? `usually ${formatDuration(stat.p25)}–${formatDuration(stat.p75)}` : '');
+  const range = (stat) => (stat && stat.n >= 3 ? `habituellement ${formatDuration(stat.p25)}–${formatDuration(stat.p75)}` : '');
   if (snapshot.phase === 'firstThought') return range(typical.think);
   if (snapshot.phase === 'firstToken' || snapshot.phase === 'firstTool') return range(typical.total);
   return range(typical.waitFirstWord);
@@ -101,21 +107,22 @@ export function GenerationStatus({ filter = null, className = '' }) {
   const elapsed = Math.max(current.elapsedMs, Date.now() - current.startedAt);
   const detail = current.note ? current.note : current.phase === 'firstThought' && current.thinkingTokens
     ? `${formatCount(current.thinkingTokens)} tokens`
-    : (current.phase === 'firstToken' && current.outputChars ? `${formatCount(current.outputChars)} chars` : '');
+    : (current.phase === 'firstToken' && current.outputChars ? `${formatCount(current.outputChars)} caractères` : '');
   const hint = typicalHint(current, typical);
+  const label = PHASE_LABELS[current.phase] || current.label;
   const title = [
-    `${current.label} — ${modelLabel(current)}`,
-    `Started ${formatDuration(elapsed)} ago (${current.entry || 'call'})`,
+    `${label} — ${modelLabel(current)}`,
+    `Démarré il y a ${formatDuration(elapsed)} (${current.entry || 'appel'})`,
     hint,
-    calls.length > 1 ? `${calls.length} calls in flight on this page` : '',
-    'Open Generation Observatory for the history.',
+    calls.length > 1 ? `${calls.length} appels en cours sur cette page` : '',
+    'Ouvrez Generation Observatory pour consulter l’historique.',
   ].filter(Boolean).join('\n');
 
   return html`
     <a class=${`gen-status gen-status-${current.phase} ${className}`} href="../generation-observatory/"
       target="_blank" rel="noopener" title=${title}>
       <i class=${`fa-solid ${ICONS[current.phase] || 'fa-circle-notch'}`}></i>
-      <span class="gen-status-label">${current.label}</span>
+      <span class="gen-status-label">${label}</span>
       <span class="gen-status-model">${modelLabel(current)}</span>
       ${detail && html`<span class="gen-status-detail">${detail}</span>`}
       <span class="gen-status-time">${formatDuration(elapsed)}</span>

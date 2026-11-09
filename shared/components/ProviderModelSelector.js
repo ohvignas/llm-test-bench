@@ -17,7 +17,7 @@ import { getEnabledProviders } from '../services/model-providers.js';
  * @param {Function} [props.onSettingsClick] - Open provider settings
  * @param {string} [props.placeholder] - Trigger text while nothing is selected
  */
-export function ProviderModelSelector({ models, providerId, modelId, onChange, disabled, loading, onSettingsClick, placeholder = 'Select model...' }) {
+export function ProviderModelSelector({ models, providerId, modelId, onChange, disabled, loading, onSettingsClick, placeholder = 'Choisir un modèle…' }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [showMode, setShowMode] = useState(() => localStorage.getItem('provider-model-selector-show-mode') || 'all');
@@ -63,7 +63,7 @@ export function ProviderModelSelector({ models, providerId, modelId, onChange, d
   }, [onChange]);
 
   const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Entrée') {
       e.preventDefault();
       const trimmed = search.trim();
       if (trimmed) {
@@ -139,13 +139,13 @@ export function ProviderModelSelector({ models, providerId, modelId, onChange, d
         class="model-selector-trigger"
         onClick=${handleToggle}
         disabled=${disabled}
-        title=${disabled ? 'Configure providers first' : 'Select a model'}
+        title=${disabled ? 'Configurez d’abord les fournisseurs' : 'Choisir un modèle'}
       >
         <span class="model-selector-label">
           ${loading
-            ? html`<i class="fa-solid fa-spinner fa-spin" style=${{ marginRight: '6px' }}></i> Loading...`
+            ? html`<i class="fa-solid fa-spinner fa-spin" style=${{ marginRight: '6px' }}></i> Chargement…`
             : (disabled
-              ? '\u{2699}\uFE0F Configure providers'
+              ? '\u{2699}\uFE0F Configurer les fournisseurs'
               : (displayLabel || placeholder)
             )
           }
@@ -164,11 +164,11 @@ export function ProviderModelSelector({ models, providerId, modelId, onChange, d
                 value=${search}
                 onInput=${e => setSearch(e.target.value)}
                 onKeyDown=${handleKeyDown}
-                placeholder="Search models..."
+                placeholder="Rechercher des modèles…"
               />
               ${onSettingsClick && html`
                 <button class="btn-icon" onClick=${(e) => { e.stopPropagation(); setOpen(false); onSettingsClick(); }}
-                  title="Provider settings" style=${{ fontSize: '12px', padding: '2px 4px' }}>
+                  title="Paramètres des fournisseurs" style=${{ fontSize: '12px', padding: '2px 4px' }}>
                   <i class="fa-solid fa-gear"></i>
                 </button>
               `}
@@ -178,17 +178,17 @@ export function ProviderModelSelector({ models, providerId, modelId, onChange, d
                 class="btn-icon"
                 style=${{ padding: '4px 10px', borderRadius: 0, background: showMode === 'free' ? 'var(--accent-light)' : 'transparent', color: showMode === 'free' ? 'var(--accent)' : 'var(--text-secondary)' }}
                 onClick=${(e) => { e.stopPropagation(); setShowMode('free'); }}
-                title="Show free models only"
+                title="Afficher uniquement les modèles gratuits"
               >
-                Free
+                Gratuits
               </button>
               <button
                 class="btn-icon"
                 style=${{ padding: '4px 10px', borderRadius: 0, background: showMode === 'all' ? 'var(--accent-light)' : 'transparent', color: showMode === 'all' ? 'var(--accent)' : 'var(--text-secondary)' }}
                 onClick=${(e) => { e.stopPropagation(); setShowMode('all'); }}
-                title="Show all models"
+                title="Afficher tous les modèles"
               >
-                All
+                Tous
               </button>
             </div>
           </div>
@@ -217,8 +217,8 @@ export function ProviderModelSelector({ models, providerId, modelId, onChange, d
               : html`
                   <div class="model-selector-empty">
                     ${search
-                      ? html`No matches. Press <kbd>Enter</kbd> to use "<strong>${search}</strong>" as custom model.`
-                      : 'No models available'
+                      ? html`Aucun résultat. Appuyez sur <kbd>Entrée</kbd> pour utiliser « <strong>${search}</strong> » comme modèle personnalisé.`
+                      : 'Aucun modèle disponible'
                     }
                   </div>
                 `

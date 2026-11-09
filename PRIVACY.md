@@ -1,5 +1,9 @@
 # Privacy
 
+## Local fork
+
+The authenticated Docker distribution in this fork stores the account password hash, sessions and an encrypted OpenRouter key in local SQLite. A separate Docker volume holds the encryption key. OpenRouter calls go through this local server; the persisted API key is not returned to the browser. Projects and sanitized timing/token/cost metrics are stored locally in a persistent Docker volume. Cloudflare analytics is removed from served application pages. See README.fr.md for limits and backup instructions. The following paragraphs describe the upstream hosted/static edition.
+
 LLM Test Bench is a mostly static website with no user accounts. Its only server-side part is a small showcase service (Cloudflare Pages Functions with a D1 database and R2 storage) that holds the published showcase examples and stores nothing about visitors.
 
 - Your working files, prompts, API keys, and generations never reach the showcase service.

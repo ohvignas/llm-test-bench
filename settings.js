@@ -45,11 +45,11 @@ async function refreshStatus() {
     folderReady = false;
     showStatus(
       'browser',
-      'Your work is saved in this browser',
-      'The apps keep what you make in this browser’s private storage, so nothing needs setting up. Saving to a folder on your disk needs a current version of Chrome or Edge.',
-      'Folder access unavailable',
+      'Votre travail est enregistré dans ce navigateur',
+      'Les applications conservent votre travail dans le stockage privé du navigateur, sans configuration. L’enregistrement dans un dossier du disque nécessite une version récente de Chrome ou Edge.',
+      'Accès aux dossiers indisponible',
     );
-    browserHelp.textContent = 'Browser storage belongs to this website on this browser. Clearing the site’s data in your browser settings removes it.';
+    browserHelp.textContent = 'Le stockage appartient à ce site dans ce navigateur. Effacer les données du site dans les paramètres du navigateur le supprime.';
     chooseButton.disabled = true;
     return;
   }
@@ -59,21 +59,21 @@ async function refreshStatus() {
   folderReady = status.status === 'ready';
   folderName = status.name || '';
   if (status.status === 'ready') {
-    showStatus('ready', `Saving to “${status.name}”`, 'Each app keeps its work in its own subfolder here. Anything saved in the browser before you chose this folder can be copied in below.', 'Change folder');
+    showStatus('ready', `Enregistrement dans « ${status.name} »`, 'Chaque application utilise son propre sous-dossier. Vous pouvez copier ci-dessous le travail enregistré auparavant dans le navigateur.', 'Changer de dossier');
   } else if (status.status === 'needs-permission') {
-    showStatus('attention', `“${status.name}” needs permission`, 'Choose it again, or select a different working folder.', 'Reconnect folder');
+    showStatus('attention', `Autorisation nécessaire pour « ${status.name} »`, 'Sélectionnez-le à nouveau ou choisissez un autre dossier de travail.', 'Reconnecter le dossier');
   } else {
-    showStatus('browser', 'Your work is saved in this browser', 'Until you choose a folder, the apps keep what you make in this browser’s private storage. Choose a folder to save files on your disk instead.', 'Choose folder');
+    showStatus('browser', 'Votre travail est enregistré dans ce navigateur', 'En attendant le choix d’un dossier, votre travail reste dans le stockage privé du navigateur. Choisissez un dossier pour enregistrer les fichiers sur votre disque.', 'Choisir un dossier');
   }
   // The storage count may have finished first; the button depends on both.
   if (storedFiles) updateCopyButton();
 }
 
-// ── Browser storage → folder ──────────────────────────────────────────────
+// ── Stockage du navigateur → folder ──────────────────────────────────────────────
 function formatBytes(bytes) {
-  if (bytes < 1024) return `${bytes} bytes`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024) return `${bytes} octets`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
 async function refreshBrowserStorage() {
@@ -83,44 +83,44 @@ async function refreshBrowserStorage() {
   storedFiles = summary.files;
   if (!summary.files) { storageBox.hidden = true; return; }
   storageBox.hidden = false;
-  storageTitle.textContent = `${summary.files} file${summary.files === 1 ? '' : 's'} saved in this browser`;
-  storageDetail.textContent = `${formatBytes(summary.bytes)} from ${summary.apps.join(', ') || 'the apps'}.`;
+  storageTitle.textContent = `${summary.files} fichier${summary.files === 1 ? '' : 's'} enregistré${summary.files === 1 ? '' : 's'} dans ce navigateur`;
+  storageDetail.textContent = `${formatBytes(summary.bytes)} provenant de ${summary.apps.join(', ') || 'vos applications'}.`;
   updateCopyButton();
 }
 
 function updateCopyButton() {
   const canCopy = folderReady && storedFiles > 0;
   copyButton.disabled = !canCopy;
-  copyButton.textContent = folderReady ? `Copy into “${folderName}”` : 'Copy into folder';
+  copyButton.textContent = folderReady ? `Copier dans « ${folderName} »` : 'Copier dans un dossier';
   storageBox.dataset.offer = canCopy ? 'true' : 'false';
   if (!folderReady && !copyStatus.textContent) {
     copyStatus.textContent = typeof window.showDirectoryPicker === 'function'
-      ? 'Choose a folder above, then copy your browser work into it.'
-      : 'Copying into a folder needs Chrome or Edge.';
+      ? 'Choisissez un dossier ci-dessus, puis copiez-y le travail du navigateur.'
+      : 'La copie dans un dossier nécessite Chrome ou Edge.';
   }
 }
 
 copyButton.addEventListener('click', async () => {
   copyButton.disabled = true;
-  copyStatus.textContent = 'Getting access to the folder…';
+  copyStatus.textContent = 'Accès au dossier…';
   try {
     const [source, folder] = await Promise.all([browserRoot(), connectRoot()]);
-    if (!source) throw new Error('Browser storage is not available.');
-    if (!folder) throw new Error('The folder is not connected. Choose it again above.');
+    if (!source) throw new Error('Le stockage du navigateur est indisponible.');
+    if (!folder) throw new Error('Le dossier n’est pas connecté. Sélectionnez-le à nouveau ci-dessus.');
     const report = await copyStorageInto(source, folder, {
-      onProgress: ({ done }) => { copyStatus.textContent = `Copying… ${done} of ${storedFiles}`; },
+      onProgress: ({ done }) => { copyStatus.textContent = `Copie… ${done} sur ${storedFiles}`; },
     });
-    const parts = [`Copied ${report.copied} file${report.copied === 1 ? '' : 's'} into “${folder.name}”.`];
-    if (report.identical) parts.push(`${report.identical} ${report.identical === 1 ? 'was' : 'were'} already there.`);
+    const parts = [`${report.copied} fichier${report.copied === 1 ? '' : 's'} copié${report.copied === 1 ? '' : 's'} dans « ${folder.name} ».`];
+    if (report.identical) parts.push(`${report.identical} fichier${report.identical === 1 ? '' : 's'} identique${report.identical === 1 ? '' : 's'} déjà présent${report.identical === 1 ? '' : 's'}.`);
     if (report.keptBoth.length) {
-      parts.push(`${report.keptBoth.length} differed from the folder's version and ${report.keptBoth.length === 1 ? 'was' : 'were'} saved beside it with “(from browser)” in the name.`);
+      parts.push(`${report.keptBoth.length} fichier(s) différent(s) enregistré(s) à côté de la version du dossier, avec « (from browser) » dans le nom.`);
     }
-    if (report.settingsKept) parts.push(`The folder's own settings were kept.`);
-    if (report.failed.length) parts.push(`${report.failed.length} could not be copied: ${report.failed.slice(0, 3).map(f => f.path).join(', ')}${report.failed.length > 3 ? '…' : ''}.`);
-    parts.push('Your browser copy is kept.');
+    if (report.settingsKept) parts.push(`Les paramètres du dossier ont été conservés.`);
+    if (report.failed.length) parts.push(`${report.failed.length} n’ont pas pu être copiés : ${report.failed.slice(0, 3).map(f => f.path).join(', ')}${report.failed.length > 3 ? '…' : ''}.`);
+    parts.push('La copie du navigateur est conservée.');
     copyStatus.textContent = parts.join(' ');
   } catch (error) {
-    copyStatus.textContent = `The copy stopped: ${error?.message || error}`;
+    copyStatus.textContent = `Copie interrompue : ${error?.message || error}`;
   } finally {
     await refreshStatus().catch(() => {});
     updateCopyButton();
@@ -129,25 +129,25 @@ copyButton.addEventListener('click', async () => {
 
 chooseButton.addEventListener('click', async () => {
   chooseButton.disabled = true;
-  showStatus('working', 'Waiting for your folder choice…', 'Use the system picker to choose or create a folder.', chooseButton.textContent);
+  showStatus('working', 'En attente du choix du dossier…', 'Utilisez le sélecteur du système pour choisir ou créer un dossier.', chooseButton.textContent);
   try {
     await setRoot();
     await refreshStatus();
     copyStatus.textContent = '';
     await refreshBrowserStorage();
-    if (storedFiles) copyStatus.textContent = `New work now saves to this folder. Your ${storedFiles} earlier file${storedFiles === 1 ? ' is' : 's are'} still in the browser: copy ${storedFiles === 1 ? 'it' : 'them'} in with the button below.`;
+    if (storedFiles) copyStatus.textContent = `Le travail sera désormais enregistré dans ce dossier. Vos ${storedFiles} fichier(s) précédent(s) restent dans le navigateur : copiez-les avec le bouton ci-dessous.`;
   } catch (error) {
     if (error?.name === 'AbortError') {
       await refreshStatus();
       return;
     }
-    showStatus('error', 'The folder could not be connected', error?.message || 'Please try again.', 'Try again');
+    showStatus('error', 'Impossible de connecter le dossier', error?.message || 'Veuillez réessayer.', 'Réessayer');
     chooseButton.disabled = false;
   }
 });
 
 refreshStatus().catch((error) => {
-  showStatus('error', 'Folder status could not be read', error?.message || 'Please reload and try again.', 'Try again');
+  showStatus('error', 'Impossible de lire l’état du dossier', error?.message || 'Actualisez la page puis réessayez.', 'Réessayer');
   chooseButton.disabled = false;
 });
 refreshBrowserStorage().catch(() => { storageBox.hidden = true; });
@@ -163,11 +163,11 @@ function localProviderEntries() {
 
 async function testLocalProvider(provider, statusNode) {
   statusNode.dataset.status = 'working';
-  statusNode.textContent = 'Testing connection…';
+  statusNode.textContent = 'Test de connexion…';
   const result = await modelProviders.testConnection(provider);
   if (!result.ok) {
     statusNode.dataset.status = 'error';
-    statusNode.textContent = result.error || 'Connection failed';
+    statusNode.textContent = result.error || 'Échec de la connexion';
     return false;
   }
 
@@ -180,7 +180,7 @@ async function testLocalProvider(provider, statusNode) {
     // user opens a gallery model picker, so do not turn success into failure.
   }
   statusNode.dataset.status = 'ready';
-  statusNode.textContent = `Connected${modelCount ? ` — ${modelCount} model${modelCount === 1 ? '' : 's'} found` : ''}`;
+  statusNode.textContent = `Connecté${modelCount ? ` — ${modelCount} modèle${modelCount === 1 ? '' : 's'} trouvé${modelCount === 1 ? '' : 's'}` : ''}`;
   return true;
 }
 
@@ -190,7 +190,7 @@ function renderProviderList() {
   if (!entries.length) {
     const empty = document.createElement('p');
     empty.className = 'model-provider-empty';
-    empty.textContent = 'No local model server connected yet.';
+    empty.textContent = 'Aucun serveur de modèles local connecté.';
     providerList.append(empty);
     return;
   }
@@ -207,7 +207,7 @@ function renderProviderList() {
     url.textContent = provider.baseUrl;
     const state = document.createElement('span');
     state.className = 'model-provider-state';
-    state.textContent = provider.enabled === false ? 'Disabled' : 'Ready to test';
+    state.textContent = provider.enabled === false ? 'Désactivé' : 'Prêt pour le test';
     details.append(title, url, state);
 
     const actions = document.createElement('div');
@@ -221,14 +221,14 @@ function renderProviderList() {
     enabled.addEventListener('change', () => {
       modelProviders.updateProvider(provider.id, { enabled: enabled.checked });
       state.dataset.status = enabled.checked ? '' : 'muted';
-      state.textContent = enabled.checked ? 'Ready to test' : 'Disabled';
+      state.textContent = enabled.checked ? 'Prêt pour le test' : 'Désactivé';
     });
-    enabledLabel.append(enabled, document.createTextNode(' Enabled'));
+    enabledLabel.append(enabled, document.createTextNode(' Activé'));
 
     const testButton = document.createElement('button');
     testButton.className = 'button compact';
     testButton.type = 'button';
-    testButton.textContent = 'Test';
+    testButton.textContent = 'Tester';
     testButton.addEventListener('click', async () => {
       testButton.disabled = true;
       await testLocalProvider(provider, state);
@@ -238,12 +238,12 @@ function renderProviderList() {
     const removeButton = document.createElement('button');
     removeButton.className = 'button compact danger';
     removeButton.type = 'button';
-    removeButton.textContent = 'Remove';
+    removeButton.textContent = 'Supprimer';
     removeButton.addEventListener('click', () => {
-      if (!window.confirm(`Remove ${provider.name || 'this local endpoint'}?`)) return;
+      if (!window.confirm(`Supprimer ${provider.name || 'ce serveur local'} ?`)) return;
       modelProviders.removeProvider(provider.id);
       renderProviderList();
-      setModelStatus('', 'Endpoint removed.');
+      setModelStatus('', 'Serveur supprimé.');
     });
 
     actions.append(enabledLabel, testButton, removeButton);
@@ -264,7 +264,7 @@ providerType.addEventListener('change', applyProviderTypeDefaults);
 endpointForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   addProviderButton.disabled = true;
-  setModelStatus('working', 'Saving endpoint and requesting local-network access…');
+  setModelStatus('working', 'Enregistrement du serveur et demande d’accès au réseau local…');
   try {
     const type = providerType.value;
     const args = {
@@ -285,11 +285,11 @@ endpointForm.addEventListener('submit', async (event) => {
     setModelStatus(
       connected ? 'ready' : 'attention',
       connected
-        ? 'Local models are ready. Open any gallery and select one from its model picker.'
-        : 'The endpoint was saved. Follow the message above, then press Test again.',
+        ? 'Les modèles locaux sont prêts. Ouvrez une galerie et choisissez-en un dans le sélecteur de modèles.'
+        : 'Le serveur a été enregistré. Suivez les indications ci-dessus, puis cliquez à nouveau sur Tester.',
     );
   } catch (error) {
-    setModelStatus('error', error?.message || 'The endpoint could not be added.');
+    setModelStatus('error', error?.message || 'Impossible d’ajouter le serveur.');
   } finally {
     addProviderButton.disabled = false;
   }

@@ -6,7 +6,7 @@ import { RatingWidget } from './RatingWidget.js';
 function formatDate(dateStr) {
   if (!dateStr) return '';
   try {
-    return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    return new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
   } catch (e) { return ''; }
 }
 
@@ -19,14 +19,14 @@ function PromptCard({ prompt, stats, onUse, onRun, onEdit, onRemove, isGeneratin
       <div class="library-card-head">
         <span class="library-card-title" title=${prompt.title}>${prompt.title}</span>
         ${prompt.source === 'user'
-          ? html`<span class="library-badge library-badge-user" title="Your prompt">yours</span>`
-          : html`<span class="library-badge" title="Curated starter prompt">curated</span>`
+          ? html`<span class="library-badge library-badge-user" title="Votre prompt">personnel</span>`
+          : html`<span class="library-badge" title="Prompt de départ sélectionné">sélectionné</span>`
         }
         ${promptSetOf(prompt) === 'advanced' && html`
-          <span class="library-badge library-badge-advanced" title="Advanced set: builds on a core prompt with numbered requirements">advanced</span>
+          <span class="library-badge library-badge-advanced" title="Série avancée : enrichit un prompt de base avec des exigences numérotées">avancé</span>
         `}
         ${promptSetOf(prompt) === 'flagship' && html`
-          <span class="library-badge library-badge-flagship" title="Flagship Sims: large simulations for the strongest models">flagship</span>
+          <span class="library-badge library-badge-flagship" title="Simulations complexes pour les modèles les plus puissants">complexe</span>
         `}
       </div>
       ${showCategory && html`
@@ -37,7 +37,7 @@ function PromptCard({ prompt, stats, onUse, onRun, onEdit, onRemove, isGeneratin
       <div
         class=${`library-card-prompt ${expanded ? 'expanded' : ''}`}
         onClick=${() => setExpanded(e => !e)}
-        title=${expanded ? 'Click to collapse' : 'Click to expand'}
+        title=${expanded ? 'Cliquer pour réduire' : 'Cliquer pour développer'}
       >${prompt.prompt}</div>
       ${expanded && prompt.notes && html`
         <div class="library-card-notes"><i class="fa-solid fa-circle-info"></i> ${prompt.notes}</div>
@@ -51,33 +51,33 @@ function PromptCard({ prompt, stats, onUse, onRun, onEdit, onRemove, isGeneratin
         ${hasRuns
           ? html`
               <i class="fa-solid fa-clock-rotate-left"></i>
-              <span>${stats.runs} run${stats.runs === 1 ? '' : 's'} · ${stats.models} model${stats.models === 1 ? '' : 's'}</span>
-              ${stats.bestRating > 0 && html`<span class="library-stats-rating">best <${RatingWidget} rating=${stats.bestRating} readonly size=${11} /></span>`}
+              <span>${stats.runs} exécution${stats.runs === 1 ? '' : 's'} · ${stats.models} modèle${stats.models === 1 ? '' : 's'}</span>
+              ${stats.bestRating > 0 && html`<span class="library-stats-rating">meilleure note <${RatingWidget} rating=${stats.bestRating} readonly size=${11} /></span>`}
               ${stats.lastRunAt && html`<span class="library-stats-date">${formatDate(stats.lastRunAt)}</span>`}
             `
-          : html`<i class="fa-regular fa-circle"></i><span>never run</span>`
+          : html`<i class="fa-regular fa-circle"></i><span>jamais exécuté</span>`
         }
       </div>
       <div class="library-card-actions">
-        <button class="btn btn-sm" onClick=${() => onUse(prompt)} title="Load into the Create view">
-          <i class="fa-solid fa-pen"></i> Use
+        <button class="btn btn-sm" onClick=${() => onUse(prompt)} title="Charger dans la vue Créer">
+          <i class="fa-solid fa-pen"></i> Utiliser
         </button>
         <button
           class="btn btn-sm btn-primary"
           onClick=${() => onRun(prompt)}
           disabled=${isGenerating}
-          title="Load into Create and generate with the current model"
+          title="Charger dans Créer et générer avec le modèle actuel"
         >
-          <i class="fa-solid fa-bolt"></i> Run
+          <i class="fa-solid fa-bolt"></i> Exécuter
         </button>
         <span class="library-card-actions-spacer"></span>
-        <button class="btn-icon" onClick=${() => onEdit(prompt)} title="Edit prompt (previous text is kept as a revision)">
+        <button class="btn-icon" onClick=${() => onEdit(prompt)} title="Modifier le prompt (la version précédente est conservée)">
           <i class="fa-solid fa-pen-to-square"></i>
         </button>
         <button
           class="btn-icon btn-icon-danger"
           onClick=${() => onRemove(prompt)}
-          title=${prompt.source === 'user' ? 'Move to library trash (kept on disk)' : 'Hide this curated prompt'}
+          title=${prompt.source === 'user' ? 'Déplacer vers la corbeille de la bibliothèque (conservé sur le disque)' : 'Masquer ce prompt sélectionné'}
         >
           <i class=${`fa-solid ${prompt.source === 'user' ? 'fa-trash' : 'fa-eye-slash'}`}></i>
         </button>
@@ -132,7 +132,7 @@ export function PromptLibraryView({
     return CATEGORIES
       .map(c => ({ id: c.id, label: c.label, icon: c.icon, prompts: filtered.filter(p => p.category === c.id) }))
       .concat([{
-        id: 'other', label: 'Other', icon: 'fa-lightbulb',
+        id: 'other', label: 'Autres', icon: 'fa-lightbulb',
         prompts: filtered.filter(p => !CATEGORIES.some(c => c.id === p.category)),
       }])
       .filter(s => s.prompts.length > 0);
@@ -145,7 +145,7 @@ export function PromptLibraryView({
           <i class="fa-solid fa-magnifying-glass"></i>
           <input
             class="form-input"
-            placeholder="Search prompts..."
+            placeholder="Rechercher des prompts…"
             value=${search}
             onInput=${(e) => setSearch(e.target.value)}
           />
@@ -154,7 +154,7 @@ export function PromptLibraryView({
           <button
             class=${`library-cat-chip ${category === 'all' ? 'active' : ''}`}
             onClick=${() => setCategory('all')}
-          >All</button>
+          >Tous</button>
           ${CATEGORIES.map(c => html`
             <button
               key=${c.id}
@@ -164,40 +164,40 @@ export function PromptLibraryView({
           `)}
         </div>
         ${hasOtherSets && html`
-          <div class="library-cat-chips library-set-chips" title="Prompt set">
-            ${[{ id: 'all', label: 'All sets' }, ...PROMPT_SETS].map(s => html`
+          <div class="library-cat-chips library-set-chips" title="Série de prompts">
+            ${[{ id: 'all', label: 'Toutes les séries' }, ...PROMPT_SETS].map(s => html`
               <button
                 key=${s.id}
                 class=${`library-cat-chip ${promptSet === s.id ? 'active' : ''}`}
-                title=${s.hint || 'Every prompt set'}
+                title=${s.hint || 'Toutes les séries de prompts'}
                 onClick=${() => setPromptSet(s.id)}
               >${s.icon ? html`<i class=${`fa-solid ${s.icon}`}></i> ` : ''}${s.label}</button>
             `)}
           </div>
         `}
         <span class="library-bar-spacer"></span>
-        <button class="btn" onClick=${onImport} disabled=${importScanning} title="Scan saved generations and Three Prompt Lab for prompts to keep">
+        <button class="btn" onClick=${onImport} disabled=${importScanning} title="Rechercher des prompts à conserver dans les générations et Three Prompt Lab">
           <i class=${`fa-solid ${importScanning ? 'fa-spinner fa-spin' : 'fa-file-import'}`}></i>
-          <span class="btn-label">Import...</span>
+          <span class="btn-label">Importer…</span>
         </button>
-        <button class="btn btn-primary" onClick=${onAdd} title="Add a new prompt to your library">
+        <button class="btn btn-primary" onClick=${onAdd} title="Ajouter un prompt à votre bibliothèque">
           <i class="fa-solid fa-plus"></i>
-          <span class="btn-label">Add Prompt</span>
+          <span class="btn-label">Ajouter un prompt</span>
         </button>
       </div>
 
       ${!hasDirectory && html`
         <div class="library-dir-hint">
           <i class="fa-solid fa-circle-info"></i>
-          Browsing the curated starter prompts. Connect a directory to save your own prompts and see run history.
-          <button class="btn btn-sm" onClick=${onPickDirectory}><i class="fa-solid fa-folder-plus"></i> Pick Directory</button>
+          Voici les prompts de départ sélectionnés. Connectez un dossier pour enregistrer vos prompts et consulter l’historique.
+          <button class="btn btn-sm" onClick=${onPickDirectory}><i class="fa-solid fa-folder-plus"></i> Choisir un dossier</button>
         </div>
       `}
 
       ${sections.length === 0 && html`
         <div class="gallery-empty">
           <i class="fa-solid fa-book-open"></i>
-          <p>No prompts match your filters</p>
+          <p>Aucun prompt ne correspond aux filtres</p>
         </div>
       `}
 

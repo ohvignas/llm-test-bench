@@ -14,7 +14,7 @@ import { playableHtml } from '../services/playable-html.js';
  * @param {{ versions: {id,label,detail?,html?,files?,latest?}[], initialId?: string, title?: string,
  *           backLabel?: string, onClose: () => void }} props
  */
-export function PlayOverlay({ versions, initialId = '', title = '', backLabel = 'Back', onClose }) {
+export function PlayOverlay({ versions, initialId = '', title = '', backLabel = 'Retour', onClose }) {
   const fallback = versions.find(v => v.latest)?.id || versions.at(-1)?.id || '';
   const [selected, setSelected] = useState(versions.some(v => v.id === initialId) ? initialId : fallback);
   const [restarts, setRestarts] = useState(0);
@@ -45,12 +45,12 @@ export function PlayOverlay({ versions, initialId = '', title = '', backLabel = 
   const focusGame = () => { try { frameRef.current?.contentWindow?.focus(); } catch { /* sandboxed */ } };
 
   if (!version) return null;
-  const optionLabel = v => `${v.label}${v.detail ? ` · ${v.detail}` : ''}${v.latest ? ' (latest)' : ''}`;
+  const optionLabel = v => `${v.label}${v.detail ? ` · ${v.detail}` : ''}${v.latest ? ' (dernière version)' : ''}`;
 
   return html`
-    <div class="play-overlay" role="dialog" aria-modal="true" aria-label=${`Playing ${title || 'the code'}: ${version.label}`}>
+    <div class="play-overlay" role="dialog" aria-modal="true" aria-label=${`Exécution de ${title || 'ce code'} : ${version.label}`}>
       <div class="play-bar">
-        <span class="play-chip"><i class="fa-solid fa-play"></i> Playing</span>
+        <span class="play-chip"><i class="fa-solid fa-play"></i> Exécution</span>
         ${title && html`<strong class="play-title">${title}</strong>`}
         ${versions.length > 1
           ? html`
@@ -62,11 +62,11 @@ export function PlayOverlay({ versions, initialId = '', title = '', backLabel = 
             </label>`
           : html`<span class="play-version-single">${optionLabel(version)}</span>`}
         <span class="play-spacer"></span>
-        <button class="btn" type="button" onClick=${() => setRestarts(n => n + 1)} title="Start this version again">
-          <i class="fa-solid fa-rotate-right"></i> Restart
+        <button class="btn" type="button" onClick=${() => setRestarts(n => n + 1)} title="Relancer cette version">
+          <i class="fa-solid fa-rotate-right"></i> Relancer
         </button>
-        <button class="btn" type="button" onClick=${() => frameRef.current?.requestFullscreen?.()} title="Fill the screen">
-          <i class="fa-solid fa-expand"></i> Fullscreen
+        <button class="btn" type="button" onClick=${() => frameRef.current?.requestFullscreen?.()} title="Remplir l’écran">
+          <i class="fa-solid fa-expand"></i> Plein écran
         </button>
         <button class="btn btn-primary" type="button" ref=${closeRef} onClick=${onClose} title=${backLabel}>
           <i class="fa-solid fa-arrow-left"></i> ${backLabel}

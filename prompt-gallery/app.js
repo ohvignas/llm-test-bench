@@ -266,7 +266,7 @@ function App() {
     if (route.name !== 'create') {
       window.location.hash = '#/create';
     }
-    addToast(`Loaded prompt from ${inbound.source || 'another app'}`, 'success');
+    addToast(`Prompt chargé depuis ${inbound.source || 'une autre application'}`, 'success');
   }, []);
 
   // ── Demo ──
@@ -504,15 +504,15 @@ function App() {
     try {
       const root = isPublicDistribution() ? await setRoot() : await connectRoot();
       if (!root) {
-        addToast('No data root configured — go to Settings → Data Root.', 'error');
+        addToast('Aucun dossier de données configuré : allez dans Paramètres → Dossier de données.', 'error');
         return;
       }
       const appHandle = await ensureAppNamespace(APP_ID);
       setRootHandle(appHandle);
       hydrateAppPrefs(APP_ID, { defaults: PREFS_DEFAULTS });
-      addToast('Directory connected', 'success');
+      addToast('Dossier connecté', 'success');
     } catch (e) {
-      if (e?.name !== 'AbortError') addToast('Failed to connect directory: ' + e.message, 'error');
+      if (e?.name !== 'AbortError') addToast('Impossible de connecter le dossier : ' + e.message, 'error');
     }
   }, [addToast]);
 
@@ -526,7 +526,7 @@ function App() {
       const list = await meta.listGenerations(rootHandle);
       setGenerations(list);
     } catch (e) {
-      addToast('Failed to load generations: ' + e.message, 'error');
+      addToast('Impossible de charger les générations : ' + e.message, 'error');
     }
   }, [rootHandle, addToast]);
 
@@ -543,7 +543,7 @@ function App() {
           perm = await rootHandle.requestPermission({ mode: 'readwrite' });
         }
         if (perm !== 'granted') {
-          addToast('Write permission denied — reconnect the Prompt Gallery folder to receive the morphed result', 'error');
+          addToast('Écriture refusée : reconnectez le dossier Prompt Gallery pour recevoir le résultat transformé', 'error');
           return;
         }
 
@@ -582,9 +582,9 @@ function App() {
         clearPromptGalleryReturnHandoff();
         await refreshGenerations();
         navigate('view/' + result.id);
-        addToast(`Saved morphed result: ${result.id}`, 'success');
+        addToast(`Résultat transformé enregistré : ${result.id}`, 'success');
       } catch (e) {
-        addToast('Code Morph return failed: ' + e.message, 'error');
+        addToast('Échec du retour de Code Morph : ' + e.message, 'error');
       } finally {
         returnHandoffBusyRef.current = false;
       }
@@ -597,13 +597,13 @@ function App() {
       const gen = await meta.loadGeneration(rootHandle, id);
       setSelectedGeneration(gen);
     } catch (e) {
-      addToast('Failed to load generation: ' + e.message, 'error');
+      addToast('Impossible de charger la génération : ' + e.message, 'error');
     }
   }, [rootHandle, addToast]);
 
   const handleSave = useCallback(async (folderName, tags, modelName) => {
     if (!rootHandle) {
-      addToast('Connect a directory first', 'error');
+      addToast('Connectez d’abord un dossier', 'error');
       return;
     }
     try {
@@ -612,7 +612,7 @@ function App() {
       if (perm !== 'granted') {
         perm = await rootHandle.requestPermission({ mode: 'readwrite' });
         if (perm !== 'granted') {
-          addToast('Write permission denied — please reconnect the directory', 'error');
+          addToast('Écriture refusée : reconnectez le dossier', 'error');
           return;
         }
       }
@@ -627,12 +627,12 @@ function App() {
       setShowSaveDialog(false);
       setEditingId(result.folderId);
       if (result.redirectedFolder) {
-        addToast(`Prompt differs — saved to new folder: ${result.redirectedFolder}`, 'info');
+        addToast(`Prompt différent : enregistrement dans un nouveau dossier : ${result.redirectedFolder}`, 'info');
       } else {
-        addToast(`Saved generation: ${result.folderId}`, 'success');
+        addToast(`Génération enregistrée : ${result.folderId}`, 'success');
       }
     } catch (e) {
-      addToast('Save failed: ' + e.message, 'error');
+      addToast('Échec de l’enregistrement : ' + e.message, 'error');
     }
   }, [rootHandle, prompt, response, addToast]);
 
@@ -658,17 +658,18 @@ function App() {
     handleModelChange(selection.providerId, selection.modelId);
   }, [agentModels, handleModelChange]);
 
-  const handleApiKeySave = useCallback((key) => {
-    openrouter.saveApiKey(key);
+  const handleApiKeySave = useCallback(async (key) => {
+    try { await openrouter.saveApiKey(key); }
+    catch (error) { addToast(error.message, 'error'); return; }
     const hasKey = !!key;
     setApiKeySet(hasKey);
     setShowApiKeyDialog(false);
     if (hasKey) {
-      addToast('API key saved (stored locally only)', 'success');
+      addToast('Clé API enregistrée', 'success');
       // Refresh models from all providers
       loadModels();
     } else {
-      addToast('API key removed', 'info');
+      addToast('Clé API supprimée', 'info');
       loadModels();
     }
   }, [addToast, loadModels]);
@@ -683,14 +684,14 @@ function App() {
   const handleGenerate = useCallback(async (promptOverride) => {
     const promptText = typeof promptOverride === 'string' ? promptOverride : prompt;
     if (!promptText.trim()) {
-      addToast('Enter a prompt first', 'error');
+      addToast('Saisissez d’abord un prompt', 'error');
       return;
     }
     if (backend === 'agent') {
       if (!rootHandle && !(await handlePickDirectory())) return;
     } else {
       if (!selectedModelId || !selectedProviderId) {
-        addToast('Select a model first', 'error');
+        addToast('Sélectionnez d’abord un modèle', 'error');
         return;
       }
       // Check API key for OpenRouter
@@ -766,9 +767,9 @@ function App() {
           setModel(modelInfo.displayLabel || modelInfo.name);
         }
       }
-      addToast('Generation complete', 'success');
+      addToast('Génération terminée', 'success');
       // Ground-truth the fresh generation in the hidden sandbox so the
-      // Create view can show clean/errors and offer Heal in Refine.
+      // Create view can show clean/errors and offer Corriger dans Améliorer.
       if (finalHtml.trim()) {
         const token = ++createRunTokenRef.current;
         setCreateRunStatus({ running: true });
@@ -777,8 +778,8 @@ function App() {
         });
       }
     } catch (e) {
-      if (abort?.signal.aborted) addToast('Generation stopped', 'info');
-      else if (!agentRun.wasCancelled()) addToast('Generation failed: ' + e.message, 'error');
+      if (abort?.signal.aborted) addToast('Génération arrêtée', 'info');
+      else if (!agentRun.wasCancelled()) addToast('Échec de la génération : ' + e.message, 'error');
     } finally {
       if (abort && generateAbortRef.current === abort) {
         generateAbortRef.current = null;
@@ -800,7 +801,7 @@ function App() {
     setModel('');
     setEditingId('');
     setCreateRunStatus(null);
-    addToast('Fields cleared', 'info');
+    addToast('Champs effacés', 'info');
   }, [addToast]);
 
   // Manual edits invalidate the last sandbox verdict.
@@ -835,7 +836,7 @@ function App() {
       // Also update in generations list
       setGenerations(prev => prev.map(g => g.id === id ? { ...g, metadata: newMeta } : g));
     } catch (e) {
-      addToast('Failed to update metadata: ' + e.message, 'error');
+      addToast('Impossible de modifier les métadonnées : ' + e.message, 'error');
     }
   }, [rootHandle, addToast]);
 
@@ -850,7 +851,7 @@ function App() {
     if (!rootHandle || !runs?.length) return false;
     const runIds = runs.map(run => run.id);
     const generationCount = runs.reduce((sum, run) => sum + (run.count || 0), 0);
-    if (!confirm(`Merge ${runs.length} same-model runs containing ${generationCount} generations? The original run IDs will be kept in metadata.`)) return false;
+    if (!confirm(`Fusionner ${runs.length} exécutions du même modèle contenant ${generationCount} générations ? Les identifiants d’origine seront conservés dans les métadonnées.`)) return false;
 
     const mergedAt = new Date().toISOString();
     const mergedRunId = `batch-merged-${Date.now().toString(36)}`;
@@ -858,7 +859,7 @@ function App() {
     try {
       updates = planRunMerge(generations, runIds, { mergedRunId, mergedAt });
     } catch (error) {
-      addToast(error.message || 'These runs cannot be merged', 'error');
+      addToast(error.message || 'Ces exécutions ne peuvent pas être fusionnées', 'error');
       return false;
     }
 
@@ -875,13 +876,13 @@ function App() {
       setSelectedGeneration(previous => previous && byId.has(previous.id)
         ? { ...previous, metadata: byId.get(previous.id) }
         : previous);
-      addToast(`${runs.length} runs merged into one run with ${generationCount} generations`, 'success');
+      addToast(`${runs.length} exécutions fusionnées en une seule avec ${generationCount} générations`, 'success');
       return true;
     } catch (error) {
       // Metadata files are independent, so restore any already-written rows if
       // a later write fails and avoid leaving a half-merged run on disk.
       await Promise.allSettled(written.map(update => meta.updateMetadata(rootHandle, update.id, update.previousMetadata)));
-      addToast(`Failed to merge runs: ${error.message}`, 'error');
+      addToast(`Impossible de fusionner les exécutions : ${error.message}`, 'error');
       return false;
     }
   }, [rootHandle, generations, addToast]);
@@ -890,7 +891,7 @@ function App() {
     if (!rootHandle || !ids?.length) return;
     const targets = generations.filter(generation => ids.includes(generation.id));
     if (!targets.length) return;
-    if (archive && targets.length > 1 && !confirm(`Archive ${targets.length} variants? They remain on disk and can be restored later.`)) return;
+    if (archive && targets.length > 1 && !confirm(`Archiver ${targets.length} variantes ? Elles restent sur le disque et pourront être restaurées.`)) return;
 
     const archivedAt = new Date().toISOString();
     try {
@@ -909,10 +910,10 @@ function App() {
         ? { ...previous, metadata: byId.get(previous.id) }
         : previous);
       addToast(archive
-        ? `${targets.length} variant${targets.length === 1 ? '' : 's'} archived`
-        : `${targets.length} variant${targets.length === 1 ? '' : 's'} restored`, 'success');
+        ? `${targets.length} variante${targets.length === 1 ? '' : 's'} archivée${targets.length === 1 ? '' : 's'}`
+        : `${targets.length} variante${targets.length === 1 ? '' : 's'} restaurée${targets.length === 1 ? '' : 's'}`, 'success');
     } catch (e) {
-      addToast(`Failed to ${archive ? 'archive' : 'restore'} generation: ${e.message}`, 'error');
+      addToast(`Impossible ${archive ? 'd’archiver' : 'de restaurer'} la génération : ${e.message}`, 'error');
     }
   }, [rootHandle, generations, addToast]);
 
@@ -927,25 +928,25 @@ function App() {
         setModel(gen.metadata?.model || '');
         setEditingId(gen.folderId || id);
         navigate('create');
-        addToast(`Loaded "${gen.folderId || id}" for editing`, 'info');
+        addToast(`« ${gen.folderId || id} » chargé pour modification`, 'info');
       }
     } catch (e) {
-      addToast('Failed to load generation: ' + e.message, 'error');
+      addToast('Impossible de charger la génération : ' + e.message, 'error');
     }
   }, [rootHandle, navigate, addToast]);
 
   const handleDelete = useCallback(async (id) => {
     if (!rootHandle) return;
-    if (!confirm(`Delete "${id}"? This cannot be undone.`)) return;
+    if (!confirm(`Supprimer « ${id} » ? Cette action est irréversible.`)) return;
     try {
       await meta.deleteGeneration(rootHandle, id);
       setGenerations(prev => prev.filter(g => g.id !== id));
       setSelectedGeneration(null);
       setSelectedId('');
       navigateToGallery();
-      addToast(`Deleted "${id}"`, 'success');
+      addToast(`« ${id} » supprimé`, 'success');
     } catch (e) {
-      addToast('Failed to delete: ' + e.message, 'error');
+      addToast('Impossible de supprimer : ' + e.message, 'error');
     }
   }, [rootHandle, navigateToGallery, addToast]);
 
@@ -956,7 +957,7 @@ function App() {
 
   const handleMorphCurrent = useCallback(() => {
     if (!response) {
-      addToast('No HTML response to morph yet', 'error');
+      addToast('Aucune réponse HTML à transformer', 'error');
       return;
     }
     try {
@@ -977,7 +978,7 @@ function App() {
         },
       });
     } catch (e) {
-      addToast('Send to Code Morph Lab failed: ' + e.message, 'error');
+      addToast('Échec de l’envoi vers Code Morph Lab : ' + e.message, 'error');
     }
   }, [response, prompt, editingId, model, allModels, selectedProviderId, selectedModelId, addToast]);
 
@@ -995,7 +996,7 @@ function App() {
         meta: { model: gen.metadata?.model, createdAt: gen.metadata?.createdAt, sourceId: gen.folderId || gen.id },
       });
     } catch (e) {
-      addToast('Morph send failed: ' + e.message, 'error');
+      addToast('Échec de l’envoi pour transformation : ' + e.message, 'error');
     }
   }, [rootHandle, addToast]);
 
@@ -1010,7 +1011,7 @@ function App() {
     setResponseMetrics({ stats: null, timing: null });
     setEditingId(library.slugify(p.title));
     navigate('create');
-    addToast(`Loaded "${p.title}"`, 'info');
+    addToast(`« ${p.title} » chargé`, 'info');
   }, [navigate, addToast]);
 
   const handleRunLibraryPrompt = useCallback((p) => {
@@ -1026,7 +1027,7 @@ function App() {
   // or just { title, prompt } seeded from the Create view / a generation.
   const handleOpenPromptForm = useCallback((initial) => {
     if (!rootHandle) {
-      addToast('Connect a directory first — your prompts are saved there', 'error');
+      addToast('Connectez d’abord un dossier : vos prompts y seront enregistrés', 'error');
       return;
     }
     setPromptForm({ initial: initial || null });
@@ -1036,29 +1037,29 @@ function App() {
     try {
       if (promptForm?.initial?.id) {
         await library.updatePrompt(rootHandle, promptForm.initial.id, data);
-        addToast(`Updated "${data.title}"`, 'success');
+        addToast(`« ${data.title} » mis à jour`, 'success');
       } else {
         await library.addPrompt(rootHandle, data);
-        addToast(`Added "${data.title}" to library`, 'success');
+        addToast(`« ${data.title} » ajouté à la bibliothèque`, 'success');
       }
       setPromptForm(null);
       await refreshLibrary();
     } catch (e) {
-      addToast('Save failed: ' + e.message, 'error');
+      addToast('Échec de l’enregistrement : ' + e.message, 'error');
     }
   }, [rootHandle, promptForm, refreshLibrary, addToast]);
 
   const handleRemoveLibraryPrompt = useCallback(async (p) => {
     const verb = p.source === 'user'
-      ? 'Move to library trash (kept in _library/library.json)?'
-      : 'Hide this curated prompt? (restorable from _library/library.json)';
+      ? 'Déplacer vers la corbeille de la bibliothèque (conservé dans _library/library.json) ?'
+      : 'Masquer ce prompt sélectionné (restaurable depuis _library/library.json) ?';
     if (!confirm(`"${p.title}" — ${verb}`)) return;
     try {
       await library.removePrompt(rootHandle, p.id);
       await refreshLibrary();
-      addToast(p.source === 'user' ? `Moved "${p.title}" to trash` : `Hid "${p.title}"`, 'info');
+      addToast(p.source === 'user' ? `« ${p.title} » déplacé vers la corbeille` : `« ${p.title} » masqué`, 'info');
     } catch (e) {
-      addToast('Remove failed: ' + e.message, 'error');
+      addToast('Échec de la suppression : ' + e.message, 'error');
     }
   }, [rootHandle, refreshLibrary, addToast]);
 
@@ -1072,7 +1073,7 @@ function App() {
       ]);
       setImportItems(library.markAlreadyInLibrary([...fromGenerations, ...fromLab], libraryPrompts));
     } catch (e) {
-      addToast('Import scan failed: ' + e.message, 'error');
+      addToast('Échec de la recherche de prompts : ' + e.message, 'error');
     } finally {
       setImportScanning(false);
     }
@@ -1080,7 +1081,7 @@ function App() {
 
   const handleImportConfirm = useCallback(async (selected) => {
     if (!rootHandle) {
-      addToast('Connect a directory first — imported prompts are saved there', 'error');
+      addToast('Connectez d’abord un dossier : les prompts importés y seront enregistrés', 'error');
       return;
     }
     try {
@@ -1089,9 +1090,9 @@ function App() {
       }
       setImportItems(null);
       await refreshLibrary();
-      addToast(`Imported ${selected.length} prompt${selected.length === 1 ? '' : 's'}`, 'success');
+      addToast(`${selected.length} prompt${selected.length === 1 ? '' : 's'} importé${selected.length === 1 ? '' : 's'}`, 'success');
     } catch (e) {
-      addToast('Import failed: ' + e.message, 'error');
+      addToast('Échec de l’importation : ' + e.message, 'error');
     }
   }, [rootHandle, refreshLibrary, addToast]);
 
@@ -1101,7 +1102,7 @@ function App() {
   // Confirms before discarding an existing session with unsaved steps.
   const handleOpenRefine = useCallback((source) => {
     if (refineSession && refineSession.steps.length > 1) {
-      if (!confirm('Discard the current Refine session (its unsaved steps will be lost)?')) return;
+      if (!confirm('Abandonner la session d’amélioration actuelle ? Ses étapes non enregistrées seront perdues.')) return;
     }
     setRefineSession({
       sourceId: source.sourceId || '',
@@ -1126,7 +1127,7 @@ function App() {
 
   const handleRefineCurrent = useCallback(() => {
     if (!response) {
-      addToast('Nothing to refine yet — generate or paste HTML first', 'error');
+      addToast('Aucun contenu à améliorer : générez ou collez d’abord du HTML', 'error');
       return;
     }
     const modelInfo = allModels.find(m => m.providerId === selectedProviderId && m.modelId === selectedModelId);
@@ -1147,7 +1148,7 @@ function App() {
     try {
       const gen = await meta.loadGeneration(rootHandle, id);
       if (!gen || !gen.response) {
-        addToast('Generation has no HTML to refine', 'error');
+        addToast('Cette génération ne contient aucun HTML à améliorer', 'error');
         return;
       }
       handleOpenRefine({
@@ -1160,7 +1161,7 @@ function App() {
         html: gen.response,
       });
     } catch (e) {
-      addToast('Failed to load generation: ' + e.message, 'error');
+      addToast('Impossible de charger la génération : ' + e.message, 'error');
     }
   }, [rootHandle, handleOpenRefine, addToast]);
 
@@ -1195,7 +1196,7 @@ function App() {
   // history: original → healed → improved.
   const handleSaveRefineStep = useCallback(async (stepIndex) => {
     if (!rootHandle) {
-      addToast('Connect a directory first', 'error');
+      addToast('Connectez d’abord un dossier', 'error');
       return;
     }
     const sess = refineSession;
@@ -1206,7 +1207,7 @@ function App() {
       if (perm !== 'granted') {
         perm = await rootHandle.requestPermission({ mode: 'readwrite' });
         if (perm !== 'granted') {
-          addToast('Write permission denied — please reconnect the directory', 'error');
+          addToast('Écriture refusée : reconnectez le dossier', 'error');
           return;
         }
       }
@@ -1220,12 +1221,12 @@ function App() {
       const result = await meta.saveGeneration(rootHandle, folder, sess.prompt || '', step.html, metadata);
       await refreshGenerations();
       if (result.redirectedFolder) {
-        addToast(`Prompt differs — saved to new folder: ${result.redirectedFolder}`, 'info');
+        addToast(`Prompt différent : enregistrement dans un nouveau dossier : ${result.redirectedFolder}`, 'info');
       } else {
-        addToast(`Saved as new variant in "${result.folderId}"`, 'success');
+        addToast(`Nouvelle variante enregistrée dans « ${result.folderId} »`, 'success');
       }
     } catch (e) {
-      addToast('Save failed: ' + e.message, 'error');
+      addToast('Échec de l’enregistrement : ' + e.message, 'error');
     }
   }, [rootHandle, refineSession, refreshGenerations, addToast]);
 
@@ -1355,7 +1356,7 @@ function App() {
 
   const handleOpenBatch = useCallback(async () => {
     if (!rootHandle) {
-      addToast('Connect a directory first — batch generations are saved there', 'error');
+      addToast('Connectez d’abord un dossier : les générations du lot y seront enregistrées', 'error');
       handlePickDirectory();
       return;
     }
@@ -1363,7 +1364,7 @@ function App() {
       let perm = await rootHandle.queryPermission({ mode: 'readwrite' });
       if (perm !== 'granted') perm = await rootHandle.requestPermission({ mode: 'readwrite' });
       if (perm !== 'granted') {
-        addToast('Write permission denied — please reconnect the directory', 'error');
+        addToast('Écriture refusée : reconnectez le dossier', 'error');
         return;
       }
     } catch (e) { /* fall through — save will surface any real problem */ }
@@ -1403,7 +1404,7 @@ function App() {
         if (num != null) {
           e.preventDefault();
           handleUpdateMetadata(selectedGeneration.id, withRating(selectedGeneration.metadata, num));
-          addToast(`Rating set to ${num}/${RATING_MAX}`, 'info');
+          addToast(`Note attribuée : ${num}/${RATING_MAX}`, 'info');
         }
       }
     };
@@ -1463,8 +1464,8 @@ function App() {
         return html`
           <div class="view-screen">
             <div class="view-preview">
-              <button class="view-back-btn" onClick=${navigateToGallery} title="Back to gallery (Esc)">
-                <i class="fa-solid fa-arrow-left"></i> Back
+              <button class="view-back-btn" onClick=${navigateToGallery} title="Retour à la galerie (Échap)">
+                <i class="fa-solid fa-arrow-left"></i> Retour
               </button>
               ${selectedGeneration?.response
             ? html`<${ViewIframe}
@@ -1472,7 +1473,7 @@ function App() {
                     generationId=${selectedGeneration.id}
                     html=${instrumentIframeHtml(selectedGeneration.response)}
                   />`
-            : html`<div class="gallery-empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading...</p></div>`
+            : html`<div class="gallery-empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Chargement…</p></div>`
           }
             </div>
             <${MetadataPanel}
@@ -1562,11 +1563,11 @@ function App() {
               ${response && !isGenerating && html`
                 <div class="create-run-strip">
                   ${createRunStatus?.running
-                    ? html`<span class="create-run-label pending"><i class="fa-solid fa-spinner fa-spin"></i> checking...</span>`
+                    ? html`<span class="create-run-label pending"><i class="fa-solid fa-spinner fa-spin"></i> vérification…</span>`
                     : createRunStatus
                       ? checkFailed
                         ? html`
-                          <button class="create-run-label error" onClick=${() => setResponseView('errors')} title="Show the errors">
+                          <button class="create-run-label error" onClick=${() => setResponseView('errors')} title="Afficher les erreurs">
                             <i class="fa-solid fa-triangle-exclamation"></i>
                             ${runStatusLabel(createRunStatus)}
                           </button>
@@ -1580,19 +1581,19 @@ function App() {
                       : null
                   }
                   ${previewErrors > 0 && html`
-                    <button class="create-run-label error" onClick=${() => setResponseView('errors')} title="Show the errors">
+                    <button class="create-run-label error" onClick=${() => setResponseView('errors')} title="Afficher les erreurs">
                       <i class="fa-solid fa-bug"></i>
-                      ${previewErrors} error${previewErrors === 1 ? '' : 's'} in the preview
+                      ${previewErrors} erreur${previewErrors === 1 ? '' : 's'} dans l’aperçu
                     </button>
                   `}
                   <span class="library-card-actions-spacer"></span>
-                  <button class="btn btn-sm" onClick=${() => setFullscreenPreview(true)} title="Show the page full screen (Esc to come back)">
+                  <button class="btn btn-sm" onClick=${() => setFullscreenPreview(true)} title="Afficher la page en plein écran (Échap pour revenir)">
                     <i class="fa-solid fa-eye"></i>
-                    Full screen
+                    Plein écran
                   </button>
-                  <button class="btn btn-sm" onClick=${handleRefineCurrent} title="Open in the Refine tab to heal errors or add features">
+                  <button class="btn btn-sm" onClick=${handleRefineCurrent} title="Ouvrir l’onglet Améliorer pour corriger les erreurs ou ajouter des fonctionnalités">
                     <i class="fa-solid fa-screwdriver-wrench"></i>
-                    ${checkFailed || previewErrors > 0 ? 'Heal in Refine' : 'Refine'}
+                    ${checkFailed || previewErrors > 0 ? 'Corriger dans Améliorer' : 'Améliorer'}
                   </button>
                 </div>
               `}
@@ -1657,15 +1658,15 @@ function App() {
           model: selectedGeneration?.metadata?.model || model || null,
         }),
         onNeedDirectory: handlePickDirectory,
-        onSaved: result => addToast(`Recording saved: ${result.path}`, 'success'),
-        onDownloaded: ({ filename }) => addToast(`Downloaded ${filename}`, 'success'),
-        onError: error => addToast(`Recording failed: ${error.message}`, 'error'),
+        onSaved: result => addToast(`Enregistrement vidéo sauvegardé : ${result.path}`, 'success'),
+        onDownloaded: ({ filename }) => addToast(`${filename} téléchargé`, 'success'),
+        onError: error => addToast(`Échec de l’enregistrement vidéo : ${error.message}`, 'error'),
       }}
     />
     ${showHelp && html`
       <${HelpDialog}
         src="./HELP.md"
-        title="Prompt Gallery — Help"
+        title="Prompt Gallery — Aide"
         onClose=${() => setShowHelp(false)}
       />
     `}
@@ -1801,7 +1802,7 @@ function ViewIframe({ generationId, html: htmlContent }) {
   return html`<iframe
     ref=${ref}
     sandbox="allow-scripts"
-    title="Preview"
+    title="Aperçu"
   />`;
 }
 

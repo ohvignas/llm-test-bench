@@ -10,7 +10,7 @@ export function RatingWidget({ rating = 0, onChange, readonly = false, size = 14
 
   if (readonly) {
     return html`
-      <span class="rating-display" title=${rating ? `${rating}/${RATING_MAX}` : 'Not rated'}>
+      <span class="rating-display" title=${rating ? `${rating}/${RATING_MAX}` : 'Non noté'}>
         ${STARS.map(i => html`
           <i key=${i}
             class=${`fa-star ${i <= rating ? 'fa-solid' : 'fa-regular empty'}`}
@@ -29,7 +29,7 @@ export function RatingWidget({ rating = 0, onChange, readonly = false, size = 14
           style=${{ fontSize: size + 'px' }}
           onMouseEnter=${() => setHovered(i)}
           onClick=${(e) => { e.stopPropagation(); onChange && onChange(i === rating ? 0 : i); }}
-          title=${i === rating ? 'Clear rating' : `${i}/${RATING_MAX}`}
+          title=${i === rating ? 'Effacer la note' : `${i}/${RATING_MAX}`}
         >
           <i class=${`${i <= (hovered || rating) ? 'fa-solid' : 'fa-regular'} fa-star`}></i>
         </button>

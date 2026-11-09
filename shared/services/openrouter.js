@@ -16,6 +16,7 @@ import { withHttpDetails } from './provider-errors.js';
 import './settings-sync.js';
 import { applyParams, withUsageReporting, createRunStats } from './gen-params.js';
 import { withTelemetry, messagesText } from './generation-telemetry.js';
+import { secureMode, sessionStatus, keyConfigured, saveVaultKey, secureFetch } from './secure-session.js';
 
 import {
   suite,
@@ -25,7 +26,9 @@ import {
   migrateJsonField,
 } from './suite-prefs.js';
 
-const API_BASE = 'https://openrouter.ai/api/v1';
+const SERVER_VAULT = secureMode();
+const API_BASE = SERVER_VAULT ? '/api/openrouter' : 'https://openrouter.ai/api/v1';
+const providerFetch = (url, init) => SERVER_VAULT ? secureFetch(url, init) : fetch(url, init);
 const KEYS_AREA = 'api-keys';
 const KEY_FIELD = 'openrouterKey';
 const LEGACY_KEY_LS = 'devtools-hub-openrouter-key';
@@ -113,6 +116,7 @@ async function throwOpenRouterError(res, context = {}) {
 // place when the suite-prefs migration scans localStorage for it.
 
 (function consolidateLegacyKeys() {
+  if (SERVER_VAULT) return;
   try {
     if (!localStorage.getItem(LEGACY_KEY_LS)) {
       for (const legacyKey of LEGACY_PER_APP_KEYS) {
@@ -134,8 +138,10 @@ async function throwOpenRouterError(res, context = {}) {
 
 const KEY_DEFAULTS = { [KEY_FIELD]: '' };
 const KEY_LEGACY = { [KEY_FIELD]: LEGACY_KEY_LS };
-suite(KEYS_AREA, { defaults: KEY_DEFAULTS, legacyKeys: KEY_LEGACY });
-const keyHydration = hydrateSuite(KEYS_AREA, { defaults: KEY_DEFAULTS, legacyKeys: KEY_LEGACY });
+if (!SERVER_VAULT) suite(KEYS_AREA, { defaults: KEY_DEFAULTS, legacyKeys: KEY_LEGACY });
+const keyHydration = SERVER_VAULT
+  ? sessionStatus()
+  : hydrateSuite(KEYS_AREA, { defaults: KEY_DEFAULTS, legacyKeys: KEY_LEGACY });
 
 suite(CACHE_AREA, { defaults: { [CACHE_FIELD]: null } });
 (async () => {
@@ -146,14 +152,17 @@ suite(CACHE_AREA, { defaults: { [CACHE_FIELD]: null } });
 // ── API Key management ──
 
 export function getApiKey() {
+  if (SERVER_VAULT) return '';
   return getSuiteField(KEYS_AREA, KEY_FIELD, '') || '';
 }
 
 export function saveApiKey(key) {
-  setSuite(KEYS_AREA, KEY_FIELD, key ? key.trim() : '');
+  if (SERVER_VAULT) return saveVaultKey(key);
+  return setSuite(KEYS_AREA, KEY_FIELD, key ? key.trim() : '');
 }
 
 export function hasApiKey() {
+  if (SERVER_VAULT) return keyConfigured();
   return !!getApiKey();
 }
 
@@ -161,7 +170,7 @@ async function getApiKeyForRequest() {
   try {
     await keyHydration;
   } catch { /* hydrateSuite already logs failures */ }
-  return getApiKey();
+  return SERVER_VAULT ? (keyConfigured() ? 'server-vault' : '') : getApiKey();
 }
 
 // ── Model list ──
@@ -188,9 +197,9 @@ export async function fetchModels({ freeOnly = false, providerFilter, search } =
     try {
       const headers = { 'Content-Type': 'application/json' };
       const apiKey = await getApiKeyForRequest();
-      if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+      if (apiKey && !SERVER_VAULT) headers['Authorization'] = `Bearer ${apiKey}`;
 
-      const res = await fetch(`${API_BASE}/models`, { headers, signal: AbortSignal.timeout(15000) });
+      const res = await providerFetch(`${API_BASE}/models`, { headers, signal: AbortSignal.timeout(15000) });
       if (!res.ok) throw new Error('Failed to fetch models');
       const data = await res.json();
 
@@ -253,11 +262,11 @@ async function chatCompletionRaw({ modelId, messages, tools, appTitle, telemetry
   if (telemetry) body = withUsageReporting(body, 'openrouter');
 
   telemetry?.mark('dispatched');
-  const res = await fetch(`${API_BASE}/chat/completions`, {
+  const res = await providerFetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
+      ...(!SERVER_VAULT ? { 'Authorization': `Bearer ${apiKey}` } : {}),
       'HTTP-Referer': window.location.origin,
       'X-Title': appTitle || 'DevTools Hub',
     },
@@ -298,11 +307,11 @@ async function streamChatCompletionRaw({ modelId, messages, tools, appTitle, onC
   const stats = createRunStats(undefined, telemetry);
 
   telemetry?.mark('dispatched');
-  const res = await fetch(`${API_BASE}/chat/completions`, {
+  const res = await providerFetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
+      ...(!SERVER_VAULT ? { 'Authorization': `Bearer ${apiKey}` } : {}),
       'HTTP-Referer': window.location.origin,
       'X-Title': appTitle || 'DevTools Hub',
     },
@@ -431,11 +440,11 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
   if (onStats || telemetry) body = withUsageReporting(body, 'openrouter');
 
   telemetry?.mark('dispatched');
-  const res = await fetch(`${API_BASE}/chat/completions`, {
+  const res = await providerFetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
+      ...(!SERVER_VAULT ? { 'Authorization': `Bearer ${apiKey}` } : {}),
       'HTTP-Referer': window.location.origin,
       'X-Title': appTitle || 'DevTools Hub',
     },

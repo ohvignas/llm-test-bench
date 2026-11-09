@@ -20,7 +20,7 @@ const MAX_COMPARE = 4;
 function shortDate(value) {
   const parsed = Date.parse(value || '');
   if (!Number.isFinite(parsed)) return '';
-  return new Date(parsed).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return new Date(parsed).toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' });
 }
 
 function providerLabel(generation) {
@@ -31,7 +31,7 @@ function providerLabel(generation) {
 // none — see useLazyHtml).
 function ComparePane({ generation, loadHtml }) {
   const { html: page, loading } = useLazyHtml(generation.id, loadHtml, { initial: generation.response || '' });
-  if (loading && !page) return html`<div class="compare-pane-loading">Loading…</div>`;
+  if (loading && !page) return html`<div class="compare-pane-loading">Chargement…</div>`;
   return html`<iframe
     srcdoc=${page || ''}
     sandbox="allow-scripts allow-modals allow-pointer-lock"
@@ -108,65 +108,65 @@ export function CompareView({ generations, compareIds, onCompareIdsChange, onOpe
               <input
                 class="filter-search"
                 type="search"
-                placeholder="Search prompts, models, providers, tags or notes"
+                placeholder="Rechercher prompts, modèles, fournisseurs, étiquettes ou notes"
                 value=${search}
                 onInput=${e => setSearch(e.target.value)}
               />
             </div>
-            <select class="filter-select" value=${filterModel} onChange=${e => setFilterModel(e.target.value)} title="Filter by model">
-              <option value="">All models</option>
+            <select class="filter-select" value=${filterModel} onChange=${e => setFilterModel(e.target.value)} title="Filtrer par modèle">
+              <option value="">Tous les modèles</option>
               ${facets.models.map(model => html`<option key=${model} value=${model}>${model}</option>`)}
             </select>
-            <select class="filter-select" value=${minRating} onChange=${e => setMinRating(Number(e.target.value))} title="Minimum rating">
-              <option value="0">Any rating</option>
-              <option value="5">5+ stars</option>
-              <option value="7">7+ stars</option>
-              <option value="8">8+ stars</option>
-              <option value="9">9+ stars</option>
-              <option value="10">10 stars</option>
+            <select class="filter-select" value=${minRating} onChange=${e => setMinRating(Number(e.target.value))} title="Note minimale">
+              <option value="0">Toutes les notes</option>
+              <option value="5">5 étoiles et plus</option>
+              <option value="7">7 étoiles et plus</option>
+              <option value="8">8 étoiles et plus</option>
+              <option value="9">9 étoiles et plus</option>
+              <option value="10">10 étoiles</option>
             </select>
-            <select class="filter-select" value=${sortBy} onChange=${e => setSortBy(e.target.value)} title="Sort">
-              <option value="date-desc">Newest first</option>
-              <option value="date-asc">Oldest first</option>
-              <option value="rating-desc">Highest rated</option>
-              <option value="name-asc">Name A-Z</option>
-              <option value="variants-desc">Most variants</option>
+            <select class="filter-select" value=${sortBy} onChange=${e => setSortBy(e.target.value)} title="Trier">
+              <option value="date-desc">Plus récents en premier</option>
+              <option value="date-asc">Plus anciens en premier</option>
+              <option value="rating-desc">Meilleures notes</option>
+              <option value="name-asc">Nom A–Z</option>
+              <option value="variants-desc">Plus de variantes</option>
             </select>
             <button
               class=${`btn-icon ${showArchived ? 'active' : ''}`}
               onClick=${() => setShowArchived(v => !v)}
-              title=${showArchived ? 'Showing archived only — click for active' : 'Show archived generations'}
+              title=${showArchived ? 'Archives uniquement : cliquer pour afficher les éléments actifs' : 'Afficher les générations archivées'}
             >
               <i class="fa-solid fa-box-archive"></i>
             </button>
-            <button class="btn-icon" onClick=${clearFilters} disabled=${!hasFilters} title="Clear filters">
+            <button class="btn-icon" onClick=${clearFilters} disabled=${!hasFilters} title="Effacer les filtres">
               <i class="fa-solid fa-filter-circle-xmark"></i>
             </button>
-            <span class="gallery-result-count">${matchCount} generation${matchCount === 1 ? '' : 's'}</span>
+            <span class="gallery-result-count">${matchCount} génération${matchCount === 1 ? '' : 's'}</span>
           </div>
 
           <div class="compare-tray">
             <span class="compare-tray-label">
               <i class="fa-solid fa-columns"></i>
-              Picked ${compareIds.length}/${MAX_COMPARE}
+              Sélection : ${compareIds.length}/${MAX_COMPARE}
             </span>
             ${selected.length === 0
-              ? html`<span class="compare-tray-hint">Pick 2–${MAX_COMPARE} generations, or use “Line up models” on a prompt</span>`
+              ? html`<span class="compare-tray-hint">Choisissez 2 à ${MAX_COMPARE} générations ou « Comparer les modèles » sur un prompt</span>`
               : selected.map(g => html`
-                  <button key=${g.id} class="compare-chip" onClick=${() => toggleId(g.id)} title="Remove from comparison">
+                  <button key=${g.id} class="compare-chip" onClick=${() => toggleId(g.id)} title="Retirer de la comparaison">
                     <span>${shortModelLabel(g)}</span>
                     <i class="fa-solid fa-xmark"></i>
                   </button>
                 `)
             }
             <span class="library-card-actions-spacer"></span>
-            ${compareIds.length > 0 && html`<button class="btn btn-sm" onClick=${reset}>Clear</button>`}
+            ${compareIds.length > 0 && html`<button class="btn btn-sm" onClick=${reset}>Effacer</button>`}
             <button
               class="btn btn-primary btn-sm"
               onClick=${() => compareIds.length >= 2 && setSelecting(false)}
               disabled=${compareIds.length < 2}
             >
-              <i class="fa-solid fa-columns"></i> Compare (${compareIds.length})
+              <i class="fa-solid fa-columns"></i> Comparer (${compareIds.length})
             </button>
           </div>
         </div>
@@ -176,15 +176,15 @@ export function CompareView({ generations, compareIds, onCompareIdsChange, onOpe
             ? html`
                 <div class="compare-selector">
                   <i class="fa-solid fa-columns"></i>
-                  <p>No generations available. Save some first!</p>
+                  <p>Aucune génération disponible. Enregistrez-en d’abord !</p>
                 </div>
               `
             : projects.length === 0
               ? html`
                   <div class="compare-selector">
                     <i class="fa-solid fa-filter-circle-xmark"></i>
-                    <p>Nothing matches these filters.</p>
-                    <button class="btn" onClick=${clearFilters}>Clear filters</button>
+                    <p>Aucun résultat pour ces filtres.</p>
+                    <button class="btn" onClick=${clearFilters}>Effacer les filtres</button>
                   </div>
                 `
               : projects.map(project => html`
@@ -193,17 +193,17 @@ export function CompareView({ generations, compareIds, onCompareIdsChange, onOpe
                       <div class="compare-project-heading">
                         <span class="gallery-card-title">${project.title}</span>
                         <span class="compare-project-meta">
-                          ${project.variants.length} run${project.variants.length === 1 ? '' : 's'}
-                          · ${project.models.length} model${project.models.length === 1 ? '' : 's'}
+                          ${project.variants.length} exécution${project.variants.length === 1 ? '' : 's'}
+                          · ${project.models.length} modèle${project.models.length === 1 ? '' : 's'}
                         </span>
                       </div>
                       <button
                         class="btn btn-sm"
                         onClick=${() => lineUpProject(project)}
                         disabled=${project.variants.length < 2}
-                        title="Compare this prompt across up to ${MAX_COMPARE} models"
+                        title="Comparer ce prompt sur ${MAX_COMPARE} modèles au maximum"
                       >
-                        <i class="fa-solid fa-wand-magic-sparkles"></i> Line up models
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Comparer les modèles
                       </button>
                       ${project.prompt && html`<p class="compare-project-prompt">${project.prompt}</p>`}
                     </header>
@@ -216,7 +216,7 @@ export function CompareView({ generations, compareIds, onCompareIdsChange, onOpe
                             key=${g.id}
                             class=${`compare-pick-card ${picked ? 'selected' : ''} ${full ? 'disabled' : ''}`}
                             onClick=${() => !full && toggleId(g.id)}
-                            title=${full ? `Deselect one first — ${MAX_COMPARE} is the maximum` : modelLabel(g)}
+                            title=${full ? `Désélectionnez un élément : maximum ${MAX_COMPARE}` : modelLabel(g)}
                           >
                             <i class=${`fa-${picked ? 'solid fa-circle-check' : 'regular fa-circle'}`}
                                style=${{ color: picked ? 'var(--accent)' : 'var(--text-muted)' }}></i>
@@ -248,16 +248,16 @@ export function CompareView({ generations, compareIds, onCompareIdsChange, onOpe
     <div class="compare-view">
       <div class="filter-bar compare-result-bar">
         <button class="btn btn-sm" onClick=${() => setSelecting(true)}>
-          <i class="fa-solid fa-arrow-left"></i> Change selection
+          <i class="fa-solid fa-arrow-left"></i> Modifier la sélection
         </button>
         <div class="compare-result-prompt">
           ${samePrompt && selected[0].prompt
             ? html`<span title=${selected[0].prompt}>${selected[0].prompt}</span>`
-            : html`<span class="compare-tray-hint">Comparing ${cols} generations from different prompts</span>`
+            : html`<span class="compare-tray-hint">Comparaison de ${cols} générations issues de prompts différents</span>`
           }
         </div>
-        <button class="btn btn-sm" onClick=${reset} title="Clear the selection">
-          <i class="fa-solid fa-xmark"></i> Clear
+        <button class="btn btn-sm" onClick=${reset} title="Effacer la sélection">
+          <i class="fa-solid fa-xmark"></i> Effacer
         </button>
       </div>
       <div class="compare-grid" style=${{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
@@ -275,7 +275,7 @@ export function CompareView({ generations, compareIds, onCompareIdsChange, onOpe
               <div style=${{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <${RatingWidget} rating=${ratingOf(g.metadata)} readonly size=${11} />
                 ${onOpen && html`
-                  <button class="btn-icon" onClick=${() => onOpen(g.id)} title="Open this generation">
+                  <button class="btn-icon" onClick=${() => onOpen(g.id)} title="Ouvrir cette génération">
                     <i class="fa-solid fa-up-right-from-square"></i>
                   </button>
                 `}

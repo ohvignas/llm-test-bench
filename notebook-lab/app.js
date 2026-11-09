@@ -503,11 +503,11 @@ function App() {
     handleModelChange(selection.providerId, selection.modelId);
   }, [agentModels, handleModelChange]);
 
-  const handleApiKeySave = useCallback((key) => {
-    openrouter.saveApiKey(key);
+  const handleApiKeySave = useCallback(async (key) => {
+    await openrouter.saveApiKey(key);
     setApiKeySet(!!key);
     setShowApiKeyDialog(false);
-    addToast(key ? 'API key saved' : 'API key removed', key ? 'success' : 'info');
+    addToast(key ? 'Clé API enregistrée' : 'Clé API supprimée', key ? 'success' : 'info');
     loadModels();
   }, [addToast, loadModels]);
 

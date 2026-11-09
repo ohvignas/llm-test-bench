@@ -65,7 +65,7 @@ function LiveHtmlFrame({ frameKey, html: htmlContent }) {
     requestAnimationFrame(apply);
     return () => { cancelled = true; };
   }, [frameKey, htmlContent]);
-  return html`<iframe ref=${ref} sandbox="allow-scripts" title="Refine preview" />`;
+  return html`<iframe ref=${ref} sandbox="allow-scripts" title="Aperçu de l’amélioration" />`;
 }
 
 const STEP_ICONS = { original: 'fa-file-code', heal: 'fa-kit-medical', improve: 'fa-wand-magic-sparkles' };
@@ -143,10 +143,10 @@ export function RefineView({
 
   const handleHeal = useCallback(async () => {
     if (!activeStep || busy) return;
-    if (!hasModel) { addToast('Select a model first', 'error'); return; }
+    if (!hasModel) { addToast('Sélectionnez d’abord un modèle', 'error'); return; }
     const startStatus = activeStep.runStatus;
     if (!startStatus || startStatus.errors.length === 0) {
-      addToast('No captured errors to heal', 'info');
+      addToast('Aucune erreur capturée à corriger', 'info');
       return;
     }
     patchSession({ busy: 'heal', streamBytes: 0 });
@@ -164,28 +164,28 @@ export function RefineView({
           onChunk: (text) => patchSession({ streamBytes: text.length }),
           signal: abort.signal,
         });
-        if (!healed || !healed.trim()) throw new Error('Model returned an empty document');
+        if (!healed || !healed.trim()) throw new Error('Le modèle a renvoyé un document vide');
         const stepIndex = baseLen + (n - 1);
         appendStep({
           kind: 'heal',
-          label: attempts > 1 ? `Heal attempt ${n}` : 'Healed',
-          summary: `Heal: ${currentErrors.length} error${currentErrors.length === 1 ? '' : 's'} addressed`,
+          label: attempts > 1 ? `Tentative de correction ${n}` : 'Corrigé',
+          summary: `Correction : ${currentErrors.length} erreur${currentErrors.length === 1 ? '' : 's'} traitée${currentErrors.length === 1 ? '' : 's'}`,
           html: healed,
           runStatus: null,
         });
         const status = await runStep(stepIndex, healed);
         if (status.ok) {
-          addToast(`Healed — sandbox run is clean (attempt ${n})`, 'success');
-          patchStep(stepIndex, { summary: `Heal: ${currentErrors.length} error${currentErrors.length === 1 ? '' : 's'} → clean` });
+          addToast(`Correction réussie : aucune erreur dans le bac à sable (tentative ${n})`, 'success');
+          patchStep(stepIndex, { summary: `Correction : ${currentErrors.length} erreur${currentErrors.length === 1 ? '' : 's'} → aucune erreur` });
           return;
         }
         currentHtml = healed;
         currentErrors = status.errors;
       }
-      addToast(`Still ${currentErrors.length} error${currentErrors.length === 1 ? '' : 's'} after ${attempts} attempt${attempts === 1 ? '' : 's'}`, 'error');
+      addToast(`Encore ${currentErrors.length} erreur${currentErrors.length === 1 ? '' : 's'} après ${attempts} tentative${attempts === 1 ? '' : 's'}`, 'error');
     } catch (e) {
-      if (abort.signal.aborted) addToast('Heal stopped', 'info');
-      else addToast('Heal failed: ' + e.message, 'error');
+      if (abort.signal.aborted) addToast('Correction arrêtée', 'info');
+      else addToast('Échec de la correction : ' + e.message, 'error');
     } finally {
       endRefineCall(abort);
       patchSession({ busy: null, streamBytes: 0 });
@@ -196,7 +196,7 @@ export function RefineView({
 
   const handleSuggest = useCallback(async () => {
     if (!activeStep || busy) return;
-    if (!hasModel) { addToast('Select a model first', 'error'); return; }
+    if (!hasModel) { addToast('Sélectionnez d’abord un modèle', 'error'); return; }
     patchSession({ busy: 'suggest', suggestions: '' });
     const abort = beginRefineCall();
     try {
@@ -207,12 +207,12 @@ export function RefineView({
         onChunk: (text) => patchSession({ suggestions: text }),
         signal: abort.signal,
       });
-      if (!out) throw new Error('Model returned no suggestions');
+      if (!out) throw new Error('Le modèle n’a renvoyé aucune suggestion');
       patchSession({ suggestions: out });
-      addToast('Suggestions ready — edit the list, then Apply', 'success');
+      addToast('Suggestions prêtes : modifiez la liste puis appliquez-la', 'success');
     } catch (e) {
-      if (abort.signal.aborted) addToast('Suggest stopped', 'info');
-      else addToast('Suggest failed: ' + e.message, 'error');
+      if (abort.signal.aborted) addToast('Suggestions arrêtées', 'info');
+      else addToast('Échec des suggestions : ' + e.message, 'error');
     } finally {
       endRefineCall(abort);
       patchSession({ busy: null });
@@ -221,9 +221,9 @@ export function RefineView({
 
   const handleApply = useCallback(async () => {
     if (!activeStep || busy) return;
-    if (!hasModel) { addToast('Select a model first', 'error'); return; }
+    if (!hasModel) { addToast('Sélectionnez d’abord un modèle', 'error'); return; }
     const instructions = (session.suggestions || '').trim();
-    if (!instructions) { addToast('No improvement instructions to apply', 'error'); return; }
+    if (!instructions) { addToast('Aucune instruction d’amélioration à appliquer', 'error'); return; }
     patchSession({ busy: 'apply', streamBytes: 0 });
     const abort = beginRefineCall();
     try {
@@ -235,21 +235,21 @@ export function RefineView({
         onChunk: (text) => patchSession({ streamBytes: text.length }),
         signal: abort.signal,
       });
-      if (!improved || !improved.trim()) throw new Error('Model returned an empty document');
+      if (!improved || !improved.trim()) throw new Error('Le modèle a renvoyé un document vide');
       const stepIndex = steps.length;
       appendStep({
         kind: 'improve',
-        label: 'Improvements applied',
-        summary: `Improve: ${instructions.split('\n').filter(l => l.trim()).length} instruction(s)\n${instructions}`,
+        label: 'Améliorations appliquées',
+        summary: `Amélioration : ${instructions.split('\n').filter(l => l.trim()).length} instruction(s)\n${instructions}`,
         html: improved,
         runStatus: null,
       });
       patchSession({ suggestions: '' });
       await runStep(stepIndex, improved);
-      addToast('Improvements applied', 'success');
+      addToast('Améliorations appliquées', 'success');
     } catch (e) {
-      if (abort.signal.aborted) addToast('Apply stopped — your instructions are kept', 'info');
-      else addToast('Apply failed: ' + e.message, 'error');
+      if (abort.signal.aborted) addToast('Application arrêtée : vos instructions sont conservées', 'info');
+      else addToast('Échec de l’application : ' + e.message, 'error');
     } finally {
       endRefineCall(abort);
       patchSession({ busy: null, streamBytes: 0 });
@@ -263,10 +263,10 @@ export function RefineView({
       <div class="refine-view">
         <div class="gallery-empty">
           <i class="fa-solid fa-screwdriver-wrench"></i>
-          <p>Nothing loaded to refine yet</p>
+          <p>Aucune génération chargée à améliorer</p>
           <p class="refine-empty-hint">
-            Open a generation from the Gallery and click <strong>Refine</strong>,
-            or generate something in Create and click <strong>Refine</strong> above the preview.
+            Ouvrez une génération dans la galerie puis cliquez sur <strong>Améliorer</strong>,
+            ou générez du contenu dans Créer puis cliquez sur <strong>Améliorer</strong> au-dessus de l’aperçu.
           </p>
         </div>
       </div>
@@ -297,12 +297,12 @@ export function RefineView({
             class="btn-play btn-play-wide refine-play"
             type="button"
             onClick=${() => setPlaying({ initialId: `step-${activeIndex}`, opened: Date.now() })}
-            title="Play full window; switch between the original and every refined step"
+            title="Ouvrir en pleine fenêtre et passer de l’original aux étapes améliorées"
           >
             <i class="fa-solid fa-play"></i>
-            <span>Play${versions.length > 1 ? ` · ${versions.length} versions` : ''}<span class="btn-play-sub">${versions.length > 1
-              ? 'Full window, starting on the step you are looking at. Switch to any other version there.'
-              : 'Full window. Heal or improve it and each new step is added as a version.'}</span></span>
+            <span>Lancer${versions.length > 1 ? ` · ${versions.length} versions` : ''}<span class="btn-play-sub">${versions.length > 1
+              ? 'Pleine fenêtre à partir de l’étape affichée, avec accès aux autres versions.'
+              : 'Pleine fenêtre. Chaque correction ou amélioration ajoute une version.'}</span></span>
           </button>
         `}
 
@@ -310,7 +310,7 @@ export function RefineView({
         <div class=${`refine-status ${!status ? 'pending' : hasErrors || status.timedOut ? 'error' : 'ok'}`}>
           <span class="refine-status-label">
             ${activeStep?.running || (!status && !busy)
-              ? html`<i class="fa-solid fa-spinner fa-spin"></i> running sandbox...`
+              ? html`<i class="fa-solid fa-spinner fa-spin"></i> exécution dans le bac à sable…`
               : html`
                   <i class=${`fa-solid ${hasErrors || status?.timedOut ? 'fa-triangle-exclamation' : 'fa-circle-check'}`}></i>
                   ${runStatusLabel(status)}
@@ -321,12 +321,12 @@ export function RefineView({
             class="btn-icon"
             onClick=${() => activeStep && runStep(activeIndex, activeStep.html)}
             disabled=${!!busy || activeStep?.running}
-            title="Re-run sandbox check"
+            title="Relancer la vérification dans le bac à sable"
           >
             <i class="fa-solid fa-rotate-right"></i>
           </button>
           ${status && (status.errors.length > 0 || status.warnings.length > 0) && html`
-            <button class="btn-icon" onClick=${() => setErrorsOpen(o => !o)} title=${errorsOpen ? 'Hide details' : 'Show details'}>
+            <button class="btn-icon" onClick=${() => setErrorsOpen(o => !o)} title=${errorsOpen ? 'Masquer les détails' : 'Afficher les détails'}>
               <i class=${`fa-solid ${errorsOpen ? 'fa-chevron-up' : 'fa-chevron-down'}`}></i>
             </button>
           `}
@@ -344,49 +344,49 @@ export function RefineView({
             class="btn btn-primary"
             onClick=${handleHeal}
             disabled=${!!busy || !hasErrors}
-            title=${hasErrors ? 'Send the errors to the model for a fix' : 'Enabled when the sandbox captures errors'}
+            title=${hasErrors ? 'Envoyer les erreurs au modèle pour les corriger' : 'Disponible lorsque le bac à sable capture des erreurs'}
           >
             <i class=${`fa-solid ${busy === 'heal' ? 'fa-spinner fa-spin' : 'fa-kit-medical'}`}></i>
-            ${busy === 'heal' ? `Healing... ${streamKb} KB` : 'Heal'}
+            ${busy === 'heal' ? `Correction… ${streamKb} Ko` : 'Corriger'}
           </button>
           <select
             class="form-input refine-attempts"
             value=${attempts}
             onChange=${(e) => setAttempts(parseInt(e.target.value, 10))}
             disabled=${!!busy}
-            title="Auto-retry attempts if still broken"
+            title="Nombre de nouvelles tentatives si les erreurs persistent"
           >
-            <option value="1">1 attempt</option>
-            <option value="2">2 attempts</option>
-            <option value="3">3 attempts</option>
+            <option value="1">1 tentative</option>
+            <option value="2">2 tentatives</option>
+            <option value="3">3 tentatives</option>
           </select>
           ${['heal', 'suggest', 'apply'].includes(busy) && html`
             <button
               class="btn btn-danger"
               onClick=${() => refineAbort?.abort()}
-              title="Stop the running model call (a CLI agent here has no time limit)"
+              title="Arrêter l’appel au modèle en cours (les agents CLI n’ont pas de limite de durée)"
             >
-              <i class="fa-solid fa-stop"></i> Stop
+              <i class="fa-solid fa-stop"></i> Arrêter
             </button>`}
           <span class="library-card-actions-spacer"></span>
           <button
             class="btn"
             onClick=${handleSuggest}
             disabled=${!!busy}
-            title="Ask the model for improvement ideas"
+            title="Demander des idées d’amélioration au modèle"
           >
             <i class=${`fa-solid ${busy === 'suggest' ? 'fa-spinner fa-spin' : 'fa-lightbulb'}`}></i>
-            Suggest improvements
+            Proposer des améliorations
           </button>
         </div>
 
         <!-- Improvements editor: type your own instructions, or let
-             "Suggest improvements" fill it in — either way, edit then Apply. -->
+             "Proposer des améliorations" fill it in — either way, edit then Apply. -->
         <div class="refine-suggestions">
           <div class="section-header">
-            <span><i class=${`fa-solid ${busy === 'suggest' ? 'fa-spinner fa-spin' : 'fa-lightbulb'}`}></i> Improvements (edit before applying)</span>
+            <span><i class=${`fa-solid ${busy === 'suggest' ? 'fa-spinner fa-spin' : 'fa-lightbulb'}`}></i> Améliorations (à modifier avant application)</span>
             <div class="section-header-actions">
-              <button class="btn-icon" onClick=${() => patchSession({ suggestions: '' })} title="Clear instructions" disabled=${!!busy || !session.suggestions}>
+              <button class="btn-icon" onClick=${() => patchSession({ suggestions: '' })} title="Effacer les instructions" disabled=${!!busy || !session.suggestions}>
                 <i class="fa-solid fa-xmark"></i>
               </button>
             </div>
@@ -394,7 +394,7 @@ export function RefineView({
           <textarea
             class="refine-suggestions-input"
             value=${session.suggestions}
-            placeholder="Describe the changes you want (one per line), or click Suggest improvements above..."
+            placeholder="Décrivez les modifications souhaitées (une par ligne) ou cliquez sur Proposer des améliorations…"
             onInput=${(e) => patchSession({ suggestions: e.target.value })}
             disabled=${busy === 'apply' || busy === 'suggest'}
           ></textarea>
@@ -402,16 +402,16 @@ export function RefineView({
             class="btn btn-primary refine-apply-btn"
             onClick=${handleApply}
             disabled=${!!busy || !(session.suggestions || '').trim()}
-            title=${(session.suggestions || '').trim() ? 'Send the instructions to the model and add the result as a new step' : 'Type or generate improvement instructions first'}
+            title=${(session.suggestions || '').trim() ? 'Envoyer les instructions au modèle et ajouter le résultat comme nouvelle étape' : 'Saisissez ou générez d’abord des instructions d’amélioration'}
           >
             <i class=${`fa-solid ${busy === 'apply' ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'}`}></i>
-            ${busy === 'apply' ? `Applying... ${streamKb} KB` : 'Apply to generation'}
+            ${busy === 'apply' ? `Application… ${streamKb} Ko` : 'Appliquer à la génération'}
           </button>
         </div>
 
         <!-- Step timeline -->
         <div class="refine-timeline">
-          <div class="section-header"><span><i class="fa-solid fa-timeline"></i> Steps</span></div>
+          <div class="section-header"><span><i class="fa-solid fa-timeline"></i> Étapes</span></div>
           ${steps.map((step, i) => html`
             <div
               class=${`refine-step ${i === activeIndex ? 'active' : ''}`}
@@ -434,12 +434,12 @@ export function RefineView({
             onClick=${() => onSaveStep(activeIndex)}
             disabled=${!!busy || !activeStep || alreadySaved || !hasDirectory}
             title=${!hasDirectory
-              ? 'Connect a directory first'
+              ? 'Connectez d’abord un dossier'
               : alreadySaved
-                ? 'This is the saved original — heal or improve it first'
-                : 'Save this step as a new variant in the generation folder (the original is never overwritten)'}
+                ? 'Ceci est l’original enregistré : corrigez-le ou améliorez-le d’abord'
+                : 'Enregistrer cette étape comme nouvelle variante dans le dossier (l’original est conservé)'}
           >
-            <i class="fa-solid fa-floppy-disk"></i> Save step as new variant
+            <i class="fa-solid fa-floppy-disk"></i> Enregistrer l’étape comme nouvelle variante
           </button>
         </div>
       </div>
@@ -447,11 +447,11 @@ export function RefineView({
       <div class="refine-preview">
         ${activeStep
           ? html`<${LiveHtmlFrame} frameKey=${`${activeIndex}-${steps.length}`} html=${activeStep.html} />`
-          : html`<div class="gallery-empty"><i class="fa-solid fa-eye"></i><p>No step selected</p></div>`
+          : html`<div class="gallery-empty"><i class="fa-solid fa-eye"></i><p>Aucune étape sélectionnée</p></div>`
         }
         ${(busy === 'heal' || busy === 'apply') && html`
           <div class="refine-stream-overlay">
-            <i class="fa-solid fa-spinner fa-spin"></i> Receiving ${streamKb} KB...
+            <i class="fa-solid fa-spinner fa-spin"></i> Réception de ${streamKb} Ko…
           </div>
         `}
       </div>
@@ -461,7 +461,7 @@ export function RefineView({
           versions=${versions}
           initialId=${playing.initialId}
           title=${refineDisplayTitle(session)}
-          backLabel="Back to Refine"
+          backLabel="Retour à Améliorer"
           onClose=${() => setPlaying(null)}
         />`}
     </div>

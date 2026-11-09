@@ -25,6 +25,8 @@
 // fall back to an IndexedDB ring buffer. Recording never breaks a generation:
 // every failure here is swallowed and counted in telemetryHealth().
 
+import { secureMode, secureFetch } from './secure-session.js';
+
 export const PHASES = Object.freeze([
   'queued', 'dispatched', 'spawned', 'firstOutput', 'sessionReady',
   'firstThought', 'firstToken', 'firstTool', 'done',
@@ -41,7 +43,7 @@ const MIN_RATE_WINDOW_MS = 500;
 
 const deps = {
   now: () => Date.now(),
-  fetch: (...args) => globalThis.fetch(...args),
+  fetch: (...args) => (secureMode() ? secureFetch : globalThis.fetch)(...args),
   // On in a page, off under node: unit tests of apps that happen to call a
   // provider must not start posting records. Tests of this module opt in.
   enabled: typeof window !== 'undefined' && typeof document !== 'undefined',

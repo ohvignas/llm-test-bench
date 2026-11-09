@@ -22,42 +22,42 @@ import { isPublicDistribution } from '../services/distribution.js';
 const LOCAL_PROVIDER_META = {
   lmstudio: {
     title: 'LM Studio',
-    pluralTitle: 'LM Studio Endpoints',
+    pluralTitle: 'Serveurs LM Studio',
     icon: 'fa-network-wired',
     defaultName: 'LM Studio',
     defaultUrl: 'http://localhost:1234',
-    placeholderName: 'LM Studio Main',
+    placeholderName: 'LM Studio principal',
     placeholderUrl: 'http://192.168.1.20:1234',
-    emptyText: 'No LM Studio endpoints configured',
+    emptyText: 'Aucun serveur LM Studio configuré',
     needsKey: false,
     create: createLmStudioProvider,
   },
   'openai-compatible': {
-    title: 'OpenAI-Compatible',
-    pluralTitle: 'OpenAI-Compatible Endpoints',
+    title: 'Compatible OpenAI',
+    pluralTitle: 'Serveurs compatibles OpenAI',
     icon: 'fa-plug',
     defaultName: 'OpenAI-Compatible',
     defaultUrl: 'http://127.0.0.1:8080',
-    placeholderName: 'Qwen box (Tailscale)',
+    placeholderName: 'Serveur Qwen (Tailscale)',
     placeholderUrl: 'http://qwen-box.tailnet.ts.net:8081',
-    emptyText: 'No OpenAI-compatible endpoints configured',
+    emptyText: 'Aucun serveur compatible OpenAI configuré',
     // Optional here: plenty of local servers take no key at all.
     needsKey: true,
     keyOnProvider: true,
-    keyPlaceholder: 'Optional — leave blank if the server takes no key',
+    keyPlaceholder: 'Facultatif : laisser vide si le serveur ne demande pas de clé',
     supportsModelIds: true,
     supportsProxy: true,
     create: createOpenAiCompatibleProvider,
   },
   'unsloth-studio': {
     title: 'Unsloth Studio',
-    pluralTitle: 'Unsloth Studio Endpoints',
+    pluralTitle: 'Serveurs Unsloth Studio',
     icon: 'fa-bolt',
     defaultName: 'Unsloth Studio',
     defaultUrl: 'http://127.0.0.1:8888',
     placeholderName: 'Unsloth DiffusionGemma',
     placeholderUrl: 'http://127.0.0.1:8888',
-    emptyText: 'No Unsloth Studio endpoints configured',
+    emptyText: 'Aucun serveur Unsloth Studio configuré',
     needsKey: true,
     create: createUnslothStudioProvider,
   },
@@ -99,15 +99,15 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
   }, [onProvidersChanged]);
 
   // ── OpenRouter API Key ──
-  const handleSaveApiKey = useCallback(() => {
-    saveApiKey(apiKey.trim());
-    reload();
+  const [keyError, setKeyError] = useState('');
+  const handleSaveApiKey = useCallback(async () => {
+    try { await saveApiKey(apiKey.trim()); setApiKey(''); setKeyError(''); reload(); }
+    catch (error) { setKeyError(error.message); }
   }, [apiKey, reload]);
 
-  const handleRemoveApiKey = useCallback(() => {
-    saveApiKey('');
-    setApiKey('');
-    reload();
+  const handleRemoveApiKey = useCallback(async () => {
+    try { await saveApiKey(''); setApiKey(''); setKeyError(''); reload(); }
+    catch (error) { setKeyError(error.message); }
   }, [reload]);
 
   // ── Test connection ──
@@ -286,8 +286,8 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
     if (!result) return null;
     const color = result.ok ? 'var(--success, #22c55e)' : 'var(--danger, #ef4444)';
     const title = result.ok
-      ? `Connected${result.modelCount ? ` — ${result.modelCount} models` : ''}`
-      : `Error: ${result.error}`;
+      ? `Connecté${result.modelCount ? ` — ${result.modelCount} modèles` : ''}`
+      : `Erreur : ${result.error}`;
     return html`<i class="fa-solid fa-circle" style=${{ fontSize: '8px', color, marginLeft: '6px' }} title=${title}></i>`;
   };
 
@@ -303,10 +303,10 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
     return html`
       ${meta.supportsModelIds && html`
         <div class="form-group">
-          <label>Model IDs (comma-separated, optional)</label>
+          <label>Identifiants des modèles (séparés par des virgules, facultatif)</label>
           <input class="form-input" value=${newModelIds}
             onInput=${e => setNewModelIds(e.target.value)}
-            placeholder="qwen3.8-27b — only if the server has no /v1/models" />
+            placeholder="qwen3.8-27b — uniquement si le serveur ne propose pas /v1/models" />
         </div>
       `}
       ${meta.supportsProxy && !isPublicDistribution() && html`
@@ -314,12 +314,12 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
           <label style=${{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <input type="checkbox" checked=${newUseProxy}
               onChange=${e => setNewUseProxy(e.target.checked)} />
-            <span>Route through this hub (fixes CORS)</span>
+            <span>Passer par cet atelier (résout les problèmes CORS)</span>
           </label>
           <div style=${{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', lineHeight: 1.5 }}>
-            Most local model servers send no CORS headers, so the browser blocks a direct
-            call even when curl works. Leave this on unless the endpoint sets
-            <code>Access-Control-Allow-Origin</code> itself. Needs the page served by <code>serve.py</code>.
+            La plupart des serveurs locaux n’envoient pas d’en-têtes CORS : le navigateur bloque donc
+            les appels directs même lorsque curl fonctionne. Conservez cette option sauf si le serveur définit
+            <code>Access-Control-Allow-Origin</code> lui-même. La page doit être servie par <code>serve.py</code>.
           </div>
         </div>
       `}
@@ -333,7 +333,7 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
     <div class="modal-overlay">
       <div class="modal provider-settings-modal" onClick=${e => e.stopPropagation()} style=${{ maxWidth: '620px', width: '90vw' }}>
         <div class="modal-header">
-          <h2><i class="fa-solid fa-server" style=${{ marginRight: '8px', color: 'var(--accent)' }}></i>${canManageProviders ? 'Model Providers' : 'Models in this app'}</h2>
+          <h2><i class="fa-solid fa-server" style=${{ marginRight: '8px', color: 'var(--accent)' }}></i>${canManageProviders ? 'Fournisseurs de modèles' : 'Modèles dans cette application'}</h2>
           <button class="btn-icon" onClick=${onClose}>
             <i class="fa-solid fa-xmark"></i>
           </button>
@@ -350,8 +350,8 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
               lineHeight: 1.5,
             }}>
               <i class="fa-solid fa-circle-info" style=${{ marginRight: '6px', color: 'var(--accent)' }}></i>
-              These toggles only affect this app's model picker. Add or edit providers in
-              <a href="../settings/" style=${{ color: 'var(--accent)' }}>global Settings</a>.
+              Ces options concernent uniquement le sélecteur de modèles de cette application. Ajoutez ou modifiez les fournisseurs dans
+              <a href="../settings/" style=${{ color: 'var(--accent)' }}>les paramètres globaux</a>.
             </div>
           `}
           <!-- OpenRouter Section -->
@@ -363,7 +363,7 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
                   <button class="btn btn-sm" onClick=${() => handleTest(openRouterProvider)}
                     disabled=${testing[openRouterProvider?.id]}>
                     <i class=${`fa-solid ${testing[openRouterProvider?.id] ? 'fa-spinner fa-spin' : 'fa-plug'}`}></i>
-                    Test
+                    Tester
                   </button>
                   <button class="btn btn-sm" onClick=${() => handleRefreshModels(openRouterProvider)}
                     disabled=${testing[`refresh-${openRouterProvider?.id}`]}>
@@ -383,7 +383,7 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
             ${testResults[openRouterProvider?.id] && html`
               <div class=${`provider-test-result ${testResults[openRouterProvider?.id].ok ? 'success' : 'error'}`}>
                 ${testResults[openRouterProvider?.id].ok
-                  ? html`<i class="fa-solid fa-circle-check"></i> Connected${testResults[openRouterProvider?.id].modelCount ? ` — ${testResults[openRouterProvider?.id].modelCount} models` : ''}${testResults[openRouterProvider?.id].refreshed ? ' (cache refreshed)' : ''}`
+                  ? html`<i class="fa-solid fa-circle-check"></i> Connecté${testResults[openRouterProvider?.id].modelCount ? ` — ${testResults[openRouterProvider?.id].modelCount} modèles` : ''}${testResults[openRouterProvider?.id].refreshed ? ' (cache actualisé)' : ''}`
                   : html`<i class="fa-solid fa-circle-xmark"></i> ${testResults[openRouterProvider?.id].error}`
                 }
               </div>
@@ -391,11 +391,12 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
 
             ${canManageProviders && html`
               <div class="form-group">
-                <label>API Key</label>
+                <label>Clé API</label>
+                ${keyError && html`<p role="alert">${keyError}</p>`}
                 <div style=${{ display: 'flex', gap: '6px' }}>
                   <input class="form-input" type="password" value=${apiKey}
                     onInput=${e => setApiKey(e.target.value)}
-                    onKeyDown=${e => e.key === 'Enter' && handleSaveApiKey()}
+                    onKeyDown=${e => e.key === 'Entrée' && handleSaveApiKey()}
                     placeholder="sk-or-v1-..."
                     style=${{ flex: 1, fontFamily: 'monospace', fontSize: '13px' }}
                   />
@@ -409,7 +410,7 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
                   `}
                 </div>
                 <span style=${{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  Get a free key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" style=${{ color: 'var(--accent)' }}>openrouter.ai/keys</a>
+                  Obtenir une clé gratuite sur <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" style=${{ color: 'var(--accent)' }}>openrouter.ai/keys</a>
                 </span>
               </div>
             `}
@@ -418,14 +419,14 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
           <!-- Local endpoint section -->
           <div class="provider-section">
             <div class="provider-section-header">
-              <h3><i class="fa-solid fa-network-wired" style=${{ marginRight: '6px' }}></i> Local OpenAI-compatible Endpoints</h3>
+              <h3><i class="fa-solid fa-network-wired" style=${{ marginRight: '6px' }}></i> Serveurs locaux compatibles OpenAI</h3>
               ${canManageProviders && html`
                 <div style=${{ display: 'flex', gap: '6px' }}>
                   <button class="btn btn-sm btn-primary" onClick=${() => startAddEndpoint('lmstudio')}>
                     <i class="fa-solid fa-plus"></i> LM Studio
                   </button>
                   <button class="btn btn-sm btn-primary" onClick=${() => startAddEndpoint('openai-compatible')}>
-                    <i class="fa-solid fa-plug"></i> OpenAI-Compatible
+                    <i class="fa-solid fa-plug"></i> Compatible OpenAI
                   </button>
                   <button class="btn btn-sm btn-primary" onClick=${() => startAddEndpoint('unsloth-studio')}>
                     <i class="fa-solid fa-plus"></i> Unsloth Studio
@@ -444,18 +445,18 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
                 lineHeight: 1.5,
               }}>
                 <i class="fa-solid fa-shield-halved" style=${{ marginRight: '6px', color: 'var(--accent)' }}></i>
-                LM Studio users: enable CORS in the Developer server settings or start it with
-                <code>lms server start --cors</code>. When your browser asks whether this site may
-                access the local network, choose <strong>Allow</strong>. Endpoints stay in your local settings.
+                Pour LM Studio, activez CORS dans les paramètres développeur du serveur ou démarrez-le avec
+                <code>lms server start --cors</code>. Si votre navigateur demande l’accès de ce site
+                au réseau local, choisissez <strong>Autoriser</strong>. Les serveurs restent enregistrés dans vos paramètres locaux.
               </div>
             `}
 
             ${localProviders.length === 0 && !showAddForm && html`
               <div class="provider-empty">
                 <i class="fa-solid fa-desktop" style=${{ opacity: 0.4, fontSize: '24px' }}></i>
-                <span>No local endpoints configured</span>
+                <span>Aucun serveur local configuré</span>
                 <span style=${{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  Add LM Studio or Unsloth Studio to use local models
+                  Ajoutez LM Studio ou Unsloth Studio pour utiliser des modèles locaux
                 </span>
               </div>
             `}
@@ -464,16 +465,16 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
               <!-- Inline edit form -->
               <div class="provider-card editing" key=${p.id}>
                 <div class="form-group">
-                  <label>Name</label>
+                  <label>Nom</label>
                   <input class="form-input" value=${newName} onInput=${e => setNewName(e.target.value)} placeholder=${localProviderMeta(p.type).placeholderName} />
                 </div>
                 <div class="form-group">
-                  <label>Base URL</label>
+                  <label>URL de base</label>
                   <input class="form-input" value=${newUrl} onInput=${e => setNewUrl(e.target.value)} placeholder=${localProviderMeta(p.type).placeholderUrl} />
                 </div>
                 ${localProviderMeta(p.type).needsKey && html`
                   <div class="form-group">
-                    <label>API Key</label>
+                    <label>Clé API</label>
                     <input class="form-input" type="password" value=${newApiKey}
                       onInput=${e => setNewApiKey(e.target.value)}
                       placeholder=${localProviderMeta(p.type).keyPlaceholder || 'sk-unsloth-...'}
@@ -484,17 +485,17 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
                 ${endpointExtras(p.type)}
                 <div style=${{ display: 'flex', gap: '8px' }}>
                   <div class="form-group" style=${{ flex: 1 }}>
-                    <label>Tags</label>
-                    <input class="form-input" value=${newTags} onInput=${e => setNewTags(e.target.value)} placeholder="lan, gpu, main" />
+                    <label>Étiquettes</label>
+                    <input class="form-input" value=${newTags} onInput=${e => setNewTags(e.target.value)} placeholder="réseau-local, gpu, principal" />
                   </div>
                   <div class="form-group" style=${{ width: '100px' }}>
-                    <label>Timeout (ms)</label>
+                    <label>Délai maximal (ms)</label>
                     <input class="form-input" type="number" value=${newTimeout} onInput=${e => setNewTimeout(e.target.value)} />
                   </div>
                 </div>
                 <div style=${{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                  <button class="btn btn-sm" onClick=${handleCancelEdit}>Cancel</button>
-                  <button class="btn btn-sm btn-primary" onClick=${handleSaveEdit}>Save</button>
+                  <button class="btn btn-sm" onClick=${handleCancelEdit}>Annuler</button>
+                  <button class="btn btn-sm btn-primary" onClick=${handleSaveEdit}>Enregistrer</button>
                 </div>
               </div>
             ` : html`
@@ -513,17 +514,17 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
                     `}
                   </div>
                   <div class="provider-card-actions">
-                    <button class="btn-icon btn-sm" onClick=${() => handleTest(p)} disabled=${testing[p.id]} title="Test connection">
+                    <button class="btn-icon btn-sm" onClick=${() => handleTest(p)} disabled=${testing[p.id]} title="Tester la connexion">
                       <i class=${`fa-solid ${testing[p.id] ? 'fa-spinner fa-spin' : 'fa-plug'}`}></i>
                     </button>
-                    <button class="btn-icon btn-sm" onClick=${() => handleRefreshModels(p)} disabled=${testing[`refresh-${p.id}`]} title="Refresh models">
+                    <button class="btn-icon btn-sm" onClick=${() => handleRefreshModels(p)} disabled=${testing[`refresh-${p.id}`]} title="Actualiser les modèles">
                       <i class=${`fa-solid ${testing[`refresh-${p.id}`] ? 'fa-spinner fa-spin' : 'fa-arrows-rotate'}`}></i>
                     </button>
                     ${canManageProviders && html`
-                      <button class="btn-icon btn-sm" onClick=${() => handleStartEdit(p)} title="Edit">
+                      <button class="btn-icon btn-sm" onClick=${() => handleStartEdit(p)} title="Modifier">
                         <i class="fa-solid fa-pen"></i>
                       </button>
-                      <button class="btn-icon btn-sm" onClick=${() => handleRemove(p.id)} title="Remove" style=${{ color: 'var(--danger)' }}>
+                      <button class="btn-icon btn-sm" onClick=${() => handleRemove(p.id)} title="Supprimer" style=${{ color: 'var(--danger)' }}>
                         <i class="fa-solid fa-trash"></i>
                       </button>
                     `}
@@ -536,7 +537,7 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
                 ${testResults[p.id] && html`
                   <div class=${`provider-test-result ${testResults[p.id].ok ? 'success' : 'error'}`}>
                     ${testResults[p.id].ok
-                      ? html`<i class="fa-solid fa-circle-check"></i> Connected${testResults[p.id].modelCount ? ` — ${testResults[p.id].modelCount} models` : ''}${testResults[p.id].refreshed ? ' (cache refreshed)' : ''}`
+                      ? html`<i class="fa-solid fa-circle-check"></i> Connecté${testResults[p.id].modelCount ? ` — ${testResults[p.id].modelCount} modèles` : ''}${testResults[p.id].refreshed ? ' (cache actualisé)' : ''}`
                       : html`<i class="fa-solid fa-circle-xmark"></i> ${testResults[p.id].error}`
                     }
                   </div>
@@ -548,18 +549,18 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
             ${canManageProviders && showAddForm && !editingId && html`
               <div class="provider-card editing">
                 <div class="form-group">
-                  <label>Name</label>
+                  <label>Nom</label>
                   <input class="form-input" value=${newName} onInput=${e => setNewName(e.target.value)}
                     placeholder=${localProviderMeta(newType).placeholderName} autoFocus />
                 </div>
                 <div class="form-group">
-                  <label>Base URL</label>
+                  <label>URL de base</label>
                   <input class="form-input" value=${newUrl} onInput=${e => setNewUrl(e.target.value)}
                     placeholder=${localProviderMeta(newType).placeholderUrl} />
                 </div>
                 ${localProviderMeta(newType).needsKey && html`
                   <div class="form-group">
-                    <label>API Key</label>
+                    <label>Clé API</label>
                     <input class="form-input" type="password" value=${newApiKey}
                       onInput=${e => setNewApiKey(e.target.value)}
                       placeholder=${localProviderMeta(newType).keyPlaceholder || 'sk-unsloth-...'}
@@ -570,21 +571,21 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
                 ${endpointExtras(newType)}
                 <div style=${{ display: 'flex', gap: '8px' }}>
                   <div class="form-group" style=${{ flex: 1 }}>
-                    <label>Tags (comma-separated)</label>
+                    <label>Étiquettes (séparées par des virgules)</label>
                     <input class="form-input" value=${newTags} onInput=${e => setNewTags(e.target.value)}
-                      placeholder="lan, gpu, main" />
+                      placeholder="réseau-local, gpu, principal" />
                   </div>
                   <div class="form-group" style=${{ width: '100px' }}>
-                    <label>Timeout (ms)</label>
+                    <label>Délai maximal (ms)</label>
                     <input class="form-input" type="number" value=${newTimeout} onInput=${e => setNewTimeout(e.target.value)} />
                   </div>
                 </div>
                 <div style=${{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
                   <button class="btn btn-sm" onClick=${resetEndpointForm}>
-                    Cancel
+                    Annuler
                   </button>
                   <button class="btn btn-sm btn-primary" onClick=${handleAdd} disabled=${!newUrl.trim()}>
-                    <i class="fa-solid fa-plus"></i> Add ${localProviderMeta(newType).title}
+                    <i class="fa-solid fa-plus"></i> Ajouter ${localProviderMeta(newType).title}
                   </button>
                 </div>
               </div>
@@ -593,7 +594,7 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
         </div>
 
         <div class="modal-footer">
-          <button class="btn" onClick=${onClose}>Close</button>
+          <button class="btn" onClick=${onClose}>Fermer</button>
         </div>
       </div>
     </div>

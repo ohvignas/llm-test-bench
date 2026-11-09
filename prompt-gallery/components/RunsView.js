@@ -8,8 +8,8 @@ import { promptSetLabel } from '../services/library.js';
 // Core is the default, so it stays quiet; any other set is called out.
 function SetBadge({ promptSet }) {
   const id = promptSet || 'core';
-  const label = id === 'mixed' ? 'Mixed sets' : promptSetLabel(id);
-  return html`<span class=${`runs-set-badge is-${id}`} title=${`Prompt set: ${label}`}>${label}</span>`;
+  const label = id === 'mixed' ? 'Séries mixtes' : promptSetLabel(id);
+  return html`<span class=${`runs-set-badge is-${id}`} title=${`Série de prompts: ${label}`}>${label}</span>`;
 }
 
 // Live HTML previews are far heavier than inline SVG, so cap side-by-side
@@ -18,9 +18,9 @@ export const MAX_COMPARE = 6;
 
 const fmtScore = (s) => (s == null ? '' : `${Math.round(s * 100)}%`);
 const fmtWhen = (iso) => {
-  if (!iso) return 'unknown date';
+  if (!iso) return 'date inconnue';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? 'unknown date' : d.toLocaleString();
+  return Number.isNaN(d.getTime()) ? 'date inconnue' : d.toLocaleString('fr-FR');
 };
 
 // A balanced grid for N side-by-side runs.
@@ -149,7 +149,7 @@ export function RunsView({ generations, hasDirectory, onPickDirectory, onOpen, o
       const next = new Set(prev);
       if (next.has(id)) { next.delete(id); return next; }
       if (next.size >= MAX_COMPARE) {
-        addToast?.(`Compare up to ${MAX_COMPARE} runs at once`, 'info');
+        addToast?.(`Comparez jusqu’à ${MAX_COMPARE} exécutions simultanément`, 'info');
         return prev;
       }
       next.add(id);
@@ -183,7 +183,7 @@ export function RunsView({ generations, hasDirectory, onPickDirectory, onOpen, o
   }, [runsByGroup]);
 
   const openCompare = useCallback(() => {
-    if (compareRuns.length < 2) { addToast?.('Pick at least two runs to compare', 'info'); return; }
+    if (compareRuns.length < 2) { addToast?.('Sélectionnez au moins deux exécutions à comparer', 'info'); return; }
     setMode('compare');
   }, [compareRuns, addToast]);
 
@@ -208,12 +208,12 @@ export function RunsView({ generations, hasDirectory, onPickDirectory, onOpen, o
     html: pageOf(it),
     icon: it.hasHtml ? 'fa-solid fa-circle-check' : 'fa-solid fa-triangle-exclamation',
     cls: it.hasHtml ? 'ok' : 'error',
-    label: 'Saved',
+    label: 'Enregistré',
     autoScore: it.autoScore,
     healed: it.healed,
     stats: it.stats,
     paramsLabel: it.paramsLabel,
-    error: it.hasHtml ? '' : 'HTML file missing',
+    error: it.hasHtml ? '' : 'Fichier HTML manquant',
     verification: it.verification,
     parentId: it.parentId,
     rating: it.rating,
@@ -224,9 +224,9 @@ export function RunsView({ generations, hasDirectory, onPickDirectory, onOpen, o
       <div class="runs-view">
         <div class="runs-empty">
           <i class="fa-solid fa-folder-open"></i>
-          <p>Connect a directory to browse the batch runs saved there.</p>
+          <p>Connectez un dossier pour consulter les exécutions par lot enregistrées.</p>
           <button class="btn btn-primary" onClick=${onPickDirectory}>
-            <i class="fa-solid fa-folder-plus"></i> Pick Directory
+            <i class="fa-solid fa-folder-plus"></i> Choisir un dossier
           </button>
         </div>
       </div>
@@ -238,11 +238,11 @@ export function RunsView({ generations, hasDirectory, onPickDirectory, onOpen, o
       <div class="runs-view">
         <div class="runs-subhead">
           <button class="btn btn-sm" onClick=${backToList}>
-            <i class="fa-solid fa-arrow-left"></i> All Runs
+            <i class="fa-solid fa-arrow-left"></i> Toutes les exécutions
           </button>
           <div class="runs-subhead-title">
             <strong>${singleRun.model} <${SetBadge} promptSet=${singleRun.promptSet} /></strong>
-            <span>${fmtWhen(singleRun.startedAt)} · ${singleRun.count} generation${singleRun.count === 1 ? '' : 's'}</span>
+            <span>${fmtWhen(singleRun.startedAt)} · ${singleRun.count} génération${singleRun.count === 1 ? '' : 's'}</span>
           </div>
         </div>
         <${BatchReview} rows=${singleRows} resetKey=${singleRun.id} onOpen=${onOpen} onRate=${onRate} />
@@ -268,42 +268,42 @@ export function RunsView({ generations, hasDirectory, onPickDirectory, onOpen, o
       ${requestedRunMissing && html`
         <div class="runs-missing-note">
           <i class="fa-solid fa-circle-info"></i>
-          <span>That run isn't in this gallery folder — nothing was saved under <code>${initialRunId}</code>. Refresh, or pick a run below.</span>
+          <span>Cette exécution ne figure pas dans ce dossier ; aucun enregistrement sous <code>${initialRunId}</code>. Actualisez ou choisissez une exécution ci-dessous.</span>
         </div>
       `}
       <div class="runs-toolbar">
         <div class="runs-intro">
           <i class="fa-solid fa-clock-rotate-left"></i>
-          <span>Every past batch run, rebuilt from the generations in your gallery folder. Check runs to compare them side by side or merge runs made with the same model (up to ${MAX_COMPARE}).</span>
+          <span>Les exécutions passées, reconstituées à partir des générations du dossier. Sélectionnez-en pour les comparer ou fusionner celles d’un même modèle (jusqu’à ${MAX_COMPARE}).</span>
         </div>
         <div class="runs-actions">
           ${selectedCount > 0 && html`
-            <button class="btn btn-sm" onClick=${() => setSelectedIds(new Set())} title="Clear selection">
-              Clear (${selectedCount})
+            <button class="btn btn-sm" onClick=${() => setSelectedIds(new Set())} title="Effacer la sélection">
+              Effacer (${selectedCount})
             </button>`}
-          <button class="btn btn-sm" onClick=${refresh} title="Reload from disk" disabled=${refreshing}>
+          <button class="btn btn-sm" onClick=${refresh} title="Recharger depuis le disque" disabled=${refreshing}>
             <i class=${`fa-solid fa-rotate ${refreshing ? 'fa-spin' : ''}`}></i>
           </button>
           <button class="btn btn-sm" onClick=${mergeSelected}
             disabled=${!mergeCompatible || merging}
             title=${selectedCount < 2
-              ? 'Select two or more runs to merge'
+              ? 'Sélectionnez au moins deux exécutions à fusionner'
               : !mergeCompatible
-                ? 'Only runs made with the same model and prompt set can be merged'
-                : `Merge ${selectedCount} same-model runs`}>
+                ? 'Seules les exécutions utilisant le même modèle et la même série peuvent être fusionnées'
+                : `Fusionner ${selectedCount} exécutions du même modèle`}>
             <i class=${`fa-solid ${merging ? 'fa-spinner fa-spin' : 'fa-code-merge'}`}></i>
-            ${merging ? 'Merging…' : `Merge${selectedCount >= 2 ? ` (${selectedCount})` : ''}`}
+            ${merging ? 'Fusion…' : `Fusionner${selectedCount >= 2 ? ` (${selectedCount})` : ''}`}
           </button>
           <button class="btn btn-primary" onClick=${openCompare}
             disabled=${selectedCount < 2}
-            title=${selectedCount < 2 ? 'Select two or more runs' : `Compare ${selectedCount} runs`}>
-            <i class="fa-solid fa-table-columns"></i> Compare${selectedCount >= 2 ? ` (${selectedCount})` : ''}
+            title=${selectedCount < 2 ? 'Sélectionnez au moins deux exécutions' : `Comparer ${selectedCount} exécutions`}>
+            <i class="fa-solid fa-table-columns"></i> Comparer${selectedCount >= 2 ? ` (${selectedCount})` : ''}
           </button>
         </div>
       </div>
 
       ${runs.length === 0
-        ? html`<div class="runs-empty"><i class="fa-solid fa-layer-group"></i><p>No batch runs found yet. Use the Batch button to run a model over your prompt library — those generations get grouped into runs here.</p></div>`
+        ? html`<div class="runs-empty"><i class="fa-solid fa-layer-group"></i><p>Aucune exécution par lot. Utilisez le bouton Lots pour exécuter un modèle sur votre bibliothèque ; les générations seront regroupées ici.</p></div>`
         : html`
           <div class="runs-list">
             ${runs.map(r => {
@@ -311,27 +311,27 @@ export function RunsView({ generations, hasDirectory, onPickDirectory, onOpen, o
               const atLimit = !checked && selectedCount >= MAX_COMPARE;
               return html`
                 <div class=${`runs-row ${checked ? 'is-checked' : ''}`} key=${r.id}>
-                  <label class="runs-check" title=${atLimit ? `Select up to ${MAX_COMPARE} runs` : 'Select to compare or merge'} onClick=${(e) => e.stopPropagation()}>
+                  <label class="runs-check" title=${atLimit ? `Sélectionner jusqu’à ${MAX_COMPARE} exécutions` : 'Sélectionner pour comparer ou fusionner'} onClick=${(e) => e.stopPropagation()}>
                     <input type="checkbox" checked=${checked} disabled=${atLimit}
                       onChange=${() => toggleSelect(r.id)} />
                   </label>
-                  <button class="runs-row-open" onClick=${() => openSingle(r)} title="Open this run">
+                  <button class="runs-row-open" onClick=${() => openSingle(r)} title="Ouvrir cette exécution">
                     <i class="fa-solid fa-layer-group runs-row-icon"></i>
                     <span class="runs-row-model" title=${r.modelId || r.model}>${r.model}</span>
                     <${SetBadge} promptSet=${r.promptSet} />
                     <span class="runs-row-when">${fmtWhen(r.startedAt)}</span>
                     <span class="runs-row-meta">
-                      <span class=${`runs-row-rated ${r.ratedCount === r.count ? 'is-done' : ''}`} title="Generations you have rated">
-                        <i class="fa-solid fa-star"></i> ${r.ratedCount}/${r.count} rated
+                      <span class=${`runs-row-rated ${r.ratedCount === r.count ? 'is-done' : ''}`} title="Générations que vous avez notées">
+                        <i class="fa-solid fa-star"></i> ${r.ratedCount}/${r.count} notées
                       </span>
-                      ${r.count} generation${r.count === 1 ? '' : 's'}
+                      ${r.count} génération${r.count === 1 ? '' : 's'}
                       <i class="fa-solid fa-chevron-right"></i>
                     </span>
                   </button>
                   ${(runsByGroup.get(r.groupId)?.length || 0) > 1 && html`
                     <button class="btn btn-sm runs-group-compare" onClick=${() => compareGroup(r.groupId)}
-                      title="This run is one model of a multi-model batch: compare every model in it side by side">
-                      <i class="fa-solid fa-table-columns"></i> Compare all ${runsByGroup.get(r.groupId).length} models
+                      title="Cette exécution appartient à un lot de plusieurs modèles : comparez tous ses modèles côte à côte">
+                      <i class="fa-solid fa-table-columns"></i> Comparer les ${runsByGroup.get(r.groupId).length} modèles
                     </button>
                   `}
                 </div>
@@ -395,7 +395,7 @@ function CompareRuns({ compareRuns, pageOf, loadingPages, onBack, onOpen, onRate
     if (!s) return null;
     const bits = [];
     if (s.tokensPerSecond != null) bits.push(`${s.tokensPerSecond} tok/s`);
-    if (s.thought) bits.push('thought');
+    if (s.thought) bits.push('raisonnement');
     return bits.length ? bits.join(' · ') : null;
   };
 
@@ -403,10 +403,10 @@ function CompareRuns({ compareRuns, pageOf, loadingPages, onBack, onOpen, onRate
     <div class="runs-view">
       <div class="runs-subhead">
         <button class="btn btn-sm" onClick=${onBack}>
-          <i class="fa-solid fa-arrow-left"></i> All Runs
+          <i class="fa-solid fa-arrow-left"></i> Toutes les exécutions
         </button>
         <div class="runs-subhead-title">
-          <strong><i class="fa-solid fa-table-columns"></i> Comparing ${compareRuns.length} runs</strong>
+          <strong><i class="fa-solid fa-table-columns"></i> Comparaison de ${compareRuns.length} exécutions</strong>
           <span>${compareRuns.map(r => r.model).join('  ·  ')}</span>
         </div>
       </div>
@@ -423,7 +423,7 @@ function CompareRuns({ compareRuns, pageOf, loadingPages, onBack, onOpen, onRate
 
         <div class="rcmp-panel">
           ${!cur ? html`
-            <div class="batch-preview"><div class="batch-preview-empty"><i class="fa-solid fa-image"></i><span>Nothing to compare</span></div></div>
+            <div class="batch-preview"><div class="batch-preview-empty"><i class="fa-solid fa-image"></i><span>Aucun élément à comparer</span></div></div>
           ` : html`
             <div class="rcmp-head">
               <span class="rcmp-head-title" title=${cur.prompt || cur.title}>${cur.title}</span>
@@ -437,9 +437,9 @@ function CompareRuns({ compareRuns, pageOf, loadingPages, onBack, onOpen, onRate
                 return html`
                   <div class="rcmp-col" key=${r.id}>
                     <div class="rcmp-col-head" title=${r.modelId || r.model}>${r.model}</div>
-                    ${(it?.genTitle || extractGenTitle(page)) ? html`<div class="rcmp-gen" title=${`Generated: ${it?.genTitle || extractGenTitle(page)}`}>${it?.genTitle || extractGenTitle(page)}</div>` : null}
+                    ${(it?.genTitle || extractGenTitle(page)) ? html`<div class="rcmp-gen" title=${`Généré : ${it?.genTitle || extractGenTitle(page)}`}>${it?.genTitle || extractGenTitle(page)}</div>` : null}
                     <div class=${`rcmp-cell ${hasHtml ? 'is-zoomable' : ''}`}
-                      title=${hasHtml ? 'Click to enlarge' : ''}
+                      title=${hasHtml ? 'Cliquer pour agrandir' : ''}
                       onClick=${hasHtml ? () => setZoom({ html: page, title: cur.title, subtitle: r.model }) : null}>
                       ${hasHtml
                         ? html`<${HtmlLive} html=${page} /><div class="preview-hitbox"></div><span class="zoom-hint"><i class="fa-solid fa-magnifying-glass-plus"></i></span>`
@@ -452,10 +452,10 @@ function CompareRuns({ compareRuns, pageOf, loadingPages, onBack, onOpen, onRate
                       </div>
                     ` : null}
                     <div class="rcmp-col-meta">
-                      ${it?.healed ? html`<span class="batch-healed-chip">fixed</span>` : null}
+                      ${it?.healed ? html`<span class="batch-healed-chip">corrigé</span>` : null}
                       ${it?.paramsLabel && it.paramsLabel !== 'defaults' ? html`<span class="batch-params-chip"><i class="fa-solid fa-sliders"></i> ${it.paramsLabel}</span>` : null}
                       ${statsBits(it?.stats) ? html`<span class="batch-stats-line">${statsBits(it.stats)}</span>` : null}
-                      ${onOpen && it?.id ? html`<button class="btn btn-xs" title="Open this generation in a new tab" onClick=${(e) => { e.stopPropagation(); onOpen(it.id); }}><i class="fa-solid fa-arrow-up-right-from-square"></i></button>` : null}
+                      ${onOpen && it?.id ? html`<button class="btn btn-xs" title="Ouvrir cette génération dans un nouvel onglet" onClick=${(e) => { e.stopPropagation(); onOpen(it.id); }}><i class="fa-solid fa-arrow-up-right-from-square"></i></button>` : null}
                     </div>
                   </div>
                 `;
@@ -463,11 +463,11 @@ function CompareRuns({ compareRuns, pageOf, loadingPages, onBack, onOpen, onRate
             </div>
 
             <div class="batch-review-nav">
-              <button class="btn btn-sm" title="Previous (←)" onClick=${() => step(-1)} disabled=${n < 2}>
+              <button class="btn btn-sm" title="Précédent (←)" onClick=${() => step(-1)} disabled=${n < 2}>
                 <i class="fa-solid fa-chevron-left"></i>
               </button>
               <span class="batch-review-count">${pos + 1} / ${n}</span>
-              <button class="btn btn-sm" title="Next (→)" onClick=${() => step(1)} disabled=${n < 2}>
+              <button class="btn btn-sm" title="Suivant (→)" onClick=${() => step(1)} disabled=${n < 2}>
                 <i class="fa-solid fa-chevron-right"></i>
               </button>
             </div>

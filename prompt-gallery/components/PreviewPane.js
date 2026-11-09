@@ -63,12 +63,12 @@ export function PreviewPane({ htmlContent, onConsoleEntry, onConsoleReset, regis
             ref=${frameRef}
             srcdoc=${load.doc}
             sandbox="allow-scripts allow-modals allow-pointer-lock"
-            title="Preview"
+            title="Aperçu"
           />`
       : html`
           <div class="gallery-empty" style=${{ background: 'var(--bg-primary)' }}>
             <i class="fa-solid fa-eye"></i>
-            <p>Paste or type HTML in the response editor to see a live preview</p>
+            <p>Collez ou saisissez du HTML dans l’éditeur de réponse pour afficher l’aperçu</p>
           </div>
         `
     }

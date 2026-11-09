@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Connexion — LLM Test Bench</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#10141d;color:#ecf0f8}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse at top,#24314a,#10141d 65%)}main{width:min(100%,440px);padding:36px;border:1px solid #344057;border-radius:20px;background:#171e2b;box-shadow:0 24px 80px #0005}.brand{color:#a7bdff;font-size:13px;font-weight:700;letter-spacing:1px}h1{font-size:28px;margin:18px 0 12px}p{line-height:1.6;color:#b9c4d7}label{display:block;margin:20px 0 8px;font-weight:600;font-size:14px}input{width:100%;padding:12px;border:1px solid #536078;border-radius:8px;background:#101723;color:inherit;font:inherit}input:focus{outline:2px solid #98b2ff;outline-offset:2px}button{width:100%;margin-top:24px;padding:13px;border:0;border-radius:9px;background:#a7bdff;color:#101729;font:inherit;font-weight:700;cursor:pointer}button:disabled{opacity:.6;cursor:wait}.error{color:#ffb5b5;white-space:pre-line}.hint{font-size:13px}.hidden{display:none}footer{font-size:12px;margin-top:24px;color:#9aa9c0}
+</style></head><body><main>
+<div class="brand">LLM TEST BENCH · LOCAL</div>
+<h1 id="heading">Connexion</h1><p id="intro">Connecte-toi pour retrouver tes projets et ta clé API enregistrée.</p>
+<form id="login-form">
+<label for="username">Identifiant</label><input id="username" name="username" autocomplete="username" minlength="3" maxlength="64" pattern="[A-Za-z0-9_.-]{3,64}" required autofocus>
+<label for="password">Mot de passe</label><input id="password" name="password" type="password" autocomplete="current-password" required>
+<div id="confirmation" class="hidden"><label for="confirm">Confirmer le mot de passe</label><input id="confirm" type="password" autocomplete="new-password"><p class="hint">Choisis au moins 12 caractères. Conserve tes identifiants dans ton gestionnaire de mots de passe.</p></div>
+<p id="error" class="error" role="alert"></p><button id="submit" type="submit" disabled>Se connecter</button>
+</form><footer>Application accessible sur cet ordinateur.</footer>
+</main><script type="module">
+const form=document.querySelector('#login-form'), error=document.querySelector('#error'), button=document.querySelector('#submit');
+let setup=false;
+try {
+  const response=await fetch('/api/auth/status',{cache:'no-store'});
+  if(!response.ok)throw new Error('Le serveur ne répond pas.');
+  const status=await response.json();
+  if(status.authenticated)location.replace('/prompt-gallery/');
+  setup=status.needs_setup;
+  if(setup){document.querySelector('#heading').textContent='Créer ton compte';document.querySelector('#intro').textContent='Premier démarrage : choisis les identifiants de ton espace local.';document.querySelector('#confirmation').classList.remove('hidden');document.querySelector('#confirm').required=true;document.querySelector('#password').minLength=12;document.querySelector('#password').autocomplete='new-password';button.textContent='Créer mon compte';}
+  button.disabled=false;
+}catch(failure){error.textContent=failure.message;button.disabled=true;}
+form.addEventListener('submit',async event=>{
+  event.preventDefault();error.textContent='';
+  const password=document.querySelector('#password').value;
+  if(setup&&password!==document.querySelector('#confirm').value){error.textContent='Les mots de passe ne correspondent pas.';return;}
+  button.disabled=true;
+  try{const response=await fetch(setup?'/api/auth/setup':'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:document.querySelector('#username').value,password})});const data=await response.json();if(!response.ok)throw new Error(data.error||'Connexion impossible.');form.reset();location.replace('/prompt-gallery/');}
+  catch(failure){error.textContent=failure.message;button.disabled=false;}
+});
+</script></body></html>

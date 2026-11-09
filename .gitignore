@@ -4,3 +4,12 @@ Thumbs.db
 .idea/
 .vscode/
 .llm-test-bench-public-build
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+data/
+secrets/
+*.sqlite*
+*.db

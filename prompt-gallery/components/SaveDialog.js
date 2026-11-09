@@ -55,7 +55,7 @@ export function SaveDialog({
   const handleSave = useCallback(() => {
     const trimmed = name.trim();
     if (!trimmed) {
-      addToast('Please enter a name for this generation', 'error');
+      addToast('Saisissez un nom pour cette génération', 'error');
       return;
     }
     const folderName = trimmed.replace(/[<>:"/\\|?*]+/g, '-').replace(/\s+/g, '-').toLowerCase();
@@ -87,11 +87,11 @@ export function SaveDialog({
 
   const checkProvider = useCallback(() => {
     if (!providerId || !modelId) {
-      addToast('Select a model first to enable AI suggestions', 'error');
+      addToast('Sélectionnez un modèle pour activer les suggestions de l’IA', 'error');
       return false;
     }
     if (!prompt && !response) {
-      addToast('Need a prompt or response to suggest from', 'error');
+      addToast('Un prompt ou une réponse est nécessaire pour proposer des suggestions', 'error');
       return false;
     }
     return true;
@@ -110,9 +110,9 @@ export function SaveDialog({
       });
       const cleaned = sanitizeName(out);
       if (cleaned) setName(cleaned);
-      else addToast('Could not parse a name suggestion', 'error');
+      else addToast('Impossible de lire la suggestion de nom', 'error');
     } catch (e) {
-      addToast('Name suggestion failed: ' + e.message, 'error');
+      addToast('Échec de la suggestion de nom : ' + e.message, 'error');
     } finally {
       setSuggestingName(false);
     }
@@ -131,9 +131,9 @@ export function SaveDialog({
       });
       const cleaned = sanitizeTags(out);
       if (cleaned) setTags(cleaned);
-      else addToast('Could not parse tag suggestions', 'error');
+      else addToast('Impossible de lire les suggestions d’étiquettes', 'error');
     } catch (e) {
-      addToast('Tag suggestion failed: ' + e.message, 'error');
+      addToast('Échec des suggestions d’étiquettes : ' + e.message, 'error');
     } finally {
       setSuggestingTags(false);
     }
@@ -146,7 +146,7 @@ export function SaveDialog({
     <div class="modal-overlay" onKeyDown=${handleKeyDown}>
       <div class="modal save-dialog" onClick=${(e) => e.stopPropagation()} style=${{ width: '560px' }}>
         <div class="modal-header">
-          <h2>Save Generation</h2>
+          <h2>Enregistrer la génération</h2>
           <button class="btn-icon" onClick=${onClose}>
             <i class="fa-solid fa-xmark"></i>
           </button>
@@ -154,7 +154,7 @@ export function SaveDialog({
 
         <div class="modal-body">
           <div class="form-group">
-            <label>Name</label>
+            <label>Nom</label>
             <div class="input-with-suggest">
               <input
                 ref=${nameInputRef}
@@ -162,7 +162,7 @@ export function SaveDialog({
                 value=${name}
                 onInput=${(e) => setName(e.target.value)}
                 onKeyDown=${(e) => e.key === 'Enter' && handleSave()}
-                placeholder="e.g. landing-page-v1"
+                placeholder="ex. page-accueil-v1"
               />
               ${showNameSuggest && html`
                 <button
@@ -170,38 +170,38 @@ export function SaveDialog({
                   class="btn-icon suggest-btn"
                   onClick=${suggestName}
                   disabled=${suggestingName}
-                  title="Suggest a name with AI"
+                  title="Proposer un nom avec l’IA"
                 >
                   <i class=${`fa-solid ${suggestingName ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'}`}></i>
                 </button>
               `}
             </div>
             <span style=${{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              This will be used as the folder name
+              Ce nom sera utilisé pour le dossier
             </span>
           </div>
 
           <div class="form-group">
-            <label>Model</label>
+            <label>Modèle</label>
             <input
               class="form-input"
               value=${modelName}
               onInput=${(e) => setModelName(e.target.value)}
-              placeholder="e.g. Claude Sonnet, GPT-4o, Gemini Pro"
+              placeholder="ex. Claude Sonnet, GPT-4o, Gemini Pro"
             />
             <span style=${{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              Name of the model that generated this HTML
+              Nom du modèle ayant généré ce HTML
             </span>
           </div>
 
           <div class="form-group">
-            <label>Tags (comma separated)</label>
+            <label>Étiquettes (séparées par des virgules)</label>
             <div class="input-with-suggest">
               <input
                 class="form-input"
                 value=${tags}
                 onInput=${(e) => setTags(e.target.value)}
-                placeholder="e.g. landing-page, responsive, css-animation"
+                placeholder="ex. page-accueil, responsive, animation-css"
               />
               ${showTagsSuggest && html`
                 <button
@@ -209,7 +209,7 @@ export function SaveDialog({
                   class="btn-icon suggest-btn"
                   onClick=${suggestTags}
                   disabled=${suggestingTags}
-                  title="Suggest tags with AI"
+                  title="Proposer des étiquettes avec l’IA"
                 >
                   <i class=${`fa-solid ${suggestingTags ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'}`}></i>
                 </button>
@@ -219,9 +219,9 @@ export function SaveDialog({
         </div>
 
         <div class="modal-footer">
-          <button class="btn" onClick=${onClose}>Cancel</button>
+          <button class="btn" onClick=${onClose}>Annuler</button>
           <button class="btn btn-primary" onClick=${handleSave}>
-            <i class="fa-solid fa-floppy-disk"></i> Save
+            <i class="fa-solid fa-floppy-disk"></i> Enregistrer
           </button>
         </div>
       </div>

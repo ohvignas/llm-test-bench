@@ -17,7 +17,7 @@ export function HtmlLive({ html: content }) {
     return () => cancelAnimationFrame(id);
   }, [content]);
   return html`<iframe class="batch-html-live" ref=${ref}
-    sandbox="allow-scripts allow-modals allow-pointer-lock" title="Preview"></iframe>`;
+    sandbox="allow-scripts allow-modals allow-pointer-lock" title="Aperçu"></iframe>`;
 }
 
 // Full-screen lightbox for examining a single generation up close. Sits above
@@ -44,12 +44,12 @@ export function HtmlLightbox({ html: content, title, subtitle, emptyMessage = ''
             <strong title=${title}>${title}</strong>
             ${subtitle ? html`<span title=${subtitle}>${subtitle}</span>` : null}
           </div>
-          <button class="btn-icon" onClick=${onClose} title="Close (Esc)"><i class="fa-solid fa-xmark"></i></button>
+          <button class="btn-icon" onClick=${onClose} title="Fermer (Échap)"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="html-lightbox-stage">
           ${content
             ? html`<${HtmlLive} html=${content} />`
-            : html`<div class="html-lightbox-empty"><i class="fa-solid fa-spinner fa-spin"></i><span>${emptyMessage || 'Waiting for output…'}</span></div>`}
+            : html`<div class="html-lightbox-empty"><i class="fa-solid fa-spinner fa-spin"></i><span>${emptyMessage || 'En attente de résultat…'}</span></div>`}
         </div>
       </div>
     </div>
@@ -121,9 +121,9 @@ export function BatchReview({ rows, resetKey, onOpen, onRate }) {
     if (!s) return null;
     const bits = [];
     if (s.tokensPerSecond != null) bits.push(`${s.tokensPerSecond} tok/s`);
-    if (s.ttftMs != null) bits.push(`${(s.ttftMs / 1000).toFixed(1)}s to first token`);
+    if (s.ttftMs != null) bits.push(`${(s.ttftMs / 1000).toFixed(1)}s avant le premier token`);
     if (s.completionTokens != null) bits.push(`${s.completionTokens} tokens`);
-    if (s.thought) bits.push(`thought${s.reasoningTokens ? ` (${s.reasoningTokens})` : ''}`);
+    if (s.thought) bits.push(`raisonnement${s.reasoningTokens ? ` (${s.reasoningTokens})` : ''}`);
     if (s.finishReason && s.finishReason !== 'stop') bits.push(s.finishReason);
     return bits.length ? bits.join(' · ') : null;
   };
@@ -143,13 +143,13 @@ export function BatchReview({ rows, resetKey, onOpen, onRate }) {
               <i class=${`batch-run-icon fa ${r.icon || ''}`}></i>
               <div class="batch-run-label">
                 <span class="batch-run-title" title=${r.prompt || r.title}>${r.title}</span>
-                ${r.subtitle ? html`<span class="batch-run-sub" title=${`Generated: ${r.subtitle}`}>${r.subtitle}</span>` : null}
+                ${r.subtitle ? html`<span class="batch-run-sub" title=${`Généré : ${r.subtitle}`}>${r.subtitle}</span>` : null}
               </div>
               <span class="batch-run-status">
                 ${r.label}
-                ${r.rating > 0 ? html` <span class="batch-rating-chip" title=${`Rated ${r.rating}/${RATING_MAX}`}><i class="fa-solid fa-star"></i> ${r.rating}</span>` : null}
+                ${r.rating > 0 ? html` <span class="batch-rating-chip" title=${`Note : ${r.rating}/${RATING_MAX}`}><i class="fa-solid fa-star"></i> ${r.rating}</span>` : null}
                 ${r.autoScore != null ? html` <span class="batch-score-chip">${fmtScore(r.autoScore)}</span>` : null}
-                ${r.healed ? html` <span class="batch-healed-chip">fixed</span>` : null}
+                ${r.healed ? html` <span class="batch-healed-chip">corrigé</span>` : null}
                 ${r.verification ? html` <${VerificationBadge} verification=${r.verification} />` : null}
                 ${r.error ? html`<span class="batch-run-err" title=${r.error}> — ${r.error}</span>` : null}
               </span>
@@ -159,11 +159,11 @@ export function BatchReview({ rows, resetKey, onOpen, onRate }) {
       </div>
       ${reviewable.length > 0 && html`
         <div class="batch-review-nav batch-review-nav-under">
-          <button class="btn btn-sm" title="Previous (←)" onClick=${() => step(-1)} disabled=${reviewable.length < 2}>
+          <button class="btn btn-sm" title="Précédent (←)" onClick=${() => step(-1)} disabled=${reviewable.length < 2}>
             <i class="fa-solid fa-chevron-left"></i>
           </button>
           <span class="batch-review-count">${reviewable.indexOf(idx) + 1} / ${reviewable.length}</span>
-          <button class="btn btn-sm" title="Next (→)" onClick=${() => step(1)} disabled=${reviewable.length < 2}>
+          <button class="btn btn-sm" title="Suivant (→)" onClick=${() => step(1)} disabled=${reviewable.length < 2}>
             <i class="fa-solid fa-chevron-right"></i>
           </button>
         </div>
@@ -174,27 +174,27 @@ export function BatchReview({ rows, resetKey, onOpen, onRate }) {
         ${!cur ? html`
           <div class="batch-preview">
             <div class="batch-preview-empty">
-              <i class="fa-solid fa-image"></i><span>Nothing to preview in this run</span>
+              <i class="fa-solid fa-image"></i><span>Aucun aperçu pour cette exécution</span>
             </div>
           </div>
         ` : html`
           <div class="batch-review-head">
             <span class="batch-review-title" title=${cur.prompt || cur.title}>${cur.title}</span>
-            ${cur.subtitle ? html`<span class="batch-review-gen" title=${`Generated: ${cur.subtitle}`}>${cur.subtitle}</span>` : null}
+            ${cur.subtitle ? html`<span class="batch-review-gen" title=${`Généré : ${cur.subtitle}`}>${cur.subtitle}</span>` : null}
             ${cur.autoScore != null ? html`<span class="batch-score-chip">${fmtScore(cur.autoScore)}</span>` : null}
-            ${cur.healed ? html`<span class="batch-healed-chip">fixed</span>` : null}
+            ${cur.healed ? html`<span class="batch-healed-chip">corrigé</span>` : null}
             ${cur.verification ? html`<${VerificationBadge} verification=${cur.verification} />` : null}
             ${onOpen && cur.id && html`
-              <button class="btn btn-xs" title="Open this generation in a new tab" onClick=${() => onOpen(cur.id)}>
-                <i class="fa-solid fa-arrow-up-right-from-square"></i> Open
+              <button class="btn btn-xs" title="Ouvrir cette génération dans un nouvel onglet" onClick=${() => onOpen(cur.id)}>
+                <i class="fa-solid fa-arrow-up-right-from-square"></i> Ouvrir
               </button>
             `}
           </div>
           ${canRate && html`
             <div class="batch-review-judge">
-              <span class="batch-review-judge-label">Your rating</span>
+              <span class="batch-review-judge-label">Votre note</span>
               <${RatingWidget} rating=${cur.rating || 0} onChange=${(value) => onRate(cur.id, value)} size=${16} />
-              <span class="batch-review-judge-hint">keys 1–9, 0 = 10 · click the lit star to clear</span>
+              <span class="batch-review-judge-hint">touches 1–9, 0 = 10 · cliquer sur l’étoile active pour effacer</span>
             </div>
           `}
           ${(cur.paramsLabel || statsBits(cur.stats)) && html`

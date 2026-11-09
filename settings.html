@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en" data-theme="dark" data-distribution="public">
+<html lang="fr" data-theme="dark" data-distribution="public">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Connect a data folder and local AI models to the projects on this site.">
-  <title>Settings · Peter Edwards</title>
+  <meta name="description" content="Connectez un dossier de données et des modèles d’IA locaux aux projets de ce site.">
+  <title>Paramètres · Peter Edwards</title>
   <link rel="canonical" href="https://neuroviz.uk/settings">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -15,89 +15,89 @@
 </head>
 <body>
   <header class="site-header">
-    <a class="brand" href="./" aria-label="Peter Edwards — home"><span class="brand-mark">PE</span><span>Peter Edwards</span></a>
-    <nav aria-label="Main navigation">
-      <a href="./#projects">Projects</a>
-      <a href="showcase.html">Showcase</a>
-      <a href="./#about">About</a>
-      <a href="privacy.html">Privacy</a>
+    <a class="brand" href="./" aria-label="Peter Edwards — accueil"><span class="brand-mark">PE</span><span>Peter Edwards</span></a>
+    <nav aria-label="Navigation principale">
+      <a href="./#projects">Projets</a>
+      <a href="showcase.html">Démonstrations</a>
+      <a href="./#about">À propos</a>
+      <a href="privacy.html">Confidentialité</a>
       <a href="https://github.com/Techdread/llm-test-bench" data-repository-link>GitHub</a>
     </nav>
   </header>
 
   <main class="settings-page">
-    <p class="eyebrow">Local workspace setup</p>
-    <h1>Connect your tools</h1>
-    <p class="settings-intro">Your work is saved in this browser from the start. Choose a data folder if you would rather keep files on your disk, and connect an optional local model server. Your files, endpoint details, and generated work stay on your device.</p>
+    <p class="eyebrow">Configuration de l’espace de travail local</p>
+    <h1>Connectez vos outils</h1>
+    <p class="settings-intro">Votre travail est enregistré dans ce navigateur dès le départ. Choisissez un dossier pour conserver les fichiers sur votre disque et connectez, si vous le souhaitez, un serveur de modèles local. Vos fichiers, les détails de connexion et les résultats générés restent sur votre appareil.</p>
 
     <section class="settings-card" aria-labelledby="folder-title">
       <div class="setting-heading">
         <div>
-          <p class="setting-label">Data root</p>
-          <h2 id="folder-title">Your working folder</h2>
+          <p class="setting-label">Dossier de données</p>
+          <h2 id="folder-title">Votre dossier de travail</h2>
         </div>
-        <span class="local-badge">Local only</span>
+        <span class="local-badge">Uniquement en local</span>
       </div>
 
       <div class="folder-status" id="folder-status" role="status" aria-live="polite">
         <span class="status-dot" aria-hidden="true"></span>
         <div>
-          <strong id="status-title">Checking folder access…</strong>
-          <p id="status-detail">Looking for a folder previously connected to this website.</p>
+          <strong id="status-title">Vérification de l’accès au dossier…</strong>
+          <p id="status-detail">Recherche d’un dossier déjà connecté à ce site.</p>
         </div>
       </div>
 
-      <button class="button primary folder-button" id="choose-folder" type="button" disabled>Choose folder</button>
-      <p class="setting-help" id="browser-help">Chrome or Edge will show a secure system folder picker. You can revoke access later in your browser's site settings.</p>
+      <button class="button primary folder-button" id="choose-folder" type="button" disabled>Choisir un dossier</button>
+      <p class="setting-help" id="browser-help">Chrome ou Edge ouvrira le sélecteur de dossiers du système. Vous pourrez révoquer cet accès dans les paramètres du site de votre navigateur.</p>
 
       <div class="browser-storage" id="browser-storage" hidden>
-        <p class="setting-label">Browser storage</p>
-        <h3 id="browser-storage-title">Work saved in this browser</h3>
-        <p id="browser-storage-detail">Counting…</p>
-        <button class="button folder-button" id="copy-into-folder" type="button" disabled>Copy into folder</button>
+        <p class="setting-label">Stockage du navigateur</p>
+        <h3 id="browser-storage-title">Travail enregistré dans ce navigateur</h3>
+        <p id="browser-storage-detail">Calcul en cours…</p>
+        <button class="button folder-button" id="copy-into-folder" type="button" disabled>Copier dans un dossier</button>
         <p class="setting-help" id="copy-status" role="status" aria-live="polite"></p>
-        <p class="setting-help">Copying never overwrites or deletes anything. Files already in the folder are kept; if one differs, the browser's version is saved beside it with “(from browser)” in its name. The browser copy stays where it is, so you can copy again later.</p>
+        <p class="setting-help">La copie n’écrase ni ne supprime aucun fichier. Les fichiers existants sont conservés ; en cas de différence, la version du navigateur est enregistrée à côté avec « (from browser) » dans son nom. La copie du navigateur reste disponible pour une nouvelle copie ultérieure.</p>
       </div>
     </section>
 
     <section class="settings-card model-settings-card" aria-labelledby="models-title">
       <div class="setting-heading">
         <div>
-          <p class="setting-label">Local AI</p>
-          <h2 id="models-title">Your local model server</h2>
+          <p class="setting-label">IA locale</p>
+          <h2 id="models-title">Votre serveur de modèles local</h2>
         </div>
-        <span class="local-badge">Direct connection</span>
+        <span class="local-badge">Connexion directe</span>
       </div>
 
-      <p class="setting-help model-intro">The browser talks directly to your own LM Studio or OpenAI-compatible endpoint. Requests are not relayed through this site.</p>
+      <p class="setting-help model-intro">Le navigateur communique directement avec votre serveur LM Studio ou compatible OpenAI. Les requêtes ne transitent pas par ce site.</p>
 
       <ol class="model-setup-steps">
-        <li>Start the server and load a model. For LM Studio, enable CORS in Developer settings or run <code>lms server start --cors</code>.</li>
-        <li>Add the endpoint below—LM Studio normally uses <code>http://localhost:1234</code>.</li>
-        <li>Click <strong>Add &amp; test</strong>, then choose <strong>Allow</strong> if Chrome or Edge asks for local-network access.</li>
+        <li>Démarrez le serveur et chargez un modèle. Dans LM Studio, activez CORS dans les paramètres développeur ou exécutez <code>lms server start --cors</code>.</li>
+        <li>Ajoutez l’adresse du serveur ci-dessous ; LM Studio utilise généralement <code>http://localhost:1234</code>.</li>
+        <li>Cliquez sur <strong>Ajouter et tester</strong>, puis sur <strong>Autoriser</strong> si Chrome ou Edge demande l’accès au réseau local.</li>
       </ol>
 
       <form class="model-endpoint-form" id="model-endpoint-form">
         <label>
-          <span>Server type</span>
+          <span>Type de serveur</span>
           <select id="model-provider-type">
-            <option value="lmstudio">LM Studio / OpenAI-compatible</option>
+            <option value="lmstudio">LM Studio / compatible OpenAI</option>
             <option value="unsloth-studio">Unsloth Studio</option>
           </select>
         </label>
         <label>
-          <span>Display name</span>
+          <span>Nom affiché</span>
           <input id="model-provider-name" value="LM Studio" autocomplete="off">
         </label>
         <label class="endpoint-url-field">
-          <span>Base URL</span>
+          <span>URL de base</span>
           <input id="model-provider-url" type="url" value="http://localhost:1234" required spellcheck="false">
         </label>
         <label class="endpoint-key-field" id="endpoint-key-field" hidden>
-          <span>API key</span>
-          <input id="model-provider-key" type="password" autocomplete="off" placeholder="Optional local token">
+          <span>Clé API</span>
+          <input id="model-provider-key" type="password" autocomplete="off" placeholder="Jeton local facultatif">
         </label>
-        <button class="button primary" id="add-model-provider" type="submit">Add &amp; test</button>
+        <button class="button primary" id="add-model-provider" type="submit">Ajouter et tester</button>
       </form>
 
       <div class="model-connect-status" id="model-connect-status" role="status" aria-live="polite"></div>
@@ -106,20 +106,20 @@
 
     <section class="folder-explainer" aria-labelledby="created-title">
       <div>
-        <p class="eyebrow">What happens next</p>
-        <h2 id="created-title">One root, separate app folders</h2>
+        <p class="eyebrow">Et ensuite</p>
+        <h2 id="created-title">Un dossier racine, un sous-dossier par application</h2>
       </div>
-      <p>The apps create a small registry file and a separate folder for each project you use, such as <code>prompt-gallery</code> or <code>game-forge-v2</code>. Saving is append-only by default.</p>
+      <p>Les applications créent un petit fichier de registre et un dossier distinct pour chaque projet utilisé, comme <code>prompt-gallery</code> ou <code>game-forge-v2</code>. Par défaut, les enregistrements s’ajoutent sans écraser les précédents.</p>
     </section>
 
-    <div class="settings-actions" aria-label="Open a project">
-      <a class="button" href="./#projects">Browse all projects</a>
-      <a class="button" href="game-forge-v2/">Open Game Forge</a>
-      <a class="button" href="prompt-gallery/">Open Prompt Gallery</a>
+    <div class="settings-actions" aria-label="Ouvrir un projet">
+      <a class="button" href="./#projects">Parcourir tous les projets</a>
+      <a class="button" href="game-forge-v2/">Ouvrir Game Forge</a>
+      <a class="button" href="prompt-gallery/">Ouvrir Prompt Gallery</a>
     </div>
   </main>
 
-  <footer><span>Peter Edwards · Projects MIT licensed</span><span><a href="privacy.html">Privacy</a></span></footer>
+  <footer><span>Peter Edwards · Projets sous licence MIT</span><span><a href="privacy.html">Confidentialité</a></span></footer>
   <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "087e962bcbbc4be0bc1ba8bf21be0bde"}'></script>
 </body>
 </html>

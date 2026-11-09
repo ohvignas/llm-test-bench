@@ -52,7 +52,7 @@ export function MetadataPanel({ generation, response, onUpdateMetadata, onSavePr
   const formatDate = (dateStr) => {
     if (!dateStr) return '—';
     try {
-      return new Date(dateStr).toLocaleDateString('en-GB', {
+      return new Date(dateStr).toLocaleDateString('fr-FR', {
         day: 'numeric', month: 'short', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
       });
@@ -65,20 +65,20 @@ export function MetadataPanel({ generation, response, onUpdateMetadata, onSavePr
     <div class="metadata-panel">
       <div class="metadata-header">
         <h3>${displayName}</h3>
-        <button class="btn-icon" onClick=${onClose} title="Close panel">
+        <button class="btn-icon" onClick=${onClose} title="Fermer le panneau">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
       <div class="metadata-body">
         <!-- Rating -->
         <div class="metadata-field">
-          <span class="metadata-label">Rating</span>
+          <span class="metadata-label">Note</span>
           <${RatingWidget} rating=${ratingOf(meta)} onChange=${handleRatingChange} size=${15} />
         </div>
 
         <!-- Model -->
         <div class="metadata-field">
-          <span class="metadata-label">Model</span>
+          <span class="metadata-label">Modèle</span>
           <span class="metadata-value">
             ${meta.model ? html`<span class="model-badge"><i class="fa-solid fa-robot"></i> ${meta.model}</span>` : '—'}
           </span>
@@ -86,14 +86,14 @@ export function MetadataPanel({ generation, response, onUpdateMetadata, onSavePr
 
         <!-- Date -->
         <div class="metadata-field">
-          <span class="metadata-label">Created</span>
+          <span class="metadata-label">Création</span>
           <span class="metadata-value">${formatDate(meta.createdAt)}</span>
         </div>
 
         <!-- Refine lineage -->
         ${meta.derivedFrom && html`
           <div class="metadata-field">
-            <span class="metadata-label">Derived from</span>
+            <span class="metadata-label">Issu de</span>
             <span class="metadata-value" style=${{ fontSize: '12px' }}>
               <i class="fa-solid fa-screwdriver-wrench"></i> ${meta.derivedFrom}
               ${meta.refine?.kind && html` <span class="tag-chip">${meta.refine.kind}</span>`}
@@ -103,7 +103,7 @@ export function MetadataPanel({ generation, response, onUpdateMetadata, onSavePr
 
         ${meta.verification && html`
           <div class="metadata-field">
-            <span class="metadata-label">Verification</span>
+            <span class="metadata-label">Vérification</span>
             <${VerificationDetails}
               verification=${meta.verification}
               parentId=${meta.derivedFrom ? `${folderId}/${meta.derivedFrom}` : ''}
@@ -113,19 +113,19 @@ export function MetadataPanel({ generation, response, onUpdateMetadata, onSavePr
 
         <!-- Tags -->
         <div class="metadata-field">
-          <span class="metadata-label">Tags</span>
+          <span class="metadata-label">Étiquettes</span>
           <div class="metadata-tags-edit">
             ${(meta.tags || []).map(tag => html`
               <span class="tag-chip" key=${tag}>
                 ${tag}
-                <button class="tag-remove" onClick=${() => handleRemoveTag(tag)} title="Remove tag">
+                <button class="tag-remove" onClick=${() => handleRemoveTag(tag)} title="Supprimer l’étiquette">
                   <i class="fa-solid fa-xmark"></i>
                 </button>
               </span>
             `)}
             <input
               class="tag-input"
-              placeholder="Add tag..."
+              placeholder="Ajouter une étiquette…"
               value=${tagInput}
               onInput=${(e) => setTagInput(e.target.value)}
               onKeyDown=${handleAddTag}
@@ -140,7 +140,7 @@ export function MetadataPanel({ generation, response, onUpdateMetadata, onSavePr
             class="metadata-notes-input"
             value=${meta.notes || ''}
             onInput=${handleNotesChange}
-            placeholder="Add notes..."
+            placeholder="Ajouter des notes…"
           ></textarea>
         </div>
 
@@ -152,15 +152,15 @@ export function MetadataPanel({ generation, response, onUpdateMetadata, onSavePr
       </div>
 
       <div class="metadata-actions">
-        <button class="btn" onClick=${() => onEdit(id)} title="Edit in Create view">
-          <i class="fa-solid fa-pen-to-square"></i> Edit
+        <button class="btn" onClick=${() => onEdit(id)} title="Modifier dans la vue Créer">
+          <i class="fa-solid fa-pen-to-square"></i> Modifier
         </button>
-        <button class="btn" onClick=${() => onCompare(id)} title="Add to compare">
-          <i class="fa-solid fa-columns"></i> Compare
+        <button class="btn" onClick=${() => onCompare(id)} title="Ajouter à la comparaison">
+          <i class="fa-solid fa-columns"></i> Comparer
         </button>
         ${onRefine && html`
-          <button class="btn" onClick=${() => onRefine(id)} title="Open in Refine — heal errors or add features (saves as a new variant)">
-            <i class="fa-solid fa-screwdriver-wrench"></i> Refine
+          <button class="btn" onClick=${() => onRefine(id)} title="Ouvrir dans Améliorer : corriger les erreurs ou ajouter des fonctionnalités (nouvelle variante)">
+            <i class="fa-solid fa-screwdriver-wrench"></i> Améliorer
           </button>
         `}
         ${onSavePromptToLibrary && prompt && html`
@@ -170,9 +170,9 @@ export function MetadataPanel({ generation, response, onUpdateMetadata, onSavePr
               (folderId || id).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
               prompt
             )}
-            title="Save this generation's prompt to the prompt library"
+            title="Enregistrer le prompt de cette génération dans la bibliothèque"
           >
-            <i class="fa-solid fa-bookmark"></i> Keep Prompt
+            <i class="fa-solid fa-bookmark"></i> Conserver le prompt
           </button>
         `}
         ${allowMorph && html`<button class="btn" onClick=${() => {
@@ -191,10 +191,10 @@ export function MetadataPanel({ generation, response, onUpdateMetadata, onSavePr
               },
             });
           } catch (e) {
-            alert('Send failed: ' + e.message);
+            alert('Échec de l’envoi : ' + e.message);
           }
-        }} title="Morph this generation in Code Morph Lab">
-          <i class="fa-solid fa-wand-magic-sparkles"></i> Morph
+        }} title="Transformer cette génération dans Code Morph Lab">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Transformer
         </button>`}
         ${allowHandoffs && html`<button class="btn" onClick=${() => {
           try {
@@ -211,13 +211,13 @@ export function MetadataPanel({ generation, response, onUpdateMetadata, onSavePr
               },
             });
           } catch (e) {
-            alert('Send failed: ' + e.message);
+            alert('Échec de l’envoi : ' + e.message);
           }
-        }} title="Seed a Bugfix Bench task from this generation">
-          <i class="fa-solid fa-bug"></i> Bug it
+        }} title="Créer une tâche Bugfix Bench à partir de cette génération">
+          <i class="fa-solid fa-bug"></i> Déboguer
         </button>`}
-        <button class="btn btn-danger" onClick=${() => onDelete(id)} title="Delete generation">
-          <i class="fa-solid fa-trash"></i> Delete
+        <button class="btn btn-danger" onClick=${() => onDelete(id)} title="Supprimer la génération">
+          <i class="fa-solid fa-trash"></i> Supprimer
         </button>
       </div>
     </div>

@@ -269,7 +269,12 @@ export function subscribeSuite(area, cb) {
     subscribers.set(area, set);
   }
   set.add(cb);
-  return () => { set.delete(cb); };
+  const vaultChange = () => cb(snapshots.get(area) || {});
+  if (area === 'api-keys') globalThis.window?.addEventListener?.('vault-key-changed', vaultChange);
+  return () => {
+    set.delete(cb);
+    if (area === 'api-keys') globalThis.window?.removeEventListener?.('vault-key-changed', vaultChange);
+  };
 }
 
 /** Synchronous read of a single field from the cached snapshot, useful in

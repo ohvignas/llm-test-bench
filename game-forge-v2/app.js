@@ -1060,8 +1060,8 @@ function App() {
     setBackend, setAgentId, setAgentModels, setProviderId, setModelId,
   });
 
-  const handleApiKeySave = useCallback((key) => {
-    saveApiKey(key);
+  const handleApiKeySave = useCallback(async (key) => {
+    await saveApiKey(key);
     setApiKeySet(hasApiKey());
     setShowApiKey(false);
     // A new key changes which OpenRouter models are reachable.

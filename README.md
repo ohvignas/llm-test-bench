@@ -2,6 +2,8 @@
 
 # LLM Test Bench
 
+> **Fork local sécurisé et interface française : [démarrage Docker et documentation française](README.fr.md).** Connexion par identifiant, clé OpenRouter chiffrée côté serveur et volumes persistants. Le reste de ce document décrit la distribution statique d'origine.
+
 **Generate it. Compare it. Keep the evidence.**
 
 A browser-based workbench for testing how language models turn the same idea into

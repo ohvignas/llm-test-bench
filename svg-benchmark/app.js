@@ -461,16 +461,16 @@ function App() {
     setSelectedModelId(modelId);
   }, []);
 
-  const handleApiKeySave = useCallback((key) => {
-    openrouter.saveApiKey(key);
+  const handleApiKeySave = useCallback(async (key) => {
+    await openrouter.saveApiKey(key);
     const hasKey = !!key;
     setApiKeySet(hasKey);
     setShowApiKeyDialog(false);
     if (hasKey) {
-      addToast('API key saved (stored locally only)', 'success');
+      addToast('Clé API enregistrée', 'success');
       loadModels();
     } else {
-      addToast('API key removed', 'info');
+      addToast('Clé API supprimée', 'info');
       loadModels();
     }
   }, [addToast, loadModels]);

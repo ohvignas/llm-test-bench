@@ -21,7 +21,7 @@ function deriveSubject(g) {
   if (title) return title;
   const firstLine = String(g.prompt || '')
     .split('\n').map(l => l.replace(/^#+\s*/, '').trim()).find(Boolean);
-  return firstLine ? firstLine.slice(0, 80) : 'Untitled';
+  return firstLine ? firstLine.slice(0, 80) : 'Sans titre';
 }
 
 function cleanLabel(s) { return String(s || '').replace(/\s+/g, ' ').trim(); }
@@ -48,13 +48,13 @@ export function canMergeRuns(runs) {
 // never touched; provenance stays recoverable under batch.mergedFrom.
 export function planRunMerge(generations, runIds, { mergedRunId, mergedAt } = {}) {
   const sourceRunIds = [...new Set((runIds || []).filter(Boolean))];
-  if (sourceRunIds.length < 2) throw new Error('Select at least two runs to merge');
-  if (!mergedRunId) throw new Error('A merged run ID is required');
+  if (sourceRunIds.length < 2) throw new Error('Sélectionnez au moins deux exécutions à fusionner');
+  if (!mergedRunId) throw new Error('Un identifiant d’exécution fusionnée est requis');
 
   const sourceSet = new Set(sourceRunIds);
   const sourceRuns = buildRuns(generations).filter(run => sourceSet.has(run.id));
-  if (sourceRuns.length !== sourceRunIds.length) throw new Error('One or more selected runs no longer exist');
-  if (!canMergeRuns(sourceRuns)) throw new Error('Only runs made with the same model and prompt set can be merged');
+  if (sourceRuns.length !== sourceRunIds.length) throw new Error('Une ou plusieurs exécutions sélectionnées n’existent plus');
+  if (!canMergeRuns(sourceRuns)) throw new Error('Seules les exécutions du même modèle et de la même série de prompts peuvent être fusionnées');
 
   const runById = new Map(sourceRuns.map(run => [run.id, run]));
   const provenance = [...new Set(sourceRunIds.flatMap(id => [

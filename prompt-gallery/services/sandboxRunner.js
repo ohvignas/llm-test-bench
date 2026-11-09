@@ -190,9 +190,9 @@ export async function runHtmlSandbox(htmlContent, { timeoutMs = DEFAULT_TIMEOUT_
 }
 
 export function runStatusLabel(status) {
-  if (!status) return 'not run';
-  if (status.timedOut) return 'timed out';
-  if (status.errors.length > 0) return `${status.errors.length} error${status.errors.length === 1 ? '' : 's'}`;
-  if (status.warnings.length > 0) return `clean (${status.warnings.length} warning${status.warnings.length === 1 ? '' : 's'})`;
-  return 'clean';
+  if (!status) return 'pas encore exécuté';
+  if (status.timedOut) return 'délai dépassé';
+  if (status.errors.length > 0) return `${status.errors.length} erreur${status.errors.length === 1 ? '' : 's'}`;
+  if (status.warnings.length > 0) return `aucune erreur (${status.warnings.length} avertissement${status.warnings.length === 1 ? '' : 's'})`;
+  return 'aucune erreur';
 }

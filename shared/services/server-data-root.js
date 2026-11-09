@@ -14,6 +14,8 @@
 // iterators. Every call is one HTTP request; app-config's cache does the
 // coalescing, as it already did for a local folder.
 
+import { secureMode, secureFetch } from './secure-session.js';
+
 const BASE = '/__data';
 
 function notFound(path) {
@@ -38,7 +40,7 @@ function checkName(name) {
 
 async function api(path, { method = 'GET', query = {}, body = null, raw = false } = {}) {
   const params = new URLSearchParams(query);
-  const res = await fetch(`${BASE}${path}?${params}`, {
+  const res = await (secureMode() ? secureFetch : fetch)(`${BASE}${path}?${params}`, {
     method,
     ...(body === null ? {} : { body, headers: { 'Content-Type': 'application/octet-stream' } }),
   });

@@ -12,20 +12,20 @@
 
 /** Canonical parameters, in display order. `providers` lists who accepts them. */
 export const PARAM_SPEC = [
-  { key: 'temperature',       label: 'Temperature',       type: 'float', min: 0,  max: 2,     step: 0.05, hint: 'Randomness. 0 = greedy.' },
-  { key: 'top_p',             label: 'Top P',             type: 'float', min: 0,  max: 1,     step: 0.01, hint: 'Nucleus sampling cutoff.' },
-  { key: 'top_k',             label: 'Top K',             type: 'int',   min: 0,  max: 200,   step: 1,    hint: '0 = disabled.' },
-  { key: 'min_p',             label: 'Min P',             type: 'float', min: 0,  max: 1,     step: 0.01, hint: 'Minimum token probability.' },
-  { key: 'repeat_penalty',    label: 'Repeat Penalty',    type: 'float', min: 0,  max: 2,     step: 0.01 },
-  { key: 'presence_penalty',  label: 'Presence Penalty',  type: 'float', min: -2, max: 2,     step: 0.1 },
-  { key: 'frequency_penalty', label: 'Frequency Penalty', type: 'float', min: -2, max: 2,     step: 0.1 },
-  { key: 'max_tokens',        label: 'Max Tokens',        type: 'int',   min: 1,  max: 200000, step: 1,
-    hint: 'Careful: thinking models can spend the whole budget reasoning and return empty content.' },
-  { key: 'seed',              label: 'Seed',              type: 'int',   min: 0,  max: 2 ** 31 - 1, step: 1, hint: 'Same seed + same params = repeatable.' },
-  { key: 'reasoning_effort',  label: 'Reasoning Effort',  type: 'enum',  values: ['minimal', 'low', 'medium', 'high'],
-    hint: 'Honoured only by models that expose it.' },
-  { key: 'enable_thinking',   label: 'Thinking',          type: 'bool',
-    hint: 'Chat-template switch. Many models (e.g. Gemma 4) ignore it and think regardless.' },
+  { key: 'temperature',       label: 'Température',       type: 'float', min: 0,  max: 2,     step: 0.05, hint: 'Aléatoire. 0 = choix du token le plus probable.' },
+  { key: 'top_p',             label: 'Top P',             type: 'float', min: 0,  max: 1,     step: 0.01, hint: 'Seuil de probabilité cumulée pour l’échantillonnage.' },
+  { key: 'top_k',             label: 'Top K',             type: 'int',   min: 0,  max: 200,   step: 1,    hint: '0 = désactivé.' },
+  { key: 'min_p',             label: 'Min P',             type: 'float', min: 0,  max: 1,     step: 0.01, hint: 'Probabilité minimale d’un token.' },
+  { key: 'repeat_penalty',    label: 'Pénalité de répétition',    type: 'float', min: 0,  max: 2,     step: 0.01 },
+  { key: 'presence_penalty',  label: 'Pénalité de présence',  type: 'float', min: -2, max: 2,     step: 0.1 },
+  { key: 'frequency_penalty', label: 'Pénalité de fréquence', type: 'float', min: -2, max: 2,     step: 0.1 },
+  { key: 'max_tokens',        label: 'Nombre maximal de tokens',        type: 'int',   min: 1,  max: 200000, step: 1,
+    hint: 'Attention : les modèles de raisonnement peuvent utiliser tout le budget pour réfléchir et ne renvoyer aucun contenu.' },
+  { key: 'seed',              label: 'Graine aléatoire',              type: 'int',   min: 0,  max: 2 ** 31 - 1, step: 1, hint: 'Même graine et mêmes paramètres : résultats reproductibles.' },
+  { key: 'reasoning_effort',  label: 'Effort de raisonnement',  type: 'enum',  values: ['minimal', 'low', 'medium', 'high'],
+    hint: 'Pris en compte uniquement par les modèles compatibles.' },
+  { key: 'enable_thinking',   label: 'Raisonnement',          type: 'bool',
+    hint: 'Option du modèle de conversation. De nombreux modèles (ex. Gemma 4) l’ignorent et raisonnent quand même.' },
 ];
 
 const SPEC_BY_KEY = new Map(PARAM_SPEC.map(p => [p.key, p]));

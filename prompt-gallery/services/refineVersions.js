@@ -4,13 +4,13 @@
 // by their last sandbox check. Pure, for the tests.
 
 export function stepCheckDetail(status) {
-  if (!status) return 'not checked yet';
-  if (status.timedOut) return 'timed out';
+  if (!status) return 'pas encore vérifié';
+  if (status.timedOut) return 'délai dépassé';
   const errors = status.errors?.length || 0;
   const warnings = status.warnings?.length || 0;
-  if (errors) return `${errors} error${errors === 1 ? '' : 's'}`;
-  if (warnings) return `${warnings} warning${warnings === 1 ? '' : 's'}`;
-  return 'ran clean';
+  if (errors) return `${errors} erreur${errors === 1 ? '' : 's'}`;
+  if (warnings) return `${warnings} avertissement${warnings === 1 ? '' : 's'}`;
+  return 'aucune erreur';
 }
 
 /** @returns {{ id, label, detail, html, latest? }[]} in step order */
@@ -20,7 +20,7 @@ export function refineVersions(steps = []) {
     .filter(({ step }) => typeof step?.html === 'string' && step.html.trim())
     .map(({ step, index }) => ({
       id: `step-${index}`,
-      label: `${index + 1} · ${step.label || (index === 0 ? 'Original' : 'Step')}`,
+      label: `${index + 1} · ${step.label || (index === 0 ? 'Original' : 'Étape')}`,
       detail: stepCheckDetail(step.runStatus),
       html: step.html,
     }));
@@ -44,5 +44,5 @@ export function pageTitle(htmlText) {
 export function refineDisplayTitle(session) {
   if (!session) return '';
   if (session.title && session.title !== UNSAVED_REFINE_TITLE) return session.title;
-  return pageTitle(session.steps?.[0]?.html) || 'Unsaved page';
+  return pageTitle(session.steps?.[0]?.html) || 'Page non enregistrée';
 }

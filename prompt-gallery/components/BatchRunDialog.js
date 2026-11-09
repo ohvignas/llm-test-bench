@@ -40,20 +40,20 @@ import {
 } from '../services/batchMetrics.js';
 
 const STATUS_META = {
-  queued:     { icon: 'fa-regular fa-circle',        cls: 'queued',  label: 'Queued' },
-  planning:   { icon: 'fa-solid fa-list-check',      cls: 'active',  label: 'Planning' },
-  generating: { icon: 'fa-solid fa-bolt',            cls: 'active',  label: 'Generating' },
-  checking:   { icon: 'fa-solid fa-flask',           cls: 'active',  label: 'Checking' },
-  healing:    { icon: 'fa-solid fa-screwdriver-wrench', cls: 'active', label: 'Healing' },
-  auditing:   { icon: 'fa-solid fa-magnifying-glass-chart', cls: 'active', label: 'Auditing' },
-  repairing:  { icon: 'fa-solid fa-screwdriver-wrench', cls: 'active', label: 'Repairing' },
-  verified:   { icon: 'fa-solid fa-circle-check',    cls: 'ok',      label: 'Verified' },
-  warned:     { icon: 'fa-solid fa-circle-question', cls: 'warn',    label: 'Needs review' },
-  no_progress:{ icon: 'fa-solid fa-equals',          cls: 'warn',    label: 'No progress' },
-  saved:      { icon: 'fa-solid fa-circle-check',    cls: 'ok',      label: 'Saved' },
-  skipped:    { icon: 'fa-solid fa-forward',         cls: 'skipped', label: 'Skipped' },
-  error:      { icon: 'fa-solid fa-triangle-exclamation', cls: 'error', label: 'Failed' },
-  stopped:    { icon: 'fa-solid fa-hand',            cls: 'skipped', label: 'Stopped' },
+  queued:     { icon: 'fa-regular fa-circle',        cls: 'queued',  label: 'En attente' },
+  planning:   { icon: 'fa-solid fa-list-check',      cls: 'active',  label: 'Planification' },
+  generating: { icon: 'fa-solid fa-bolt',            cls: 'active',  label: 'Génération' },
+  checking:   { icon: 'fa-solid fa-flask',           cls: 'active',  label: 'Vérification' },
+  healing:    { icon: 'fa-solid fa-screwdriver-wrench', cls: 'active', label: 'Correction' },
+  auditing:   { icon: 'fa-solid fa-magnifying-glass-chart', cls: 'active', label: 'Audit' },
+  repairing:  { icon: 'fa-solid fa-screwdriver-wrench', cls: 'active', label: 'Réparation' },
+  verified:   { icon: 'fa-solid fa-circle-check',    cls: 'ok',      label: 'Vérifié' },
+  warned:     { icon: 'fa-solid fa-circle-question', cls: 'warn',    label: 'À vérifier' },
+  no_progress:{ icon: 'fa-solid fa-equals',          cls: 'warn',    label: 'Aucun progrès' },
+  saved:      { icon: 'fa-solid fa-circle-check',    cls: 'ok',      label: 'Enregistré' },
+  skipped:    { icon: 'fa-solid fa-forward',         cls: 'skipped', label: 'Ignoré' },
+  error:      { icon: 'fa-solid fa-triangle-exclamation', cls: 'error', label: 'Échec' },
+  stopped:    { icon: 'fa-solid fa-hand',            cls: 'skipped', label: 'Arrêté' },
 };
 
 export function BatchRunDialog({
@@ -290,10 +290,10 @@ export function BatchRunDialog({
   };
 
   const start = useCallback(async () => {
-    if (!canRun) { addToast('Select a model first', 'error'); return; }
-    if (!hasDirectory) { addToast('Connect a directory first — generations are saved there', 'error'); return; }
+    if (!canRun) { addToast('Sélectionnez d’abord un modèle', 'error'); return; }
+    if (!hasDirectory) { addToast('Connectez d’abord un dossier : les générations y seront enregistrées', 'error'); return; }
     const list = setPrompts.filter(p => selectedIds.has(p.id));
-    if (list.length === 0) { addToast('Select at least one prompt', 'error'); return; }
+    if (list.length === 0) { addToast('Sélectionnez au moins un prompt', 'error'); return; }
 
     const plan = planBatchLanes({ prompts: list, models: runModels, runId });
     setRunList(plan.runList);
@@ -340,12 +340,12 @@ export function BatchRunDialog({
             if (event.type === 'done') return;
             handleEvent(typeof event.index === 'number' ? { ...event, index: event.index + lane.offset } : event);
           },
-          shouldStop: () => stopRef.current,
+          shouldArrêt : () => stopRef.current,
           shouldPause: () => pauseRequestedRef.current,
           waitIfPaused: waitAtPauseBoundary,
         });
       } catch (e) {
-        addToast(`Batch run error${plan.multi ? ` (${lane.model.label || lane.model.modelId})` : ''}: ${e.message}`, 'error');
+        addToast(`Erreur d’exécution par lot${plan.multi ? ` (${lane.model.label || lane.model.modelId})` : ''}: ${e.message}`, 'error');
         return null;
       } finally {
         runningLanesRef.current -= 1;
@@ -357,10 +357,10 @@ export function BatchRunDialog({
     };
 
     try {
-      const summaries = await runLanes({ lanes: plan.lanes, mode: laneMode, runOne, shouldStop: () => stopRef.current });
+      const summaries = await runLanes({ lanes: plan.lanes, mode: laneMode, runOne, shouldArrêt : () => stopRef.current });
       setSummary(combineSummaries(summaries.filter(Boolean)));
     } catch (e) {
-      addToast('Batch run error: ' + e.message, 'error');
+      addToast('Erreur d’exécution par lot : ' + e.message, 'error');
     } finally {
       pauseRequestedRef.current = false;
       releasePaused();
@@ -376,7 +376,7 @@ export function BatchRunDialog({
     if (pauseRequestedRef.current || stopRef.current) return;
     pauseRequestedRef.current = true;
     setPauseState('pausing');
-    addToast('Pause requested — waiting for the current model call to finish', 'info');
+    addToast('Pause demandée : attente de la fin de l’appel au modèle', 'info');
   }, [addToast]);
 
   const resume = useCallback(() => {
@@ -385,7 +385,7 @@ export function BatchRunDialog({
     setPauseState('running');
     setPauseContext(null);
     releasePaused();
-    addToast('Batch resumed', 'info');
+    addToast('Lot repris', 'info');
   }, [addToast]);
 
   // Stop cancels the calls in flight rather than waiting them out: a CLI agent
@@ -396,7 +396,7 @@ export function BatchRunDialog({
     pauseRequestedRef.current = false;
     releasePaused();
     deps.abortInFlight?.();
-    addToast('Stopping — cancelling the run in progress…', 'info');
+    addToast('Arrêt : annulation de l’exécution en cours…', 'info');
   }, [addToast, deps]);
 
   const doneCount = items.filter(it => ['saved', 'skipped', 'error', 'stopped', 'verified', 'warned', 'no_progress'].includes(it.status)).length;
@@ -407,7 +407,7 @@ export function BatchRunDialog({
   const displayedCharacters = displayedHtml.length;
   const reportedTokens = inspectedIndex >= 0 ? completionTokenCount(outputStats[inspectedIndex]) : null;
   const displayedTokens = reportedTokens ?? estimatedTokenCount(displayedHtml);
-  const displayedTokenLabel = `${displayedTokens.toLocaleString()} token${displayedTokens === 1 ? '' : 's'} generated`;
+  const displayedTokenLabel = `${displayedTokens.toLocaleString()} token${displayedTokens === 1 ? '' : 's'} généré${displayedTokens === 1 ? '' : 's'}`;
   const viewingActive = inspectedIndex >= 0 && inspectedIndex === activeIndex;
   const displayedTokenRate = tokensPerSecond(
     inspectedIndex >= 0 ? outputStats[inspectedIndex] : null,
@@ -423,10 +423,10 @@ export function BatchRunDialog({
   const fullscreenTitle = fullscreenIndex >= 0 ? (rowTitle(runList[fullscreenIndex]) || 'Generation') : '';
   const fullscreenIsActive = phase === 'running' && fullscreenIndex === activeIndex;
   const fullscreenSubtitle = fullscreenIsActive
-    ? 'Live generation · the batch continues in the background'
+    ? 'Génération en direct · le lot continue en arrière-plan'
     : phase === 'running'
-      ? 'Pinned generation · the batch continues in the background'
-      : 'Saved batch generation';
+      ? 'Génération épinglée · le lot continue en arrière-plan'
+      : 'Génération du lot enregistrée';
 
   useEffect(() => {
     if (phase !== 'running' || !viewingActive || !isStreaming || !displayedCharacters) return undefined;
@@ -465,9 +465,9 @@ export function BatchRunDialog({
         next[index] = loadedHtml;
         return next;
       });
-      if (!loadedHtml) addToast('The saved generation has no HTML to preview', 'error');
+      if (!loadedHtml) addToast('Cette génération enregistrée ne contient aucun HTML à afficher', 'error');
     } catch (error) {
-      if (fullscreenIndexRef.current === index) addToast('Failed to open generation: ' + error.message, 'error');
+      if (fullscreenIndexRef.current === index) addToast('Impossible d’ouvrir la génération : ' + error.message, 'error');
     } finally {
       if (fullscreenIndexRef.current === index) setFullscreenLoading(false);
     }
@@ -500,8 +500,8 @@ export function BatchRunDialog({
         <div class="batch-model-label">
           <i class=${`fa-solid ${hasModel ? 'fa-microchip' : 'fa-triangle-exclamation'}`}></i>
           ${hasModel
-            ? html`<span>Model: <strong>${model.label || model.modelId}</strong></span>`
-            : html`<span>No model loaded — pick one to run the batch</span>`}
+            ? html`<span>Modèle : <strong>${model.label || model.modelId}</strong></span>`
+            : html`<span>Aucun modèle chargé : choisissez-en un pour lancer le lot</span>`}
         </div>
         <${ExecutorModelSelector}
           models=${allModels}
@@ -519,27 +519,27 @@ export function BatchRunDialog({
 
       <div class="batch-section batch-models">
         <div class="batch-section-head">
-          <span><i class="fa-solid fa-users-gear"></i> Models (${runModels.length})</span>
+          <span><i class="fa-solid fa-users-gear"></i> Modèles (${runModels.length})</span>
           <span class="batch-select-actions">
             <button class="btn btn-xs" onClick=${() => setBatchModels(list => addBatchModel(list, model))}
               disabled=${!hasModel || selectedInList}
-              title=${selectedInList ? 'Already in the list' : 'Add the model picked above to this batch'}>
-              <i class="fa-solid fa-plus"></i> Add selected model
+              title=${selectedInList ? 'Déjà dans la liste' : 'Ajouter au lot le modèle sélectionné ci-dessus'}>
+              <i class="fa-solid fa-plus"></i> Ajouter le modèle sélectionné
             </button>
             ${batchModels.length > 0 && html`
-              <button class="btn btn-xs" onClick=${() => setBatchModels([])} title="Back to running just the model picked above">Clear</button>
+              <button class="btn btn-xs" onClick=${() => setBatchModels([])} title="Revenir à l’exécution du seul modèle sélectionné">Effacer</button>
             `}
           </span>
         </div>
         ${batchModels.length === 0
-          ? html`<div class="batch-models-hint">Runs the model picked above. To compare several, pick a model and press <strong>Add selected model</strong>, then pick the next.</div>`
+          ? html`<div class="batch-models-hint">Exécute le modèle sélectionné. Pour en comparer plusieurs, choisissez-en un et cliquez sur <strong>Ajouter le modèle sélectionné</strong>, puis choisissez le suivant.</div>`
           : html`
             <div class="batch-model-chips">
               ${batchModels.map((m, i) => html`
                 <span class="batch-model-chip" key=${batchModelKey(m)}>
                   <span class="batch-model-lane">${i + 1}</span>
                   <span class="batch-model-name" title=${m.label || m.modelId}>${m.label || m.modelId}</span>
-                  <button class="btn-icon" title="Remove from this batch" aria-label=${`Remove ${m.label || m.modelId}`}
+                  <button class="btn-icon" title="Retirer de ce lot" aria-label=${`Retirer ${m.label || m.modelId}`}
                     onClick=${() => setBatchModels(list => list.filter(x => batchModelKey(x) !== batchModelKey(m)))}>
                     <i class="fa-solid fa-xmark"></i>
                   </button>
@@ -548,25 +548,25 @@ export function BatchRunDialog({
             </div>
           `}
         ${isMulti && html`
-          <div class="batch-options batch-lane-modes" role="radiogroup" aria-label="How the models run">
+          <div class="batch-options batch-lane-modes" role="radiogroup" aria-label="Mode d’exécution des modèles">
             <label class="batch-opt batch-mode-opt">
               <input type="radio" name="batch-lane-mode" value="parallel" checked=${laneMode === 'parallel'} onChange=${() => setLaneMode('parallel')} />
-              <span><strong>All at once</strong><small>Every model works through the list at the same time. Fastest for CLI agents and cloud models.</small></span>
+              <span><strong>Simultanément</strong><small>Tous les modèles traitent la liste en parallèle. Plus rapide pour les agents CLI et les modèles hébergés.</small></span>
             </label>
             <label class="batch-opt batch-mode-opt">
               <input type="radio" name="batch-lane-mode" value="sequential" checked=${laneMode === 'sequential'} onChange=${() => setLaneMode('sequential')} />
-              <span><strong>One after another</strong><small>Finish each model before starting the next. Use this when they share one local GPU.</small></span>
+              <span><strong>L’un après l’autre</strong><small>Terminer un modèle avant le suivant. À utiliser si les modèles partagent le même GPU local.</small></span>
             </label>
           </div>
         `}
-        ${isMulti && html`<div class="batch-note"><i class="fa-solid fa-layer-group"></i> Each model is saved as its own run, grouped together in Runs for comparison.</div>`}
+        ${isMulti && html`<div class="batch-note"><i class="fa-solid fa-layer-group"></i> Chaque modèle est enregistré dans une exécution distincte, regroupée dans Exécutions pour la comparaison.</div>`}
       </div>
 
       ${!hasDirectory && html`
         <div class="batch-dir-hint">
           <i class="fa-solid fa-circle-info"></i>
-          Connect a directory — generations are saved there.
-          <button class="btn btn-sm" onClick=${onPickDirectory}><i class="fa-solid fa-folder-plus"></i> Pick Directory</button>
+          Connectez un dossier : les générations y seront enregistrées.
+          <button class="btn btn-sm" onClick=${onPickDirectory}><i class="fa-solid fa-folder-plus"></i> Choisir un dossier</button>
         </div>
       `}
 
@@ -574,12 +574,12 @@ export function BatchRunDialog({
         <div class="batch-section-head">
           <span><i class="fa-solid fa-list-check"></i> Prompts (${selectedCount}/${setPrompts.length})</span>
           <span class="batch-select-actions">
-            <button class="btn btn-xs" onClick=${selectAll} title="Tick every prompt in this set">All</button>
-            <button class="btn btn-xs" onClick=${selectNone} title="Untick every prompt in this set">None</button>
+            <button class="btn btn-xs" onClick=${selectAll} title="Sélectionner tous les prompts de cette série">Tous</button>
+            <button class="btn btn-xs" onClick=${selectNone} title="Désélectionner tous les prompts de cette série">Aucun</button>
           </span>
         </div>
         ${availableSets.length > 1 && html`
-          <div class="batch-set-switch" role="group" aria-label="Prompt set">
+          <div class="batch-set-switch" role="group" aria-label="Série de prompts">
             ${availableSets.map(s => html`
               <button
                 key=${s.id}
@@ -590,96 +590,96 @@ export function BatchRunDialog({
                 onClick=${() => setPromptSet(s.id)}
               ><i class=${`fa-solid ${s.icon}`}></i>${s.label}<span class="batch-set-count">${s.count}</span></button>
             `)}
-            ${activeSetMeta?.hint && html`<span class="batch-set-hint">${activeSetMeta.hint}. Only this set runs.</span>`}
+            ${activeSetMeta?.hint && html`<span class="batch-set-hint">${activeSetMeta.hint}. Seule cette série sera exécutée.</span>`}
           </div>
         `}
         <div class="batch-prompt-list">
           ${setPrompts.length === 0
-            ? html`<div class="batch-empty">No prompts to run in this set.</div>`
+            ? html`<div class="batch-empty">Aucun prompt à exécuter dans cette série.</div>`
             : setPrompts.map(p => html`
               <label class="batch-prompt-row" key=${p.id}>
                 <input type="checkbox" checked=${selectedIds.has(p.id)} onChange=${() => toggleOne(p.id)} />
                 <span class="batch-prompt-title" title=${p.title}>${p.title}</span>
                 ${!isMulti && runModels[0] && (() => { try { return deps.hasExistingForModel?.(p, runModels[0]); } catch (e) { return false; } })()
-                  ? html`<span class="batch-prompt-badge" title="Already has a generation for this model">has run</span>`
+                  ? html`<span class="batch-prompt-badge" title="Dispose déjà d’une génération pour ce modèle">déjà exécuté</span>`
                   : null}
               </label>
             `)}
         </div>
         ${skipExisting && alreadyRunCount > 0 && html`
-          <div class="batch-note"><i class="fa-solid fa-forward"></i> ${alreadyRunCount} selected prompt${alreadyRunCount === 1 ? '' : 's'} will be skipped (already run for ${isMulti ? 'that model' : 'this model'}).</div>
+          <div class="batch-note"><i class="fa-solid fa-forward"></i> ${alreadyRunCount} prompt${alreadyRunCount === 1 ? '' : 's'} ignoré(s) : déjà exécuté(s) pour ${isMulti ? 'ce modèle' : 'le modèle actuel'}.</div>
         `}
       </div>
 
       <div class="batch-section">
-        <div class="batch-section-head"><span><i class="fa-solid fa-wand-magic-sparkles"></i> Generation mode</span></div>
+        <div class="batch-section-head"><span><i class="fa-solid fa-wand-magic-sparkles"></i> Mode de génération</span></div>
         <div class="batch-options">
           <label class="batch-opt batch-mode-opt">
             <input type="radio" name="batch-mode" value="quick" checked=${mode === 'quick'} onChange=${() => setMode('quick')} />
-            <span><strong>Quick</strong><small>Generate once using the existing prompt and call flow.</small></span>
+            <span><strong>Rapide</strong><small>Générer une fois à partir du prompt et du déroulement existants.</small></span>
           </label>
           <label class="batch-opt batch-mode-opt">
             <input type="radio" name="batch-mode" value="runtime-heal" checked=${mode === 'runtime-heal'} onChange=${() => setMode('runtime-heal')} />
-            <span><strong>Runtime Heal</strong><small>Check the sandbox and repair captured runtime errors.</small></span>
+            <span><strong>Correction des erreurs</strong><small>Vérifier le bac à sable et corriger les erreurs d’exécution capturées.</small></span>
           </label>
           <label class="batch-opt batch-mode-opt">
             <input type="radio" name="batch-mode" value="verified"
               checked=${mode === 'verified'} onChange=${() => setMode('verified')} />
-            <span><strong>Verified</strong><small>Audit prompt requirements using deterministic sandbox evidence.</small></span>
+            <span><strong>Vérifié</strong><small>Évaluer les exigences du prompt à partir des observations du bac à sable.</small></span>
           </label>
           ${mode === 'runtime-heal' && html`
             <label class="batch-opt batch-opt-indent">
-              <span>Max attempts</span>
+              <span>Tentatives maximales</span>
               <select class="form-input batch-num" value=${healAttempts} onChange=${(e) => setHealAttempts(Number(e.target.value))}>
                 ${[1, 2, 3].map(n => html`<option key=${n} value=${n}>${n}</option>`)}
               </select>
-              <span class="batch-opt-hint">saves both the original and healed versions</span>
+              <span class="batch-opt-hint">conserve les versions originale et corrigée</span>
             </label>
           `}
           ${mode === 'verified' && html`
             <label class="batch-opt batch-opt-indent">
-              <span>Verified repair rounds</span>
+              <span>Cycles de correction vérifiée</span>
               <select class="form-input batch-num" value=${maxRepairRounds} onChange=${(e) => setMaxRepairRounds(Number(e.target.value))}>
                 ${[0, 1, 2].map(n => html`<option key=${n} value=${n}>${n}</option>`)}
               </select>
             </label>
-            <div class="batch-verified-cost"><i class="fa-solid fa-coins"></i> Uses an audit call and up to two repair/re-audit calls per prompt. Every candidate is saved.</div>
+            <div class="batch-verified-cost"><i class="fa-solid fa-coins"></i> Utilise un audit et jusqu’à deux appels de correction et de nouvel audit par prompt. Chaque version est enregistrée.</div>
           `}
         </div>
       </div>
 
       <div class="batch-section">
-        <div class="batch-section-head"><span><i class="fa-solid fa-sliders"></i> Run options</span></div>
+        <div class="batch-section-head"><span><i class="fa-solid fa-sliders"></i> Options d’exécution</span></div>
         <div class="batch-options">
           <label class="batch-opt">
             <input type="checkbox" checked=${skipExisting} onChange=${(e) => setSkipExisting(e.target.checked)} />
-            <span>Skip prompts already run for this model</span>
+            <span>Ignorer les prompts déjà exécutés pour ce modèle</span>
           </label>
           <label class="batch-opt batch-live-output-option">
             <input type="checkbox" checked=${showLiveOutput} onChange=${(e) => setShowLiveOutput(e.target.checked)} />
-            <span>Show live generation in this dialog</span>
-            <span class="batch-opt-hint">Turn off to reduce browser memory use during large batches.</span>
+            <span>Afficher la génération en direct dans cette fenêtre</span>
+            <span class="batch-opt-hint">Désactiver pour réduire la mémoire utilisée lors des grands lots.</span>
           </label>
           <label class="batch-opt">
-            <span>Retry on API failure</span>
+            <span>Réessayer en cas d’échec de l’API</span>
             <select class="form-input batch-num" value=${apiRetries} onChange=${(e) => setApiRetries(Number(e.target.value))}>
               ${[0, 1, 2, 3].map(n => html`<option key=${n} value=${n}>${n}</option>`)}
             </select>
           </label>
           <label class="batch-opt">
-            <span>Delay between prompts</span>
+            <span>Délai entre les prompts</span>
             <input class="form-input batch-num" type="number" min="0" max="120" step="1"
               value=${delaySec} onChange=${(e) => setDelaySec(Math.max(0, Number(e.target.value) || 0))} />
-            <span class="batch-opt-hint">seconds</span>
+            <span class="batch-opt-hint">secondes</span>
           </label>
         </div>
       </div>
     </div>
 
     <div class="modal-footer">
-      <button class="btn" onClick=${onClose}>Cancel</button>
+      <button class="btn" onClick=${onClose}>Annuler</button>
       <button class="btn btn-primary btn-generate" onClick=${start} disabled=${!canRun || !hasDirectory || selectedCount === 0}>
-        <i class="fa-solid fa-play"></i> Go — run ${selectedCount} prompt${selectedCount === 1 ? '' : 's'}${isMulti ? ` × ${runModels.length} models` : ''}
+        <i class="fa-solid fa-play"></i> Lancer ${selectedCount} prompt${selectedCount === 1 ? '' : 's'}${isMulti ? ` × ${runModels.length} modèles` : ''}
       </button>
     </div>
   `;
@@ -689,19 +689,19 @@ export function BatchRunDialog({
       <div class="batch-progress">
         <div class="batch-progress-bar"><div class="batch-progress-fill" style=${{ width: progressPct + '%' }}></div></div>
         <div class="batch-progress-meta">
-          <div class="batch-progress-text">${doneCount} / ${runList.length} done${pauseState === 'paused'
-            ? ` · paused${pauseContext?.prompt?.title ? ` before "${pauseContext.prompt.title}"` : ''}`
-            : phase === 'running' && activeIndex >= 0 ? ` · running "${runList[activeIndex]?.title || ''}"` : ''}</div>
+          <div class="batch-progress-text">${doneCount} / ${runList.length} terminé(s)${pauseState === 'paused'
+            ? ` · en pause${pauseContext?.prompt?.title ? ` avant « ${pauseContext.prompt.title} »` : ''}`
+            : phase === 'running' && activeIndex >= 0 ? ` · exécution de « ${runList[activeIndex]?.title || ''} »` : ''}</div>
           <div class=${`batch-stream-count ${isStreaming ? 'is-streaming' : ''}`} aria-live="polite">
             ${!showLiveOutput
-              ? html`<i class="fa-solid fa-eye-slash"></i> Live generation hidden to reduce memory use`
+              ? html`<i class="fa-solid fa-eye-slash"></i> Génération en direct masquée pour économiser la mémoire`
               : !viewingActive && inspectedIndex >= 0
-              ? html`<i class="fa-solid fa-eye"></i> Viewing saved output · ${displayedCharacters.toLocaleString()} chars · ${displayedTokenLabel} · ${displayedTokenRateLabel}`
+              ? html`<i class="fa-solid fa-eye"></i> Affichage du résultat enregistré · ${displayedCharacters.toLocaleString()} car. · ${displayedTokenLabel} · ${displayedTokenRateLabel}`
               : html`
                 <i class=${`fa-solid ${isStreaming ? 'fa-spinner fa-spin' : displayedCharacters ? 'fa-code' : 'fa-hourglass-half'}`}></i>
                 ${displayedCharacters
-                  ? `${displayedCharacters.toLocaleString()} character${displayedCharacters === 1 ? '' : 's'} streamed · ${displayedTokenLabel} · ${displayedTokenRateLabel}`
-                  : 'Waiting for the first code chunk…'}
+                  ? `${displayedCharacters.toLocaleString()} caractère${displayedCharacters === 1 ? '' : 's'} reçus · ${displayedTokenLabel} · ${displayedTokenRateLabel}`
+                  : 'En attente du premier fragment de code…'}
               `}
           </div>
         </div>
@@ -711,10 +711,10 @@ export function BatchRunDialog({
         <div class=${`batch-pause-state ${pauseState}`} role="status" aria-live="polite">
           <i class=${`fa-solid ${pauseState === 'paused' ? 'fa-circle-pause' : 'fa-spinner fa-spin'}`}></i>
           <div>
-            <strong>${pauseState === 'paused' ? 'Paused' : 'Pausing…'}</strong>
+            <strong>${pauseState === 'paused' ? 'En pause' : 'Mise en pause…'}</strong>
             <span>${pauseState === 'paused'
-              ? `No model calls are running${pauseContext?.prompt?.title ? ` · next: ${pauseContext.prompt.title}` : ''}.`
-              : 'Finishing the in-flight model call; no new call will start.'}</span>
+              ? `Aucun appel au modèle en cours${pauseContext?.prompt?.title ? ` · suivant : ${pauseContext.prompt.title}` : ''}.`
+              : 'Fin de l’appel au modèle en cours ; aucun nouvel appel ne sera lancé.'}</span>
           </div>
         </div>
       `}
@@ -735,7 +735,7 @@ export function BatchRunDialog({
                 role=${canInspect ? 'button' : undefined}
                 tabIndex=${canInspect ? 0 : undefined}
                 aria-current=${isInspected ? 'true' : undefined}
-                title=${canInspect ? (isActive ? 'View the live generation' : 'Inspect this generation while the batch continues') : ''}
+                title=${canInspect ? (isActive ? 'Voir la génération en direct' : 'Examiner cette génération pendant l’exécution du lot') : ''}
                 onClick=${canInspect ? () => inspectOutput(idx) : undefined}
                 onKeyDown=${canInspect ? (event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -747,11 +747,11 @@ export function BatchRunDialog({
                 <i class=${`batch-run-icon fa ${m.icon} ${m.cls === 'active' ? 'fa-fade' : ''}`}></i>
                 <span class="batch-run-title" title=${rowTitle(p)}>${p.title}${runIsMulti && p.modelLabel ? html`<span class="batch-run-model">${p.modelLabel}</span>` : null}</span>
                 <span class="batch-run-status">
-                  ${it.status === 'healing' && it.healAttempt ? `heal ${it.healAttempt}`
-                    : it.status === 'repairing' && it.repairRound ? `Repairing · round ${it.repairRound}` : m.label}
-                  ${it.healed && it.status === 'saved' ? html` <span class="batch-healed-chip">healed</span>` : null}
+                  ${it.status === 'healing' && it.healAttempt ? `correction ${it.healAttempt}`
+                    : it.status === 'repairing' && it.repairRound ? `Réparation · cycle ${it.repairRound}` : m.label}
+                  ${it.healed && it.status === 'saved' ? html` <span class="batch-healed-chip">corrigé</span>` : null}
                   ${canOpenFullscreen ? html`
-                    <button class="batch-fullscreen-button" title="Open interactive full-screen generation"
+                    <button class="batch-fullscreen-button" title="Ouvrir la génération interactive en plein écran"
                       onClick=${(event) => { event.stopPropagation(); openFullscreen(idx); }}>
                       <i class="fa-solid fa-expand"></i>
                     </button>` : null}
@@ -765,43 +765,43 @@ export function BatchRunDialog({
           ? html`
             <div class="batch-preview">
               <div class="batch-preview-head">
-                <span title=${inspectedTitle}><i class="fa-solid fa-display"></i> ${inspectedTitle || 'Preview'}</span>
+                <span title=${inspectedTitle}><i class="fa-solid fa-display"></i> ${inspectedTitle || 'Aperçu'}</span>
                 <span class="batch-preview-actions">
                   ${displayedHtml ? html`
-                    <button class="batch-fullscreen-button" title="Open interactive full-screen generation"
+                    <button class="batch-fullscreen-button" title="Ouvrir la génération interactive en plein écran"
                       onClick=${() => openFullscreen(inspectedIndex)}>
-                      <i class="fa-solid fa-expand"></i> Full screen
+                      <i class="fa-solid fa-expand"></i> Plein écran
                     </button>` : null}
                   ${!viewingActive && activeIndex >= 0
-                    ? html`<button class="batch-return-live" onClick=${returnToLive}><i class="fa-solid fa-tower-broadcast"></i> Return to live</button>`
+                    ? html`<button class="batch-return-live" onClick=${returnToLive}><i class="fa-solid fa-tower-broadcast"></i> Revenir au direct</button>`
                     : pauseState === 'paused'
-                      ? html`<span class="batch-live-chip is-paused"><i class="fa-solid fa-circle-pause"></i> Paused</span>`
-                      : html`<span class="batch-live-chip"><i class="fa-solid fa-circle"></i> Live</span>`}
+                      ? html`<span class="batch-live-chip is-paused"><i class="fa-solid fa-circle-pause"></i> En pause</span>`
+                      : html`<span class="batch-live-chip"><i class="fa-solid fa-circle"></i> En direct</span>`}
                 </span>
               </div>
               ${displayedHtml
-                ? html`<iframe class="batch-preview-frame" sandbox="allow-scripts" srcdoc=${displayedHtml} title=${`Preview: ${inspectedTitle || 'current generation'}`}></iframe>`
-                : html`<div class="batch-preview-empty"><i class="fa-solid fa-hourglass-half"></i><span>Live preview appears here</span></div>`}
+                ? html`<iframe class="batch-preview-frame" sandbox="allow-scripts" srcdoc=${displayedHtml} title=${`Aperçu : ${inspectedTitle || 'génération en cours'}`}></iframe>`
+                : html`<div class="batch-preview-empty"><i class="fa-solid fa-hourglass-half"></i><span>L’aperçu en direct apparaîtra ici</span></div>`}
             </div>`
           : html`
             <div class="batch-preview batch-preview-disabled" role="status">
               <div class="batch-preview-empty">
                 <i class="fa-solid fa-eye-slash"></i>
-                <strong>Live generation hidden</strong>
-                <span>Preview and code rendering are off for this run.</span>
+                <strong>Génération en direct masquée</strong>
+                <span>L’aperçu et l’affichage du code sont désactivés pour cette exécution.</span>
                 ${activeIndex >= 0 ? html`
                   <button class="btn btn-sm batch-open-active-fullscreen" onClick=${() => openFullscreen(activeIndex)}>
-                    <i class="fa-solid fa-expand"></i> Open current generation full screen
+                    <i class="fa-solid fa-expand"></i> Ouvrir la génération en cours en plein écran
                   </button>` : null}
               </div>
             </div>`}
       </div>
 
       ${showLiveOutput && html`
-        <section class="batch-code-stream" aria-label="Streaming HTML output">
+        <section class="batch-code-stream" aria-label="Sortie HTML en direct">
           <div class="batch-code-stream-head">
-            <span><i class="fa-solid fa-code"></i> ${viewingActive && pauseState === 'running' ? 'Live HTML stream' : 'Generated HTML'}${inspectedTitle ? ` · ${inspectedTitle}` : ''}</span>
-            <span>${displayedCharacters.toLocaleString()} chars · ${displayedTokens.toLocaleString()} tokens · ${displayedTokenRateLabel}</span>
+            <span><i class="fa-solid fa-code"></i> ${viewingActive && pauseState === 'running' ? 'Flux HTML en direct' : 'HTML généré'}${inspectedTitle ? ` · ${inspectedTitle}` : ''}</span>
+            <span>${displayedCharacters.toLocaleString()} car. · ${displayedTokens.toLocaleString()} tokens · ${displayedTokenRateLabel}</span>
           </div>
           <${CellEditor}
             className="batch-stream-editor"
@@ -821,15 +821,15 @@ export function BatchRunDialog({
     <div class="modal-footer">
       ${pauseState === 'paused'
         ? html`<button class="btn btn-primary batch-resume-button" onClick=${resume}>
-            <i class="fa-solid fa-play"></i> Resume
+            <i class="fa-solid fa-play"></i> Reprendre
           </button>`
         : html`<button class="btn batch-pause-button" onClick=${pause} disabled=${pauseState === 'pausing' || stopRef.current}
-            title="Finish the current model call, then pause before another starts">
+            title="Terminer l’appel au modèle en cours, puis suspendre avant le suivant">
             <i class=${`fa-solid ${pauseState === 'pausing' ? 'fa-spinner fa-spin' : 'fa-pause'}`}></i>
-            ${pauseState === 'pausing' ? 'Pausing…' : 'Pause'}
+            ${pauseState === 'pausing' ? 'Mise en pause…' : 'Pause'}
           </button>`}
       <button class="btn btn-danger" onClick=${stop} disabled=${stopRef.current}>
-        <i class="fa-solid fa-stop"></i> ${stopRef.current ? 'Stopping…' : 'Stop'}
+        <i class="fa-solid fa-stop"></i> ${stopRef.current ? 'Arrêt…' : 'Arrêter'}
       </button>
     </div>
   `;
@@ -839,23 +839,23 @@ export function BatchRunDialog({
       <div class="batch-summary">
         <div class="batch-summary-icon"><i class="fa-solid fa-flag-checkered"></i></div>
         <div class="batch-summary-grid">
-          ${runIsMulti ? html`<div class="batch-stat"><strong>${summary?.lanes || 0}</strong><span>models</span></div>` : null}
-          <div class="batch-stat"><strong>${summary?.generated || 0}</strong><span>generated</span></div>
-          <div class="batch-stat"><strong>${summary?.healed || 0}</strong><span>healed</span></div>
-          <div class="batch-stat"><strong>${summary?.saved || 0}</strong><span>saved</span></div>
-          <div class="batch-stat"><strong>${summary?.skipped || 0}</strong><span>skipped</span></div>
-          <div class=${`batch-stat ${summary?.failed ? 'is-bad' : ''}`}><strong>${summary?.failed || 0}</strong><span>failed</span></div>
+          ${runIsMulti ? html`<div class="batch-stat"><strong>${summary?.lanes || 0}</strong><span>modèles</span></div>` : null}
+          <div class="batch-stat"><strong>${summary?.generated || 0}</strong><span>générés</span></div>
+          <div class="batch-stat"><strong>${summary?.healed || 0}</strong><span>corrigés</span></div>
+          <div class="batch-stat"><strong>${summary?.saved || 0}</strong><span>enregistrés</span></div>
+          <div class="batch-stat"><strong>${summary?.skipped || 0}</strong><span>ignorés</span></div>
+          <div class=${`batch-stat ${summary?.failed ? 'is-bad' : ''}`}><strong>${summary?.failed || 0}</strong><span>échoués</span></div>
         </div>
         ${(summary?.verifiedPassed || summary?.verifiedWarned || summary?.verifiedFailed || summary?.roleCalls) ? html`
           <div class="batch-verified-summary">
-            <span><strong>${summary?.verifiedPassed || 0}</strong> passed</span>
-            <span><strong>${summary?.verifiedWarned || 0}</strong> needs review</span>
-            <span><strong>${summary?.verifiedFailed || 0}</strong> verification failed</span>
-            <span><strong>${summary?.roleCalls || 0}</strong> role calls</span>
-            <span><strong>${summary?.repairRounds || 0}</strong> repair rounds</span>
+            <span><strong>${summary?.verifiedPassed || 0}</strong> validés</span>
+            <span><strong>${summary?.verifiedWarned || 0}</strong> à vérifier</span>
+            <span><strong>${summary?.verifiedFailed || 0}</strong> échecs de vérification</span>
+            <span><strong>${summary?.roleCalls || 0}</strong> appels de rôle</span>
+            <span><strong>${summary?.repairRounds || 0}</strong> cycles de correction</span>
           </div>
         ` : null}
-        ${summary?.stopped ? html`<div class="batch-note"><i class="fa-solid fa-hand"></i> Run stopped early.</div>` : null}
+        ${summary?.stopped ? html`<div class="batch-note"><i class="fa-solid fa-hand"></i> Exécution interrompue.</div>` : null}
       </div>
 
       <div class="batch-run-list batch-run-list-done">
@@ -867,11 +867,11 @@ export function BatchRunDialog({
               <i class=${`batch-run-icon fa ${m.icon}`}></i>
               <span class="batch-run-title" title=${rowTitle(p)}>${p.title}${runIsMulti && p.modelLabel ? html`<span class="batch-run-model">${p.modelLabel}</span>` : null}</span>
               <span class="batch-run-status">
-                ${m.label}${it.healed ? html` <span class="batch-healed-chip">healed</span>` : null}
-                ${it.repairRound ? html` <span class="batch-healed-chip">${it.repairRound} repair${it.repairRound === 1 ? '' : 's'}</span>` : null}
+                ${m.label}${it.healed ? html` <span class="batch-healed-chip">corrigé</span>` : null}
+                ${it.repairRound ? html` <span class="batch-healed-chip">${it.repairRound} correction${it.repairRound === 1 ? '' : 's'}</span>` : null}
                 ${it.status === 'error' && it.message ? html`<span class="batch-run-err" title=${it.message}> — ${it.message}</span>` : null}
                 ${it.savedIds?.length ? html`
-                  <button class="batch-fullscreen-button" title="Open interactive full-screen generation"
+                  <button class="batch-fullscreen-button" title="Ouvrir la génération interactive en plein écran"
                     onClick=${() => openFullscreen(idx)}><i class="fa-solid fa-expand"></i></button>` : null}
               </span>
             </div>
@@ -881,14 +881,14 @@ export function BatchRunDialog({
     </div>
 
     <div class="modal-footer">
-      <button class="btn" onClick=${() => setPhase('config')}><i class="fa-solid fa-rotate-left"></i> New Run</button>
+      <button class="btn" onClick=${() => setPhase('config')}><i class="fa-solid fa-rotate-left"></i> Nouvelle exécution</button>
       <button class="btn" onClick=${() => { onOpenGallery?.(); onClose(); }}>
-        <i class="fa-solid fa-images"></i> View in Gallery
+        <i class="fa-solid fa-images"></i> Voir dans la galerie
       </button>
       ${onOpenRuns && html`
         <button class="btn btn-primary" onClick=${() => { onOpenRuns(runIsMulti ? '' : runId); onClose(); }}
-          title=${runIsMulti ? "Open the Runs tab, where each model's run sits in this batch's group" : "Open this run's generations in the Runs tab"}>
-          <i class="fa-solid fa-layer-group"></i> ${runIsMulti ? 'Review These Runs' : 'Review This Run'}
+          title=${runIsMulti ? "Ouvrir l’onglet Exécutions, où les résultats de chaque modèle sont regroupés" : "Ouvrir les générations de cette exécution dans l’onglet Exécutions"}>
+          <i class="fa-solid fa-layer-group"></i> ${runIsMulti ? 'Évaluer ces exécutions' : 'Évaluer cette exécution'}
         </button>
       `}
     </div>
@@ -899,7 +899,7 @@ export function BatchRunDialog({
       <div class="modal-overlay">
         <div class=${`modal batch-dialog ${phase === 'running' ? 'is-running' : ''}`} onClick=${(e) => e.stopPropagation()}>
           <div class="modal-header">
-            <h2><i class="fa-solid fa-layer-group"></i> Batch Run</h2>
+            <h2><i class="fa-solid fa-layer-group"></i> Exécution par lot</h2>
             ${phase !== 'running' && html`
               <button class="btn-icon" onClick=${onClose}><i class="fa-solid fa-xmark"></i></button>
             `}
@@ -912,7 +912,7 @@ export function BatchRunDialog({
           html=${fullscreenHtml}
           title=${fullscreenTitle}
           subtitle=${fullscreenSubtitle}
-          emptyMessage=${fullscreenLoading ? 'Loading the saved generation…' : 'Waiting for the next output chunk…'}
+          emptyMessage=${fullscreenLoading ? 'Chargement de la génération enregistrée…' : 'En attente du prochain fragment…'}
           onClose=${closeFullscreen}
         />
       `}
