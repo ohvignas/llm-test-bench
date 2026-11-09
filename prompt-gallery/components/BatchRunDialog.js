@@ -3,6 +3,8 @@ import { Fragment } from 'preact';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'preact/hooks';
 import { ExecutorModelSelector } from '../../shared/components/ExecutorModelSelector.js';
 import { CellEditor } from '../../shared/components/CellEditor.js';
+import { BatchGenerationLog } from './BatchGenerationLog.js';
+import { createBatchJournal, logModelKey } from '../services/batchGenerationLog.js';
 import { HtmlLightbox } from './BatchReview.js';
 import { DEFAULT_HTML_BUDGET, htmlGenerationParams } from '../services/generationBudget.js';
 import { runBatch } from '../services/batchRunner.js';
@@ -83,6 +85,17 @@ export function BatchRunDialog({
 }) {
   // phase: 'config' | 'running' | 'done'
   const [phase, setPhase] = useState('config');
+  const [outputView, setOutputView] = useState('log');
+  const [logFilter, setLogFilter] = useState('all');
+  const [logEntries, setLogEntries] = useState([]);
+  const [logModels, setLogModels] = useState([]);
+  const journalRef = useRef(null);
+  const journalStartedAtRef = useRef(0);
+  const journalRunListRef = useRef([]);
+  const syncJournal = useCallback(() => {
+    const rows = journalRef.current?.entries() || [];
+    setLogEntries(prev => prev.length === rows.length && prev.at(-1)?.id === rows.at(-1)?.id ? prev : rows);
+  }, []);
   const [liveCalls, setLiveCalls] = useState(getInFlight);
   useEffect(() => subscribeInFlight(setLiveCalls), []);
 
@@ -201,7 +214,15 @@ export function BatchRunDialog({
     return next;
   }), [setPrompts]);
 
+  useEffect(() => {
+    if (phase !== 'running') return;
+    journalRef.current?.observeCalls(liveCalls, rateClock);
+    syncJournal();
+  }, [liveCalls, rateClock, phase, syncJournal]);
+
   const handleEvent = useCallback((event) => {
+    journalRef.current?.event(event, {model:event.model, index:event.index, title:journalRunListRef.current[event.index]?.title});
+    syncJournal();
     if (event.type === 'item') {
       if (event.status === 'start') {
         activeIndexRef.current = event.index;
@@ -307,6 +328,15 @@ export function BatchRunDialog({
       htmlGenerationParams({ providerType: 'openrouter', modelId: 'anthropic/validation', budget: generationBudget });
     } catch (error) { addToast(error.message, 'error'); return; }
     const plan = planBatchLanes({ prompts: list, models: runModels.map(m => ({ ...m, generationBudget })), runId });
+    const startedAt = Date.now();
+    journalStartedAtRef.current = startedAt;
+    setRateClock(startedAt);
+    journalRunListRef.current = plan.runList;
+    journalRef.current = createBatchJournal({models:runModels,startedAt});
+    setLogModels(runModels);
+    setLogEntries([]);
+    setLogFilter('all');
+    setOutputView('log');
     setRunList(plan.runList);
     setItems(plan.runList.map(() => ({ status: 'queued' })));
     setOutputs(showLiveOutput ? plan.runList.map(() => '') : []);
@@ -349,13 +379,14 @@ export function BatchRunDialog({
           deps,
           onEvent: (event) => {
             if (event.type === 'done') return;
-            handleEvent(typeof event.index === 'number' ? { ...event, index: event.index + lane.offset } : event);
+            handleEvent({ ...event, model:lane.model, index:typeof event.index === 'number' ? event.index + lane.offset : lane.offset });
           },
           shouldStop: () => stopRef.current,
           shouldPause: () => pauseRequestedRef.current,
           waitIfPaused: waitAtPauseBoundary,
         });
       } catch (e) {
+        handleEvent({type:'item',status:'error',index:lane.offset,model:lane.model,message:e.message});
         addToast(`Erreur d’exécution par lot${plan.multi ? ` (${lane.model.label || lane.model.modelId})` : ''}: ${e.message}`, 'error');
         return null;
       } finally {
@@ -386,11 +417,15 @@ export function BatchRunDialog({
   const pause = useCallback(() => {
     if (pauseRequestedRef.current || stopRef.current) return;
     pauseRequestedRef.current = true;
+    journalRef.current?.event({type:'control',message:'Pause demandée : les appels en cours vont se terminer avant la suspension'});
+    syncJournal();
     setPauseState('pausing');
     addToast('Pause demandée : attente de la fin de l’appel au modèle', 'info');
   }, [addToast]);
 
   const resume = useCallback(() => {
+    journalRef.current?.event({type:'control',message:'Reprise demandée'});
+    syncJournal();
     if (!pauseRequestedRef.current) return;
     pauseRequestedRef.current = false;
     setPauseState('running');
@@ -403,6 +438,8 @@ export function BatchRunDialog({
   // runs with no time limit, so a hung run would otherwise hold the batch
   // forever. Work already saved stays saved; the interrupted item is 'stopped'.
   const stop = useCallback(() => {
+    journalRef.current?.event({type:'control',message:'Arrêt demandé : annulation des appels en cours'});
+    syncJournal();
     stopRef.current = true;
     pauseRequestedRef.current = false;
     releasePaused();
@@ -452,7 +489,10 @@ export function BatchRunDialog({
     if (index < 0 || (!outputs[index] && !batchItemRunning(items[index]))) return;
     followActiveRef.current = index === activeIndexRef.current;
     setInspectedIndex(index);
-  }, [outputs, items]);
+    const item = journalRunListRef.current[index];
+    const selected = logModels[item?.laneIndex ?? 0];
+    if (selected) setLogFilter(logModelKey(selected));
+  }, [outputs, items, logModels]);
 
   const returnToLive = useCallback(() => {
     if (activeIndexRef.current < 0) return;
@@ -710,6 +750,10 @@ export function BatchRunDialog({
     </div>
   `;
 
+  const renderJournal = (done = false) => html`<${BatchGenerationLog}
+    entries=${logEntries} models=${logModels} calls=${liveCalls} startedAt=${journalStartedAtRef.current}
+    now=${rateClock} filter=${logFilter} onFilterChange=${setLogFilter} done=${done} />`;
+
   const renderRunning = () => html`
     <div class="modal-body batch-running">
       <div class="batch-progress">
@@ -748,6 +792,10 @@ export function BatchRunDialog({
         </div>
       `}
 
+      <div class="batch-output-tabs" role="group" aria-label="Affichage du suivi">
+        <button class=${`btn btn-sm ${outputView === 'log' ? 'btn-primary' : ''}`} aria-pressed=${outputView === 'log'} onClick=${() => setOutputView('log')}>Journal de génération</button>
+        <button class=${`btn btn-sm ${outputView === 'preview' ? 'btn-primary' : ''}`} aria-pressed=${outputView === 'preview'} onClick=${() => setOutputView('preview')}>Aperçu et code</button>
+      </div>
       <div class="batch-run-body">
         <div class="batch-run-list">
           ${runList.map((p, idx) => {
@@ -793,7 +841,7 @@ export function BatchRunDialog({
           })}
           <div ref=${listEndRef}></div>
         </div>
-        ${showLiveOutput
+        ${outputView === 'log' ? renderJournal() : showLiveOutput
           ? html`
             <div class="batch-preview">
               <div class="batch-preview-head">
@@ -829,7 +877,7 @@ export function BatchRunDialog({
             </div>`}
       </div>
 
-      ${showLiveOutput && html`
+      ${outputView === 'preview' && showLiveOutput && html`
         <section class="batch-code-stream" aria-label="Sortie HTML en direct">
           <div class="batch-code-stream-head">
             <span><i class="fa-solid fa-code"></i> ${viewingActive && pauseState === 'running' ? 'Flux HTML en direct' : 'HTML généré'}${inspectedTitle ? ` · ${inspectedTitle}` : ''}</span>
@@ -910,6 +958,7 @@ export function BatchRunDialog({
           `;
         })}
       </div>
+      ${renderJournal(true)}
     </div>
 
     <div class="modal-footer">

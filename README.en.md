@@ -98,3 +98,9 @@ The library now contains 164 prompts: 92 core, 40 advanced, 8 flagship simulatio
 The new website set covers storefronts, portfolios, reservations, dashboards, forms, CSV handling and accessible interactions. Every brief requests a standalone HTML document with fictional data and no external network calls. Checkpoints and sample numeric results support manual verification; they are not a new automated scoring suite.
 
 Coverage was informed by [FrontendBench](https://arxiv.org/abs/2506.13832) and [Vision2Web](https://vision2web-bench.github.io/). These are original briefs, not copied dataset tasks or an official implementation of either benchmark. References are recorded in `prompt-gallery/data/library-web.json`.
+
+## Live generation log
+
+The batch dialog opens its **Journal de génération** view by default. It shows timestamped request phases, provider reasoning signals (without reasoning text), first HTML, errors, attempts and reported final usage. Select a model row to filter the journal, or choose all models. **Aperçu et code** restores the preview and code view.
+
+Last-signal timing distinguishes current traffic from silence. After 60 seconds without a signal the log reports an unconfirmed wait, without declaring a failure or retrying. It never copies full prompts, response bodies, private reasoning or request headers; error messages redact common credential formats. Up to 400 local entries remain in the dialog after completion and can be exported as JSON. The journal cannot reconstruct activity from an older, already-running browser page.

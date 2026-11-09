@@ -202,7 +202,7 @@ export async function runBatch({ prompts, model, options, deps, onEvent, shouldS
         genError = e;
       }
       if (genError) {
-        emit({ type: 'log', index: i, message: `Generation attempt ${attempt + 1} failed: ${genError.message}` });
+        emit({ type: 'log', index: i, message: genError.name === 'AbortError' ? 'Appel annulé' : `Tentative de génération ${attempt + 1} échouée : ${genError.message}` });
         if (genError.retryable === false || genError.name === 'AbortError') break;
         if (attempt < opts.apiRetries && !stop()) await interruptibleDelay(1000 * (attempt + 1), stop, pause);
       }
@@ -246,11 +246,11 @@ export async function runBatch({ prompts, model, options, deps, onEvent, shouldS
             healed = true;
             try { runStatus = await deps.runSandbox(finalHtml); } catch (e) { runStatus = null; }
           } else {
-            emit({ type: 'log', index: i, message: `Heal attempt ${healUsed} returned nothing` });
+            emit({ type: 'log', index: i, message: `La tentative de correction ${healUsed} n’a renvoyé aucun contenu` });
             break;
           }
         } catch (e) {
-          emit({ type: 'log', index: i, message: `Heal attempt ${healUsed} failed: ${e.message}` });
+          emit({ type: 'log', index: i, message: `Tentative de correction ${healUsed} échouée : ${e.message}` });
           break;
         }
       }
@@ -289,7 +289,7 @@ export async function runBatch({ prompts, model, options, deps, onEvent, shouldS
       emit({ type: 'item', index: i, status: 'saved', savedIds, healed, healAttempts: healUsed, runStatus });
     } catch (e) {
       summary.failed++;
-      emit({ type: 'item', index: i, status: 'error', message: 'Save failed: ' + e.message });
+      emit({ type: 'item', index: i, status: 'error', message: 'Échec de l’enregistrement : ' + e.message });
     }
 
     await interruptibleDelay(opts.delayMs, stop, pause);

@@ -230,6 +230,10 @@ export function startGeneration(meta = {}) {
   const id = newId(queuedAt);
   const phases = { queued: 0 };
   let latest = 'queued';
+  let lastActivityAt = queuedAt;
+  let lastReceivedAt = null;
+  let reasoningChunks = 0;
+  let lastActivityNotifyAt = -Infinity;
   let usage = null;
   let finishReason = null;
   let thinkingTokens = 0;
@@ -251,10 +255,24 @@ export function startGeneration(meta = {}) {
     /** First occurrence wins; `at` is an absolute epoch-ms override. */
     mark(phase, at) {
       if (finished || !PHASES.includes(phase) || Number.isFinite(phases[phase])) return;
-      phases[phase] = rel(at ?? deps.now());
+      lastActivityAt = at ?? deps.now();
+      phases[phase] = rel(lastActivityAt);
       clientMarks[phase] = true;
       if (PHASES.indexOf(phase) >= PHASES.indexOf(latest)) latest = phase;
       notify();
+    },
+
+    // Live timing only: no payload, private reasoning, headers or credentials.
+    activity(kind = 'stream') {
+      if (finished) return;
+      const now = deps.now();
+      lastReceivedAt = now;
+      lastActivityAt = now;
+      if (kind === 'reasoning') reasoningChunks++;
+      if (now - lastActivityNotifyAt >= 500) {
+        lastActivityNotifyAt = now;
+        notify();
+      }
     },
 
     setUsage(u) { if (u) usage = { ...(usage || {}), ...u }; },
@@ -271,6 +289,7 @@ export function startGeneration(meta = {}) {
     thinking(tokens) {
       const n = Number(tokens) || 0;
       if (n <= 0 || finished) return;
+      tracker.activity('reasoning');
       thinkingTokens = n;
       tracker.mark('firstThought');
       const t = rel(deps.now());
@@ -285,7 +304,7 @@ export function startGeneration(meta = {}) {
     progress(text) {
       const len = typeof text === 'string' ? text.length : 0;
       if (len > 0) tracker.mark('firstToken');
-      if (len !== outputChars) { outputChars = len; notify(); }
+      if (len !== outputChars) { tracker.activity('content'); outputChars = len; notify(); }
     },
 
     /**
@@ -335,6 +354,8 @@ export function startGeneration(meta = {}) {
         outputChars,
         note,
         startedAt: queuedAt,
+        phases: { ...phases },
+        lastActivityAt, lastReceivedAt, reasoningChunks,
       };
     },
 

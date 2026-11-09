@@ -489,7 +489,10 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
       const error = parsed.error || parsed.choices?.[0]?.error;
       if (error) throw new Error(typeof error === 'string' ? error : error.message || 'Le fournisseur a interrompu la génération.');
       const choice = parsed.choices?.[0];
-      if (choice?.delta?.reasoning) stats.markReasoning();
+      if (choice?.delta?.reasoning || choice?.delta?.reasoning_content || choice?.delta?.reasoning_details?.length) {
+        telemetry?.activity?.('reasoning');
+        stats.markReasoning();
+      }
       if (choice?.finish_reason) stats.setFinishReason(choice.finish_reason);
       if (parsed.usage) stats.setUsage(parsed.usage);
       const delta = choice?.delta?.content;
@@ -510,6 +513,7 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
           break;
         }
 
+        telemetry?.activity?.('stream');
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';

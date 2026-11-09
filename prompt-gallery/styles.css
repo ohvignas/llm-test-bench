@@ -3004,3 +3004,27 @@ button.create-run-label:hover { text-decoration: underline; }
 .library-card-instruction { margin: 10px 0; font-size: 12px; color: var(--text-secondary); }
 .library-card-instruction pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; max-height: 300px; overflow-y: auto; }
 .library-card-prompt:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* Generation diagnostics: local, bounded history with one stream per model. */
+.batch-output-tabs { display:flex; gap:8px; flex-shrink:0; }
+.batch-generation-log { display:flex; flex-direction:column; min-height:0; overflow:hidden; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-secondary); }
+.batch-log-head { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px; border-bottom:1px solid var(--border-color); font-size:12px; }
+.batch-log-head > strong { flex:1; }
+.batch-log-head label { display:flex; align-items:center; gap:5px; }
+.batch-log-head select { width:auto; max-width:220px; font-size:11px; }
+.batch-log-signals { display:grid; gap:6px; padding:8px 10px; max-height:155px; overflow-y:auto; flex-shrink:0; }
+.batch-log-signal { display:flex; flex-direction:column; gap:3px; font-size:11px; overflow-wrap:anywhere; }
+.batch-log-signal > span { color:var(--text-secondary); }
+.batch-log-signal.is-silent > span { color:var(--warning); }
+.batch-log-explanation { margin:0; padding:0 10px 8px; color:var(--text-secondary); font-size:11px; line-height:1.4; flex-shrink:0; }
+.batch-log-entries { flex:1; min-height:120px; overflow-y:auto; margin:0; padding:0; list-style:none; }
+.batch-log-entry { display:flex; align-items:flex-start; gap:9px; padding:8px 10px; border-top:1px solid var(--border-color); font-size:11px; }
+.batch-log-entry time { color:var(--text-muted); font-variant-numeric:tabular-nums; flex-shrink:0; }
+.batch-log-entry > div { display:flex; flex-direction:column; gap:3px; overflow-wrap:anywhere; min-width:0; }
+.batch-log-entry strong { font-weight:500; color:var(--text-secondary); }
+.batch-log-entry.is-error { color:var(--danger); }
+.batch-log-entry.is-warn { color:var(--warning); }
+.batch-log-entry.is-success { color:var(--success); }
+.batch-log-empty { padding:12px; color:var(--text-muted); font-size:12px; }
+.batch-generation-log.is-finished { max-height:380px; margin-top:12px; }
+@media(max-width:800px) { .batch-generation-log { min-height:330px; } .batch-log-head select { max-width:170px; } }

@@ -80,3 +80,14 @@ test('a non-streamed exhausted answer reports the same failure instead of return
   globalThis.fetch=async()=>Response.json({choices:[{message:{content:''},finish_reason:'length'}],usage:{completion_tokens:65536,completion_tokens_details:{reasoning_tokens:65536}}});
   await assert.rejects(raw.streamChat({...args,onChunk:null}),error=>error.code==='OUTPUT_TOKEN_LIMIT'&&error.retryable===false);
 });
+
+test('reasoning-details and streamed traffic update live diagnostics without exposing reasoning text',async()=>{
+  const activity=[],marks=[],chunks=[];
+  globalThis.fetch=async()=>new Response('data: {"choices":[{"delta":{"reasoning_details":[{"text":"PRIVATE INTERNAL CONTENT"}]}}]}\n\ndata: {"choices":[{"delta":{"content":"<html>ok</html>"}}]}\n\ndata: [DONE]\n\n');
+  await raw.streamChat({...args,onChunk:value=>chunks.push(value),telemetry:{activity:kind=>activity.push(kind),mark:phase=>marks.push(phase)}});
+  assert.ok(activity.includes('stream'));
+  assert.ok(activity.includes('reasoning'));
+  assert.ok(marks.includes('firstThought'));
+  assert.deepEqual(chunks,['<html>ok</html>']);
+  assert.doesNotMatch(JSON.stringify({activity,marks,chunks}),/PRIVATE INTERNAL CONTENT/);
+});
