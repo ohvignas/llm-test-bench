@@ -148,7 +148,7 @@
       "notes": "À surveiller : Stabilité de l’intégration, trajectoires et gestion des particules absorbées."
     },
     "threejs-gta-6-game": {
-      "title": "GTA 6 — jeu urbain en monde ouvert",
+      "title": "GTA VI — jeu urbain en monde ouvert",
       "description": "Créer un prototype de jeu urbain avec déplacements, véhicules et activités interactives.",
       "notes": "À surveiller : Transitions entre véhicules, collisions, circulation et missions réellement jouables.",
       "aliases": [
@@ -577,7 +577,7 @@
       "notes": "À surveiller : Stabilité de l’intégration, trajectoires et gestion des particules absorbées. Vérifier également chaque exigence numérotée de la consigne originale."
     },
     "adv-threejs-gta-6-game": {
-      "title": "GTA 6 — jeu urbain en monde ouvert, version avancée",
+      "title": "GTA VI — jeu urbain en monde ouvert, version avancée",
       "description": "Créer un prototype de jeu urbain avec déplacements, véhicules et activités interactives. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
       "notes": "À surveiller : Transitions entre véhicules, collisions, circulation et missions réellement jouables. Vérifier également chaque exigence numérotée de la consigne originale.",
       "aliases": [
