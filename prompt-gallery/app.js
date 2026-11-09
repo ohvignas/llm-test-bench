@@ -1010,7 +1010,7 @@ function App() {
     setPrompt(p.prompt);
     setResponse('');
     setResponseMetrics({ stats: null, timing: null });
-    setEditingId(library.slugify(p.title));
+    setEditingId(library.promptFolderId(p));
     navigate('create');
     addToast(`« ${p.title} » chargé`, 'info');
   }, [navigate, addToast]);
@@ -1019,7 +1019,7 @@ function App() {
     setPrompt(p.prompt);
     setResponse('');
     setResponseMetrics({ stats: null, timing: null });
-    setEditingId(library.slugify(p.title));
+    setEditingId(library.promptFolderId(p));
     navigate('create');
     handleGenerate(p.prompt);
   }, [navigate, handleGenerate]);
@@ -1313,7 +1313,7 @@ function App() {
     save: async ({ prompt, promptText, response, model: mdl, tags, kind, healAttempts, verification, derivedFrom }) => {
       const derivedTitle = prompt.title
         || (promptText.split('\n').find(l => l.trim()) || 'untitled').trim().slice(0, 60);
-      const folder = library.slugify(derivedTitle);
+      const folder = library.promptFolderId({ ...prompt, title: derivedTitle });
       const note = kind === 'healed'
         ? `Batch self-heal (${healAttempts} attempt${healAttempts === 1 ? '' : 's'})`
         : kind === 'verified-repair'
@@ -1343,7 +1343,7 @@ function App() {
       return meta.saveGeneration(rootHandle, folder, promptText, response, metadata);
     },
     hasExistingForModel: (prompt, mdl) => {
-      const slug = library.slugify(prompt.title || '');
+      const slug = library.promptFolderId(prompt);
       return generations.some(g => {
         const folder = g.folderId || g.id;
         const folderMatch = folder === slug

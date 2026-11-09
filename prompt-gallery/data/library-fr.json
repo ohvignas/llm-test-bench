@@ -1,0 +1,706 @@
+{
+  "version": 1,
+  "locale": "fr",
+  "prompts": {
+    "threejs-space-shooter": {
+      "title": "Combat spatial",
+      "description": "Piloter un vaisseau, affronter des vagues d’ennemis et gérer sa santé dans un décor étoilé.",
+      "notes": "À surveiller : Collisions, diversité des ennemis, fin de partie et fluidité des particules."
+    },
+    "threejs-tower-defense": {
+      "title": "Défense de tours",
+      "description": "Placer des tours pour défendre un parcours contre des vagues d’ennemis avec une économie et des améliorations.",
+      "notes": "À surveiller : Respect du parcours, ciblage des tours, équilibre des ressources et performances."
+    },
+    "threejs-cloth-sim": {
+      "title": "Simulation physique de tissu",
+      "description": "Manipuler un tissu en trois dimensions soumis à la gravité, au vent et aux interactions de la souris.",
+      "notes": "À surveiller : Stabilité du tissu, collisions et précision de la saisie à la souris."
+    },
+    "threejs-solar-orrery": {
+      "title": "Maquette du système solaire",
+      "description": "Explorer les planètes, leurs orbites et leurs caractéristiques dans un système solaire interactif.",
+      "notes": "À surveiller : Échelle des orbites, lisibilité des étiquettes et transitions de caméra."
+    },
+    "threejs-voxel-sculptor": {
+      "title": "Sculpture en voxels",
+      "description": "Créer et peindre une sculpture composée de petits cubes avec des outils d’édition interactifs.",
+      "notes": "À surveiller : Annulation, précision du ciblage et réactivité sur les grandes sculptures."
+    },
+    "threejs-terrain-painter": {
+      "title": "Peinture de terrain",
+      "description": "Modeler un relief en trois dimensions avec des pinceaux pour élever, lisser et colorer sa surface.",
+      "notes": "À surveiller : Normales après modification, précision du pinceau et lissage du relief."
+    },
+    "threejs-fractal-explorer": {
+      "title": "Explorateur de fractales",
+      "description": "Voyager dans des formes fractales tridimensionnelles et modifier leurs paramètres de rendu.",
+      "notes": "À surveiller : Compilation des shaders, précision du rendu et fluidité de navigation."
+    },
+    "threejs-underwater": {
+      "title": "Exploration sous-marine",
+      "description": "Explorer un environnement sous-marin peuplé de poissons, de coraux et d’effets lumineux.",
+      "notes": "À surveiller : Collisions des poissons, ambiance sous-marine et gestion de l’oxygène."
+    },
+    "threejs-neon-city-flythrough": {
+      "title": "Survol d’une ville néon",
+      "description": "Traverser une ville futuriste lumineuse avec une caméra animée et des commandes de navigation.",
+      "notes": "À surveiller : Contrôle de la caméra, variété des bâtiments et lisibilité malgré les effets lumineux."
+    },
+    "threejs-procedural-terrain-biomes": {
+      "title": "Terrain procédural et biomes",
+      "description": "Générer des paysages avec plusieurs biomes et des paramètres de relief, d’eau et de végétation.",
+      "notes": "À surveiller : Régénération des paramètres, transitions entre biomes et hauteur de l’eau."
+    },
+    "threejs-audio-reactive-crystal-field": {
+      "title": "Cristaux réactifs à la musique",
+      "description": "Animer un champ de cristaux en fonction du son et des différentes fréquences musicales.",
+      "notes": "À surveiller : Activation audio volontaire, réactions variées et solution de repli sans microphone."
+    },
+    "threejs-exploding-modular-cube": {
+      "title": "Cube modulaire éclaté",
+      "description": "Décomposer un cube en éléments animés, puis reconstituer sa forme par interaction.",
+      "notes": "À surveiller : Orientation des pièces, survol et répétition des cycles d’éclatement."
+    },
+    "threejs-gpu-galaxy-particles": {
+      "title": "Galaxie de particules",
+      "description": "Représenter une galaxie spirale avec de nombreuses particules et des réglages visuels.",
+      "notes": "À surveiller : Répartition des bras, statistiques fiables et coût des mises à jour graphiques."
+    },
+    "threejs-portal-chamber": {
+      "title": "Chambre des portails",
+      "description": "Créer une salle futuriste organisée autour d’un portail animé et d’effets de profondeur.",
+      "notes": "À surveiller : Animation du portail, transparence, éclairage et cadrage de la caméra."
+    },
+    "threejs-jelly-cube": {
+      "title": "Cube gélatineux",
+      "description": "Déformer un cube souple avec des interactions et une animation élastique.",
+      "notes": "À surveiller : Stabilité des ressorts, retour à la forme initiale et absence de dérive des sommets."
+    },
+    "threejs-rainy-cyber-alley": {
+      "title": "Ruelle futuriste sous la pluie",
+      "description": "Composer une ruelle nocturne avec pluie, enseignes lumineuses et surfaces réfléchissantes.",
+      "notes": "À surveiller : Protection sous les toits, reflets crédibles et fluidité de la pluie."
+    },
+    "threejs-mini-planet": {
+      "title": "Petite planète interactive",
+      "description": "Explorer une petite planète sphérique et ses éléments avec une caméra adaptée.",
+      "notes": "À surveiller : Déplacements aux pôles, orientation des objets et collisions de caméra."
+    },
+    "threejs-fractal-tunnel": {
+      "title": "Tunnel fractal",
+      "description": "Parcourir un tunnel géométrique animé avec des effets de vitesse et de profondeur.",
+      "notes": "À surveiller : Continuité du tunnel, stabilité de la caméra et limitation des clignotements."
+    },
+    "threejs-magnetic-marbles": {
+      "title": "Billes magnétiques",
+      "description": "Manipuler des billes et des forces magnétiques dans une scène physique interactive.",
+      "notes": "À surveiller : Stabilité des forces, collisions entre billes et comportement des commandes."
+    },
+    "threejs-hologram-showcase": {
+      "title": "Vitrine holographique",
+      "description": "Présenter un objet holographique avec des effets lumineux et des points d’information interactifs.",
+      "notes": "À surveiller : Lisibilité des détails, sélection des points d’intérêt et transitions d’animation."
+    },
+    "threejs-voxel-builder": {
+      "title": "Construction en voxels",
+      "description": "Assembler des structures cubiques avec des outils de sélection et de construction.",
+      "notes": "À surveiller : Précision de placement, annulation et performances sur les grands volumes."
+    },
+    "threejs-lava-planet": {
+      "title": "Planète de lave",
+      "description": "Créer une planète volcanique animée avec des surfaces incandescentes et une atmosphère visuelle.",
+      "notes": "À surveiller : Animation de la lave, contrastes et lisibilité de la surface."
+    },
+    "threejs-endless-runner-prototype": {
+      "title": "Course sans fin",
+      "description": "Jouer à une course à obstacles générée en continu avec score et difficulté progressive.",
+      "notes": "À surveiller : Obstacles franchissables, collisions, redémarrage et commandes tactiles."
+    },
+    "threejs-dna-sculpture": {
+      "title": "Sculpture de l’ADN",
+      "description": "Observer une double hélice d’ADN avec des réglages et des informations interactives.",
+      "notes": "À surveiller : Géométrie des brins, connexions et cohérence des paramètres."
+    },
+    "threejs-origami-fold": {
+      "title": "Atelier de pliage origami",
+      "description": "Animer le pliage d’une feuille et parcourir les étapes de sa transformation.",
+      "notes": "À surveiller : Cohérence des plis, superposition des faces et synchronisation des étapes."
+    },
+    "threejs-storm-ocean": {
+      "title": "Océan en tempête",
+      "description": "Animer une mer agitée sous un ciel orageux avec vagues et effets atmosphériques.",
+      "notes": "À surveiller : Mouvements des vagues, éclairage et stabilité du rendu."
+    },
+    "threejs-scifi-hangar-drones": {
+      "title": "Hangar futuriste et drones",
+      "description": "Commander des drones dans un hangar avec éclairage et formations animées.",
+      "notes": "À surveiller : Collisions, changements de formation et cohérence des commandes."
+    },
+    "threejs-3d-ribbon-painter": {
+      "title": "Peinture de rubans en 3D",
+      "description": "Dessiner des rubans dans l’espace avec des outils de couleur et de manipulation.",
+      "notes": "À surveiller : Continuité des rubans, précision du tracé et nettoyage de la scène."
+    },
+    "threejs-3d-gravity-well-simulation": {
+      "title": "Simulation de puits gravitationnels",
+      "description": "Visualiser les trajectoires de particules influencées par des masses et un champ gravitationnel.",
+      "notes": "À surveiller : Stabilité de l’intégration, trajectoires et gestion des particules absorbées."
+    },
+    "threejs-gta-6-game": {
+      "title": "Jeu urbain en monde ouvert",
+      "description": "Créer un prototype de jeu urbain avec déplacements, véhicules et activités interactives.",
+      "notes": "À surveiller : Transitions entre véhicules, collisions, circulation et missions réellement jouables."
+    },
+    "p5js-flow-field-painter": {
+      "title": "Peinture par champ de flux",
+      "description": "Dessiner des motifs organiques avec des particules guidées par un champ de forces.",
+      "notes": "À surveiller : Réglages actifs, renouvellement des particules et export de l’image."
+    },
+    "p5js-falling-sand": {
+      "title": "Automate de sable",
+      "description": "Simuler la chute et les interactions de matériaux dans une grille de pixels.",
+      "notes": "À surveiller : Conservation des matériaux, collisions et utilisation des pinceaux."
+    },
+    "p5js-audio-visualizer": {
+      "title": "Visualiseur audio interactif",
+      "description": "Transformer le son en animations avec plusieurs modes visuels et des réglages.",
+      "notes": "À surveiller : Activation audio, réaction aux fréquences et gestion des fichiers ou du microphone."
+    },
+    "p5js-boids": {
+      "title": "Nuée d’oiseaux simulés",
+      "description": "Observer des agents qui se regroupent, s’alignent et évitent les collisions.",
+      "notes": "À surveiller : Effet réel des réglages, stabilité et performances avec de nombreux agents."
+    },
+    "p5js-seasonal-tree": {
+      "title": "Arbre récursif et saisons",
+      "description": "Faire pousser un arbre procédural dont l’apparence évolue selon les saisons.",
+      "notes": "À surveiller : Structure des branches, transitions saisonnières et cohérence des paramètres."
+    },
+    "p5js-kaleidoscope": {
+      "title": "Atelier de kaléidoscope",
+      "description": "Dessiner des motifs symétriques avec couleurs, outils et répétitions radiales.",
+      "notes": "À surveiller : Symétrie, précision du dessin et effacement ou export."
+    },
+    "p5js-double-pendulum": {
+      "title": "Chaos du double pendule",
+      "description": "Explorer le mouvement chaotique de pendules doubles et leurs trajectoires.",
+      "notes": "À surveiller : Intégration numérique, conservation de l’énergie et sensibilité aux conditions initiales."
+    },
+    "p5js-metaball-lava-lamp": {
+      "title": "Lampe à lave et métaballes",
+      "description": "Animer des formes fluides qui fusionnent dans une lampe à lave interactive.",
+      "notes": "À surveiller : Fusion des formes, limites du contenant et fluidité de l’animation."
+    },
+    "htmljs-wordle": {
+      "title": "Jeu de lettres à deviner",
+      "description": "Retrouver un mot grâce à des essais limités et des indices colorés.",
+      "notes": "À surveiller : Lettres répétées, validation des essais et états de victoire ou de défaite."
+    },
+    "htmljs-asteroids": {
+      "title": "Astéroïdes sur Canvas",
+      "description": "Piloter un vaisseau et détruire des astéroïdes dans un jeu d’arcade.",
+      "notes": "À surveiller : Collisions, fractionnement des astéroïdes et redémarrage."
+    },
+    "htmljs-pixel-editor": {
+      "title": "Éditeur de pixels",
+      "description": "Dessiner des images pixel par pixel avec palette, outils et export.",
+      "notes": "À surveiller : Coordonnées avec zoom, remplissage et annulation des modifications."
+    },
+    "htmljs-synth-keyboard": {
+      "title": "Clavier synthétiseur",
+      "description": "Jouer des notes avec un clavier visuel et régler les paramètres du synthétiseur.",
+      "notes": "À surveiller : Déverrouillage audio, notes simultanées et absence de sons bloqués."
+    },
+    "htmljs-tetris": {
+      "title": "Jeu de blocs Tetris",
+      "description": "Empiler des pièces, compléter des lignes et suivre le score.",
+      "notes": "À surveiller : Rotation aux bords, suppression des lignes et détection de fin de partie."
+    },
+    "htmljs-typing-test": {
+      "title": "Test de vitesse de frappe",
+      "description": "Mesurer la vitesse et la précision de saisie sur des textes proposés.",
+      "notes": "À surveiller : Calcul des erreurs, chronomètre, accents et remise à zéro."
+    },
+    "htmljs-markdown-previewer": {
+      "title": "Aperçu Markdown avec analyseur intégré",
+      "description": "Éditer du Markdown et observer sa transformation en document mis en forme.",
+      "notes": "À surveiller : Analyse des blocs, échappement du HTML et mise à jour de l’aperçu."
+    },
+    "htmljs-kanban": {
+      "title": "Tableau Kanban",
+      "description": "Organiser des tâches dans des colonnes avec déplacements et édition.",
+      "notes": "À surveiller : Déplacement réel des tâches, édition, suppression et conservation de l’état."
+    },
+    "shader-mandelbulb": {
+      "title": "Fractale Mandelbulb",
+      "description": "Explorer une fractale tridimensionnelle calculée par lancer de rayons progressif.",
+      "notes": "À surveiller : Compilation, normales, précision des contours et performances."
+    },
+    "shader-voronoi-flow": {
+      "title": "Flux de Voronoï animé",
+      "description": "Animer des cellules de Voronoï et leurs transitions dans un rendu procédural.",
+      "notes": "À surveiller : Continuité des cellules, paramètres actifs et qualité des transitions."
+    },
+    "shader-water-caustics": {
+      "title": "Bassin et caustiques aquatiques",
+      "description": "Reproduire les motifs lumineux d’une eau animée dans un bassin.",
+      "notes": "À surveiller : Mouvement des caustiques, profondeur et cohérence des reflets."
+    },
+    "shader-clouds": {
+      "title": "Nuages volumétriques",
+      "description": "Traverser une couche de nuages calculés dans un volume tridimensionnel.",
+      "notes": "À surveiller : Éclairage interne, stabilité du bruit et performances."
+    },
+    "shader-fire": {
+      "title": "Feu procédural",
+      "description": "Créer des flammes animées avec un shader et des paramètres interactifs.",
+      "notes": "À surveiller : Mouvement du feu, réglages de couleur et absence d’artefacts."
+    },
+    "shader-crt": {
+      "title": "Effet d’écran cathodique",
+      "description": "Appliquer un rendu rétro avec balayage, courbure et aberrations visuelles.",
+      "notes": "À surveiller : Réglages réellement appliqués et lisibilité du contenu."
+    },
+    "shader-game-of-life": {
+      "title": "Jeu de la vie sur GPU",
+      "description": "Faire évoluer un automate cellulaire avec des commandes de simulation.",
+      "notes": "À surveiller : Règles de voisinage, pause, réinitialisation et édition de la grille."
+    },
+    "shader-seascape": {
+      "title": "Paysage océanique",
+      "description": "Représenter un océan procédural avec ciel, horizon et vagues.",
+      "notes": "À surveiller : Horizon, éclairage, mouvement des vagues et stabilité du shader."
+    },
+    "games-flappy-bird": {
+      "title": "Vol entre les obstacles",
+      "description": "Maintenir un personnage en vol pour franchir des obstacles et marquer des points.",
+      "notes": "À surveiller : Collisions, commandes cohérentes et remise à zéro du score."
+    },
+    "games-ragdoll": {
+      "title": "Pantins et physique de Verlet",
+      "description": "Manipuler des pantins articulés soumis à la gravité et aux collisions.",
+      "notes": "À surveiller : Contraintes des articulations, saisie et stabilité de la physique."
+    },
+    "games-roguelike": {
+      "title": "Exploration de donjons en ASCII",
+      "description": "Explorer des salles, affronter des ennemis et gérer son état dans un jeu textuel.",
+      "notes": "À surveiller : Déplacements, tours des ennemis, obstacles et progression."
+    },
+    "games-2048": {
+      "title": "Puzzle 2048",
+      "description": "Fusionner des tuiles numérotées et suivre son score sur une grille.",
+      "notes": "À surveiller : Fusion unique par tour, génération de tuiles et détection de partie bloquée."
+    },
+    "games-iso-city": {
+      "title": "Construction de ville isométrique",
+      "description": "Bâtir une ville sur une grille isométrique avec outils et ressources.",
+      "notes": "À surveiller : Conversion des coordonnées, placement et cohérence de l’économie."
+    },
+    "games-fireworks": {
+      "title": "Spectacle de feux d’artifice",
+      "description": "Déclencher des fusées et composer un spectacle de particules lumineuses.",
+      "notes": "À surveiller : Cycle des fusées, disparition des particules et stabilité des performances."
+    },
+    "games-chess": {
+      "title": "Échecs contre l’ordinateur",
+      "description": "Jouer aux échecs sur un plateau interactif contre un adversaire automatisé.",
+      "notes": "À surveiller : Coups légaux, échec au roi, fin de partie et retour visuel des coups."
+    },
+    "games-million-particles": {
+      "title": "Champ d’un million de particules",
+      "description": "Explorer une animation de particules à grande échelle avec des forces interactives.",
+      "notes": "À surveiller : Nombre réel de particules, mémoire et mesure des performances."
+    },
+    "webxr-controller-playground": {
+      "title": "Laboratoire de contrôleurs en réalité virtuelle",
+      "description": "Tester les interactions de contrôleurs dans une scène WebXR.",
+      "notes": "À surveiller : Détection du casque, commandes et explications quand la réalité virtuelle est indisponible."
+    },
+    "webxr-teleport-gallery": {
+      "title": "Galerie avec téléportation en réalité virtuelle",
+      "description": "Visiter une galerie et se déplacer par téléportation entre ses espaces.",
+      "notes": "À surveiller : Visée de téléportation, limites de déplacement et interaction avec les œuvres."
+    },
+    "webxr-paint-studio": {
+      "title": "Atelier de peinture en réalité virtuelle",
+      "description": "Dessiner dans l’espace avec les contrôleurs d’un casque.",
+      "notes": "À surveiller : Début et fin des traits, changement d’outil et nettoyage de la scène."
+    },
+    "webxr-passthrough-room-planner": {
+      "title": "Aménagement de pièce en réalité mixte",
+      "description": "Placer et ajuster des meubles virtuels dans un espace de réalité mixte.",
+      "notes": "À surveiller : Dimensions, placement au sol et gestion des fonctions non disponibles."
+    },
+    "webxr-hand-tracking-instrument": {
+      "title": "Instrument piloté par les mains",
+      "description": "Produire des sons et des interactions avec le suivi des mains.",
+      "notes": "À surveiller : Détection des gestes, activation audio et perte temporaire du suivi."
+    },
+    "webxr-archery-range": {
+      "title": "Stand de tir à l’arc en réalité virtuelle",
+      "description": "Viser des cibles avec un arc et des flèches dans un espace immersif.",
+      "notes": "À surveiller : Tension de l’arc, trajectoires, impacts et score."
+    },
+    "webxr-rhythm-sabers": {
+      "title": "Arène de sabres rythmiques",
+      "description": "Franchir une séquence musicale en touchant les éléments au bon moment.",
+      "notes": "À surveiller : Synchronisation, collisions, score et démarrage audio volontaire."
+    },
+    "webxr-data-observatory": {
+      "title": "Observatoire de données en réalité virtuelle",
+      "description": "Explorer des visualisations de données disposées dans un espace immersif.",
+      "notes": "À surveiller : Lisibilité, sélection des données et navigation spatiale."
+    },
+    "webxr-cockpit-flight": {
+      "title": "Vol spatial depuis un cockpit en réalité virtuelle",
+      "description": "Piloter un appareil spatial depuis un cockpit interactif.",
+      "notes": "À surveiller : Repères de pilotage, commandes et stabilité de la caméra."
+    },
+    "webxr-escape-room": {
+      "title": "Salle d’énigmes en réalité virtuelle",
+      "description": "Résoudre des énigmes et manipuler des objets pour s’échapper d’une pièce.",
+      "notes": "À surveiller : Interactions, dépendances entre énigmes et progression jusqu’à la sortie."
+    },
+    "webxr-scale-explorer": {
+      "title": "Système solaire à portée de main",
+      "description": "Manipuler une représentation du système solaire et explorer les changements d’échelle.",
+      "notes": "À surveiller : Gestes de saisie, changement d’échelle et maintien des objets dans le champ de vision."
+    },
+    "webxr-raw-webgl2": {
+      "title": "WebXR sans bibliothèque externe",
+      "description": "Construire une scène immersive avec les API WebXR et WebGL natives.",
+      "notes": "À surveiller : Initialisation de session, matrices des yeux et gestion de la compatibilité."
+    },
+    "sim-city-builder": {
+      "title": "Gestion d’une ville",
+      "description": "Développer une ville avec population, services, ressources et indicateurs de satisfaction.",
+      "notes": "À surveiller : Effets des décisions, équilibre budgétaire et cohérence des indicateurs."
+    },
+    "sim-gaia-planet": {
+      "title": "Simulation de planète vivante",
+      "description": "Faire évoluer une planète en jouant sur le climat, le relief et la vie.",
+      "notes": "À surveiller : Relations entre paramètres, stabilité et réactions visibles de l’environnement."
+    },
+    "sim-london-bus": {
+      "title": "Conduite d’un bus à Londres",
+      "description": "Piloter un bus sur un trajet urbain avec arrêts, voyageurs et horaires.",
+      "notes": "À surveiller : Arrêts, montée des passagers, circulation et cohérence du trajet."
+    },
+    "sim-fed-chair": {
+      "title": "Simulation de politique monétaire",
+      "description": "Explorer une économie fictive en ajustant les leviers de politique monétaire.",
+      "notes": "À surveiller : Décalage temporel des effets, indicateurs cohérents et décisions réellement prises en compte."
+    },
+    "sim-stock-market": {
+      "title": "Simulation de marché boursier",
+      "description": "Passer des ordres fictifs et suivre un portefeuille dans un marché simulé.",
+      "notes": "À surveiller : Calcul du portefeuille, achats et ventes, prix et limites de trésorerie."
+    },
+    "sim-school": {
+      "title": "Gestion d’un établissement scolaire",
+      "description": "Diriger une école en organisant moyens, personnel et résultats.",
+      "notes": "À surveiller : Effets des décisions, budget et évolution des indicateurs."
+    },
+    "sim-epidemic": {
+      "title": "Simulation de propagation épidémique",
+      "description": "Observer une population simulée et l’effet de mesures sur la propagation.",
+      "notes": "À surveiller : Transitions entre états, cohérence des totaux et effet des interventions."
+    },
+    "sim-ecosystem": {
+      "title": "Évolution des prédateurs et des proies",
+      "description": "Observer un écosystème d’agents dont les populations et les comportements évoluent.",
+      "notes": "À surveiller : Naissances, consommation, disparition des agents et stabilité des populations."
+    },
+    "sim-ant-colony": {
+      "title": "Simulation de colonie de fourmis",
+      "description": "Observer une colonie qui explore, recherche de la nourriture et suit des phéromones.",
+      "notes": "À surveiller : Retour à la colonie, chemins de phéromones et renouvellement des ressources."
+    },
+    "sim-traffic": {
+      "title": "Simulation de circulation routière",
+      "description": "Gérer des véhicules, intersections et signaux pour observer les flux routiers.",
+      "notes": "À surveiller : Respect des feux, distances de sécurité et prévention des blocages."
+    },
+    "sim-air-traffic": {
+      "title": "Contrôle du trafic aérien",
+      "description": "Organiser les trajectoires et les atterrissages d’avions dans un espace aérien simulé.",
+      "notes": "À surveiller : Séparation des avions, consignes de trajectoire et occupation des pistes."
+    },
+    "sim-rocket": {
+      "title": "Lancement de fusée en orbite",
+      "description": "Piloter une fusée, gérer ses étages et atteindre une trajectoire orbitale.",
+      "notes": "À surveiller : Carburant, séparation des étages, gravité et indicateurs de trajectoire."
+    },
+    "sim-power-grid": {
+      "title": "Gestion d’un réseau électrique",
+      "description": "Équilibrer production, demande et incidents dans un réseau électrique simulé.",
+      "notes": "À surveiller : Conservation des flux, surcharge, pannes et effet des actions de régulation."
+    },
+    "sim-hospital": {
+      "title": "Gestion d’un service d’urgences",
+      "description": "Organiser les arrivées, le triage et les ressources d’un hôpital fictif.",
+      "notes": "À surveiller : Priorités, attente, affectation des équipes et continuité des parcours."
+    },
+    "sim-evolution-creatures": {
+      "title": "Créatures qui apprennent à marcher",
+      "description": "Faire évoluer des créatures articulées et comparer leurs capacités de locomotion.",
+      "notes": "À surveiller : Contraintes physiques, sélection, mutations et mesure du déplacement."
+    },
+    "sim-farm": {
+      "title": "Gestion d’une ferme au fil des saisons",
+      "description": "Planifier cultures, récoltes et ressources dans une exploitation simulée.",
+      "notes": "À surveiller : Calendrier des cultures, stocks, saisons et équilibre des revenus."
+    },
+    "sim-island-economy": {
+      "title": "Économie d’une nation insulaire",
+      "description": "Développer une économie insulaire en gérant ressources, population et échanges.",
+      "notes": "À surveiller : Bilans de production, consommation, commerce et effet des décisions."
+    },
+    "sim-weather-front": {
+      "title": "Simulation des systèmes météorologiques",
+      "description": "Observer des masses d’air et leur évolution dans une simulation météo.",
+      "notes": "À surveiller : Déplacement des fronts, cohérence des paramètres et évolution de la carte."
+    },
+    "flag-airport-operations": {
+      "title": "Simulateur des opérations aéroportuaires",
+      "description": "Coordonner avions, pistes, portes et véhicules de service dans un aéroport animé en 3D.",
+      "notes": "À surveiller : Occupation exclusive des pistes, circulation sur les voies, attribution des portes et séquence des services."
+    },
+    "flag-bus-garage": {
+      "title": "Simulation d’un dépôt de bus",
+      "description": "Organiser les déplacements, la maintenance et la recharge des bus dans un dépôt détaillé.",
+      "notes": "À surveiller : Blocages des voies, collisions, étapes de maintenance et limites de recharge électrique."
+    },
+    "flag-black-hole-expedition": {
+      "title": "Expédition vers un trou noir",
+      "description": "Explorer un trou noir avec effets de lentille gravitationnelle et disque d’accrétion.",
+      "notes": "À surveiller : Déviation des rayons, asymétrie du disque, profondeur et performances du rendu."
+    },
+    "flag-microscopic-biosphere": {
+      "title": "Défense d’une biosphère microscopique",
+      "description": "Commander des unités dans un monde microscopique avec un rendu organique détaillé.",
+      "notes": "À surveiller : Déplacements en milieu visqueux, profondeur de champ et interactions entre organismes."
+    },
+    "flag-neon-glassblowing": {
+      "title": "Atelier de soufflage de verre néon",
+      "description": "Façonner du verre chaud et observer ses déformations, sa lumière et son refroidissement.",
+      "notes": "À surveiller : Différence entre verre chaud et froid, symétrie, réfraction et réaction des inclusions."
+    },
+    "flag-deep-sea-vent-colony": {
+      "title": "Colonie des sources hydrothermales",
+      "description": "Développer une colonie dans les profondeurs autour de sources chaudes et d’organismes lumineux.",
+      "notes": "À surveiller : Obscurité, diffusion des lumières, chaleur et cohérence des ressources de la colonie."
+    },
+    "flag-demolition-sandbox": {
+      "title": "Laboratoire de démolition architecturale",
+      "description": "Détruire des structures et observer des effondrements progressifs avec débris et poussière.",
+      "notes": "À surveiller : Rôle des supports, propagation de l’effondrement et stabilisation des débris."
+    },
+    "flag-brick-stop-motion": {
+      "title": "Construction en briques et animation image par image",
+      "description": "Assembler des briques, tester leur physique et produire une animation image par image.",
+      "notes": "À surveiller : Emboîtement, proportions, mode physique et continuité des images de l’animation."
+    },
+    "adv-threejs-tower-defense": {
+      "title": "Défense de tours — version avancée",
+      "description": "Placer des tours pour défendre un parcours contre des vagues d’ennemis avec une économie et des améliorations. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Respect du parcours, ciblage des tours, équilibre des ressources et performances. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-threejs-cloth-sim": {
+      "title": "Simulation physique de tissu — version avancée",
+      "description": "Manipuler un tissu en trois dimensions soumis à la gravité, au vent et aux interactions de la souris. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Stabilité du tissu, collisions et précision de la saisie à la souris. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-threejs-solar-orrery": {
+      "title": "Maquette du système solaire — version avancée",
+      "description": "Explorer les planètes, leurs orbites et leurs caractéristiques dans un système solaire interactif. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Échelle des orbites, lisibilité des étiquettes et transitions de caméra. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-threejs-fractal-explorer": {
+      "title": "Explorateur de fractales — version avancée",
+      "description": "Voyager dans des formes fractales tridimensionnelles et modifier leurs paramètres de rendu. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Compilation des shaders, précision du rendu et fluidité de navigation. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-threejs-procedural-terrain-biomes": {
+      "title": "Terrain procédural et biomes — version avancée",
+      "description": "Générer des paysages avec plusieurs biomes et des paramètres de relief, d’eau et de végétation. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Régénération des paramètres, transitions entre biomes et hauteur de l’eau. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-threejs-mini-planet": {
+      "title": "Petite planète interactive — version avancée",
+      "description": "Explorer une petite planète sphérique et ses éléments avec une caméra adaptée. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Déplacements aux pôles, orientation des objets et collisions de caméra. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-threejs-fractal-tunnel": {
+      "title": "Tunnel fractal — version avancée",
+      "description": "Parcourir un tunnel géométrique animé avec des effets de vitesse et de profondeur. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Continuité du tunnel, stabilité de la caméra et limitation des clignotements. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-threejs-hologram-showcase": {
+      "title": "Vitrine holographique — version avancée",
+      "description": "Présenter un objet holographique avec des effets lumineux et des points d’information interactifs. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Lisibilité des détails, sélection des points d’intérêt et transitions d’animation. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-threejs-voxel-builder": {
+      "title": "Construction en voxels — version avancée",
+      "description": "Assembler des structures cubiques avec des outils de sélection et de construction. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Précision de placement, annulation et performances sur les grands volumes. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-threejs-endless-runner-prototype": {
+      "title": "Course sans fin — version avancée",
+      "description": "Jouer à une course à obstacles générée en continu avec score et difficulté progressive. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Obstacles franchissables, collisions, redémarrage et commandes tactiles. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-threejs-dna-sculpture": {
+      "title": "Sculpture de l’ADN — version avancée",
+      "description": "Observer une double hélice d’ADN avec des réglages et des informations interactives. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Géométrie des brins, connexions et cohérence des paramètres. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-threejs-origami-fold": {
+      "title": "Atelier de pliage origami — version avancée",
+      "description": "Animer le pliage d’une feuille et parcourir les étapes de sa transformation. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Cohérence des plis, superposition des faces et synchronisation des étapes. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-threejs-scifi-hangar-drones": {
+      "title": "Hangar futuriste et drones — version avancée",
+      "description": "Commander des drones dans un hangar avec éclairage et formations animées. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Collisions, changements de formation et cohérence des commandes. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-threejs-3d-gravity-well-simulation": {
+      "title": "Simulation de puits gravitationnels — version avancée",
+      "description": "Visualiser les trajectoires de particules influencées par des masses et un champ gravitationnel. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Stabilité de l’intégration, trajectoires et gestion des particules absorbées. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-threejs-gta-6-game": {
+      "title": "Jeu urbain en monde ouvert — version avancée",
+      "description": "Créer un prototype de jeu urbain avec déplacements, véhicules et activités interactives. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Transitions entre véhicules, collisions, circulation et missions réellement jouables. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-p5js-audio-visualizer": {
+      "title": "Visualiseur audio interactif — version avancée",
+      "description": "Transformer le son en animations avec plusieurs modes visuels et des réglages. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Activation audio, réaction aux fréquences et gestion des fichiers ou du microphone. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-p5js-double-pendulum": {
+      "title": "Chaos du double pendule — version avancée",
+      "description": "Explorer le mouvement chaotique de pendules doubles et leurs trajectoires. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Intégration numérique, conservation de l’énergie et sensibilité aux conditions initiales. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-htmljs-pixel-editor": {
+      "title": "Éditeur de pixels — version avancée",
+      "description": "Dessiner des images pixel par pixel avec palette, outils et export. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Coordonnées avec zoom, remplissage et annulation des modifications. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-htmljs-synth-keyboard": {
+      "title": "Clavier synthétiseur — version avancée",
+      "description": "Jouer des notes avec un clavier visuel et régler les paramètres du synthétiseur. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Déverrouillage audio, notes simultanées et absence de sons bloqués. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-shader-mandelbulb": {
+      "title": "Fractale Mandelbulb — version avancée",
+      "description": "Explorer une fractale tridimensionnelle calculée par lancer de rayons progressif. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Compilation, normales, précision des contours et performances. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-shader-clouds": {
+      "title": "Nuages volumétriques — version avancée",
+      "description": "Traverser une couche de nuages calculés dans un volume tridimensionnel. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Éclairage interne, stabilité du bruit et performances. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-shader-fire": {
+      "title": "Feu procédural — version avancée",
+      "description": "Créer des flammes animées avec un shader et des paramètres interactifs. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Mouvement du feu, réglages de couleur et absence d’artefacts. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-shader-crt": {
+      "title": "Effet d’écran cathodique — version avancée",
+      "description": "Appliquer un rendu rétro avec balayage, courbure et aberrations visuelles. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Réglages réellement appliqués et lisibilité du contenu. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-shader-game-of-life": {
+      "title": "Jeu de la vie sur GPU — version avancée",
+      "description": "Faire évoluer un automate cellulaire avec des commandes de simulation. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Règles de voisinage, pause, réinitialisation et édition de la grille. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-shader-seascape": {
+      "title": "Paysage océanique — version avancée",
+      "description": "Représenter un océan procédural avec ciel, horizon et vagues. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Horizon, éclairage, mouvement des vagues et stabilité du shader. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-games-flappy-bird": {
+      "title": "Vol entre les obstacles — version avancée",
+      "description": "Maintenir un personnage en vol pour franchir des obstacles et marquer des points. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Collisions, commandes cohérentes et remise à zéro du score. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-games-ragdoll": {
+      "title": "Pantins et physique de Verlet — version avancée",
+      "description": "Manipuler des pantins articulés soumis à la gravité et aux collisions. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Contraintes des articulations, saisie et stabilité de la physique. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-games-roguelike": {
+      "title": "Exploration de donjons en ASCII — version avancée",
+      "description": "Explorer des salles, affronter des ennemis et gérer son état dans un jeu textuel. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Déplacements, tours des ennemis, obstacles et progression. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-games-iso-city": {
+      "title": "Construction de ville isométrique — version avancée",
+      "description": "Bâtir une ville sur une grille isométrique avec outils et ressources. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Conversion des coordonnées, placement et cohérence de l’économie. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-games-fireworks": {
+      "title": "Spectacle de feux d’artifice — version avancée",
+      "description": "Déclencher des fusées et composer un spectacle de particules lumineuses. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Cycle des fusées, disparition des particules et stabilité des performances. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-games-million-particles": {
+      "title": "Champ d’un million de particules — version avancée",
+      "description": "Explorer une animation de particules à grande échelle avec des forces interactives. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Nombre réel de particules, mémoire et mesure des performances. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-webxr-controller-playground": {
+      "title": "Laboratoire de contrôleurs en réalité virtuelle — version avancée",
+      "description": "Tester les interactions de contrôleurs dans une scène WebXR. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Détection du casque, commandes et explications quand la réalité virtuelle est indisponible. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-webxr-passthrough-room-planner": {
+      "title": "Aménagement de pièce en réalité mixte — version avancée",
+      "description": "Placer et ajuster des meubles virtuels dans un espace de réalité mixte. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Dimensions, placement au sol et gestion des fonctions non disponibles. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-webxr-hand-tracking-instrument": {
+      "title": "Instrument piloté par les mains — version avancée",
+      "description": "Produire des sons et des interactions avec le suivi des mains. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Détection des gestes, activation audio et perte temporaire du suivi. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-webxr-archery-range": {
+      "title": "Stand de tir à l’arc en réalité virtuelle — version avancée",
+      "description": "Viser des cibles avec un arc et des flèches dans un espace immersif. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Tension de l’arc, trajectoires, impacts et score. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-webxr-rhythm-sabers": {
+      "title": "Arène de sabres rythmiques — version avancée",
+      "description": "Franchir une séquence musicale en touchant les éléments au bon moment. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Synchronisation, collisions, score et démarrage audio volontaire. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-webxr-cockpit-flight": {
+      "title": "Vol spatial depuis un cockpit en réalité virtuelle — version avancée",
+      "description": "Piloter un appareil spatial depuis un cockpit interactif. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Repères de pilotage, commandes et stabilité de la caméra. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-webxr-scale-explorer": {
+      "title": "Système solaire à portée de main — version avancée",
+      "description": "Manipuler une représentation du système solaire et explorer les changements d’échelle. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Gestes de saisie, changement d’échelle et maintien des objets dans le champ de vision. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-webxr-raw-webgl2": {
+      "title": "WebXR sans bibliothèque externe — version avancée",
+      "description": "Construire une scène immersive avec les API WebXR et WebGL natives. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : Initialisation de session, matrices des yeux et gestion de la compatibilité. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "adv-zen-flight-simulator": {
+      "title": "Simulateur de vol relaxant — version avancée",
+      "description": "Survoler des paysages procéduraux avec des commandes souples, plusieurs caméras et une ambiance apaisante. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
+      "notes": "À surveiller : continuité du terrain, fluidité du vol, commandes et déclenchement volontaire du son. Vérifier également chaque exigence numérotée de la consigne originale."
+    }
+  }
+}

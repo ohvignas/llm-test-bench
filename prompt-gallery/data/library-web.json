@@ -1,0 +1,403 @@
+{
+  "version": 1,
+  "provenance": {
+    "kind": "original",
+    "note": "Prompts originaux du fork, rédigés en français. Les publications suivantes ont inspiré la couverture des interactions et des niveaux de difficulté ; aucun prompt de ces jeux de données n’est reproduit. Ce catalogue ne constitue pas leur benchmark officiel.",
+    "references": [
+      {
+        "title": "FrontendBench",
+        "url": "https://arxiv.org/abs/2506.13832"
+      },
+      {
+        "title": "Vision2Web",
+        "url": "https://vision2web-bench.github.io/"
+      }
+    ]
+  },
+  "prompts": [
+    {
+      "id": "web-vitrine-saas",
+      "set": "web",
+      "title": "Page de présentation d’un logiciel",
+      "description": "Une vitrine soignée avec tarifs, FAQ et formulaire de contact.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "débutant",
+        "présentation",
+        "responsive"
+      ],
+      "prompt": "Crée : Page de présentation d’un logiciel.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Présenter le logiciel fictif « Atelier » avec une navigation, une accroche, trois fonctionnalités, des témoignages et un pied de page.\n2. Afficher trois offres à 9, 19 et 39 € par mois. Un interrupteur annuel applique une remise de 20 % et montre clairement le total annuel : 86,40, 182,40 et 374,40 €.\n3. Créer une FAQ à accordéons et un formulaire de contact avec nom, courriel et message obligatoires ; afficher les erreurs près des champs puis une confirmation locale.\n4. Adapter la navigation à 375 px avec un menu qui s’ouvre et se ferme au clavier. Respecter la préférence de réduction des animations.",
+      "notes": "Vérifier les trois prix annuels, la validation des champs, la FAQ au clavier et l’absence de débordement à 375 px.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-portfolio-agence",
+      "set": "web",
+      "title": "Portfolio d’une agence créative",
+      "description": "Présenter des projets filtrables et leurs fiches détaillées.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "débutant",
+        "portfolio",
+        "filtres"
+      ],
+      "prompt": "Crée : Portfolio d’une agence créative.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Inventer six projets répartis entre Identité, Produit et Site web ; chaque projet comporte un titre, une année et un visuel réalisé en CSS ou SVG.\n2. Filtrer la grille par discipline et effectuer une recherche par titre ; combiner les deux filtres et afficher un état sans résultat.\n3. Ouvrir une fiche de projet dans une boîte de dialogue avec contexte, rôle et livrables ; fermer avec Échap et rendre le focus au bouton d’origine.\n4. Inclure une présentation de l’agence, un contact et une mise en page adaptée au téléphone sans images distantes.",
+      "notes": "Vérifier le cumul recherche/discipline, les six fiches, le focus de la boîte de dialogue et l’état vide.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-restaurant-menu",
+      "set": "web",
+      "title": "Carte de restaurant interactive",
+      "description": "Filtrer les plats et composer une commande avec un total exact.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "débutant",
+        "restaurant",
+        "panier"
+      ],
+      "prompt": "Crée : Carte de restaurant interactive.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Afficher huit plats fictifs avec prix, catégorie et allergènes ; prévoir au moins trois plats végétariens.\n2. Combiner recherche, catégorie et filtre végétarien. Permettre d’ajouter un plat, d’ajuster sa quantité et de le retirer du panier.\n3. Inclure le menu test : soupe à 7,50 €, salade à 12 € et tarte à 6 €. Deux soupes et une tarte doivent totaliser 21 € ; calculer en centimes pour éviter les erreurs d’arrondi.\n4. Ajouter une confirmation de commande purement locale, un état panier vide et une disposition utilisable à 375 px.",
+      "notes": "Vérifier le total de 21 €, les filtres combinés et la suppression du dernier article.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-boutique-panier",
+      "set": "web",
+      "title": "Boutique et panier d’achat",
+      "description": "Gérer un catalogue, des stocks, un code de remise et la livraison.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "intermédiaire",
+        "commerce",
+        "calculs"
+      ],
+      "prompt": "Crée : Boutique et panier d’achat.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Afficher six produits avec catégorie, prix et stock ; proposer recherche, filtre de catégorie et tri par prix.\n2. Inclure un carnet à 12 € de stock 3 et une affiche à 18 € de stock 2. Empêcher de dépasser les stocks et accepter les changements de quantité au clavier.\n3. Appliquer le code LOCAL10 : remise de 10 % sur les articles. Ajouter 4,90 € de livraison si le sous-total remisé est inférieur à 50 €, sinon livraison gratuite.\n4. Deux carnets et une affiche avec LOCAL10 doivent donner 42 € d’articles, 4,20 € de remise et un total final de 42,70 €. Afficher séparément chaque montant.\n5. Prévoir panier vide, code invalide et commande simulée ; ne demander aucune donnée bancaire.",
+      "notes": "Vérifier le total de 42,70 €, les limites de stock, le retrait du code et le seuil de livraison.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-reservations-creneaux",
+      "set": "web",
+      "title": "Réservation de créneaux",
+      "description": "Choisir un rendez-vous et empêcher les réservations en double.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "intermédiaire",
+        "réservation",
+        "calendrier"
+      ],
+      "prompt": "Crée : Réservation de créneaux.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Créer un agenda du 10 au 16 novembre 2026 avec créneaux de 30 minutes de 09:00 à 12:00 ; fournir un sélecteur de jour.\n2. Initialiser le 10 novembre à 09:00 comme occupé. Le créneau ne doit jamais être sélectionnable.\n3. Permettre de réserver un créneau disponible avec nom et courriel valides, puis de consulter et annuler la réservation. Une confirmation immédiate ne doit jamais créer deux réservations.\n4. Montrer clairement les états libre, sélectionné et occupé, et un message quand une journée ne contient plus de créneau libre.",
+      "notes": "Vérifier le créneau initialement occupé, le double clic sur Confirmer et la libération après annulation.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-tableau-indicateurs",
+      "set": "web",
+      "title": "Tableau de bord d’activité",
+      "description": "Filtrer des ventes et recalculer cartes et graphiques à partir des mêmes données.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "intermédiaire",
+        "tableau-de-bord",
+        "graphiques"
+      ],
+      "prompt": "Crée : Tableau de bord d’activité.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Utiliser ces ventes : 2026-11-01 Paris 120 €, 2026-11-02 Lyon 80 €, 2026-11-03 Paris 200 €, 2026-11-04 Nantes 100 €.\n2. Afficher chiffre d’affaires, nombre de ventes et panier moyen ; initialement ils valent 500 €, 4 et 125 €.\n3. Combiner filtre de ville et bornes de dates inclusives ; Paris doit donner 320 €, 2 ventes et 160 € de panier moyen. Recalculer tous les indicateurs et graphiques.\n4. Dessiner les graphiques avec SVG ou Canvas et fournir un tableau textuel équivalent. Une période sans données affiche zéro vente et aucun calcul NaN.\n5. Prévoir le tri du tableau et un bouton Réinitialiser tous les filtres.",
+      "notes": "Vérifier les totaux initiaux et Paris, les bornes de dates, le tableau accessible et l’état sans données.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-kanban-projet",
+      "set": "web",
+      "title": "Gestionnaire de projet Kanban",
+      "description": "Créer, déplacer, rechercher et supprimer des tâches.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "intermédiaire",
+        "organisation",
+        "tâches"
+      ],
+      "prompt": "Crée : Gestionnaire de projet Kanban.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Initialiser six tâches réparties dans À faire, En cours et Terminé, avec titre, priorité et responsable.\n2. Créer et modifier une tâche avec titre obligatoire ; permettre le déplacement par glisser-déposer et par boutons accessibles au clavier.\n3. Combiner recherche et filtre de priorité. Afficher pour chaque colonne le nombre de tâches visibles et le nombre total.\n4. Permettre une suppression avec confirmation puis annulation de la dernière suppression. Un déplacement ne doit jamais dupliquer la tâche.\n5. Afficher les états sans tâche et une disposition avec colonnes empilées sur mobile.",
+      "notes": "Vérifier déplacement au clavier, absence de doublons, compteurs sous filtre et restauration après suppression.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-budget-personnel",
+      "set": "web",
+      "title": "Suivi d’un budget fictif",
+      "description": "Calculer revenus, dépenses et solde avec des montants français.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "intermédiaire",
+        "budget",
+        "calculs"
+      ],
+      "prompt": "Crée : Suivi d’un budget fictif.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Initialiser trois opérations fictives : revenu 2000 €, loyer 800 € et courses 125,50 € ; afficher revenus 2000 €, dépenses 925,50 € et solde 1074,50 €.\n2. Ajouter, modifier et supprimer une opération avec date, libellé, catégorie, type et montant positif.\n3. Accepter 12,50 et 12.50 dans le champ montant, refuser les valeurs non numériques et calculer les sommes en centimes.\n4. Filtrer par mois et catégorie et synchroniser liste, totaux et graphique des dépenses. Afficher un avertissement visible si les dépenses dépassent le revenu.\n5. Préciser qu’il s’agit de données de démonstration sans connexion bancaire.",
+      "notes": "Vérifier le solde de 1074,50 €, la saisie avec virgule, les modifications et la cohérence des filtres.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-messagerie-assistance",
+      "set": "web",
+      "title": "Messagerie d’assistance simulée",
+      "description": "Tester l’envoi, l’attente, les erreurs et les réponses locales.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "intermédiaire",
+        "messagerie",
+        "états"
+      ],
+      "prompt": "Crée : Messagerie d’assistance simulée.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Créer une interface de conversation avec une liste de trois conversations fictives et un panneau de messages.\n2. Envoyer un message par bouton ou Entrée ; Maj+Entrée insère une nouvelle ligne. Refuser les messages vides et afficher le texte saisi comme du texte, jamais du HTML exécutable.\n3. Produire une réponse automatique locale après 500 ms. Inclure une option de démonstration « Échec du prochain envoi » et une action Réessayer.\n4. Changer de conversation pendant l’attente doit ranger la réponse dans sa conversation d’origine. Préserver le brouillon de chaque conversation.\n5. Annoncer les nouveaux messages avec une région accessible et indiquer clairement qu’aucune IA distante n’est appelée.",
+      "notes": "Vérifier les brouillons, les réponses après changement de conversation, la relance locale et l’affichage littéral de <b>test</b>.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-admin-contacts",
+      "set": "web",
+      "title": "Administration de contacts",
+      "description": "Gérer un annuaire avec validation, tri et pagination.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "intermédiaire",
+        "administration",
+        "formulaires"
+      ],
+      "prompt": "Crée : Administration de contacts.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Initialiser 12 contacts fictifs avec nom, courriel, ville et statut ; afficher cinq contacts par page.\n2. Ajouter et modifier un contact ; nom obligatoire et courriel valide unique sans tenir compte des majuscules.\n3. Combiner recherche et filtre de statut, puis trier par nom. Revenir à une page valide après filtrage ou suppression.\n4. Demander confirmation avant suppression et permettre d’annuler cette dernière action. Afficher le nombre filtré et le nombre total.\n5. Rendre la table utilisable sur téléphone et les actions accessibles au clavier.",
+      "notes": "Vérifier l’unicité des courriels, la dernière page après suppression, les filtres combinés et l’annulation.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-formulaire-inscription",
+      "set": "web",
+      "title": "Formulaire d’inscription par étapes",
+      "description": "Valider les champs étape par étape sans perdre les saisies.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "débutant",
+        "formulaires",
+        "validation"
+      ],
+      "prompt": "Crée : Formulaire d’inscription par étapes.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Créer trois étapes : profil, préférences et récapitulatif. Le profil demande nom, courriel et date de naissance.\n2. Bloquer Suivant si les champs de l’étape sont invalides ; refuser les dates de naissance futures et afficher les messages près des champs.\n3. Conserver toutes les valeurs lorsque l’utilisateur revient en arrière et mettre à jour le récapitulatif après modification.\n4. Demander un consentement explicite non précoché avant de confirmer. Désactiver la double soumission et montrer une confirmation locale.\n5. Afficher la progression, placer le focus sur la première erreur et adapter la disposition à 375 px.",
+      "notes": "Vérifier la validation par étape, le retour arrière, le consentement et la double soumission.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-quiz-pedagogique",
+      "set": "web",
+      "title": "Quiz pédagogique",
+      "description": "Noter un quiz, expliquer les réponses et recommencer proprement.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "débutant",
+        "éducation",
+        "quiz"
+      ],
+      "prompt": "Crée : Quiz pédagogique.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Créer cinq questions de culture générale avec quatre choix chacune et exactement une réponse correcte.\n2. Montrer une question à la fois avec indicateur de progression. Une réponse validée doit afficher une explication et ne plus pouvoir modifier le score.\n3. À la fin, afficher le score sur cinq et la liste des réponses justes ou fausses, sans dévoiler les réponses avant validation.\n4. Le bouton Recommencer remet score, progression et sélections à zéro. Autoriser toutes les actions au clavier.\n5. Inclure une présentation de début et un état final distincts.",
+      "notes": "Vérifier un parcours entièrement correct, une réponse fausse, les clics répétés et le redémarrage.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-galerie-visuelle",
+      "set": "web",
+      "title": "Galerie visuelle et favoris",
+      "description": "Rechercher des œuvres et naviguer dans une visionneuse accessible.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "débutant",
+        "galerie",
+        "accessibilité"
+      ],
+      "prompt": "Crée : Galerie visuelle et favoris.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Composer douze illustrations originales en SVG ou CSS avec titre, auteur fictif et catégorie.\n2. Combiner recherche et catégorie ; ajouter et retirer des favoris puis afficher uniquement les favoris.\n3. Ouvrir une visionneuse avec image, légende et commandes précédent/suivant dans la liste filtrée. Ne pas naviguer vers une œuvre exclue par le filtre.\n4. Fermer avec Échap, contenir le focus dans la visionneuse et le rendre à l’œuvre d’origine. Fournir un texte alternatif.\n5. Afficher un état sans résultat et adapter la grille au téléphone.",
+      "notes": "Vérifier la navigation dans la sélection filtrée, les favoris, Échap et la restitution du focus.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-billetterie-evenements",
+      "set": "web",
+      "title": "Billetterie d’événements fictifs",
+      "description": "Réserver des places en gérant les tarifs et les jauges.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "intermédiaire",
+        "événements",
+        "réservation"
+      ],
+      "prompt": "Crée : Billetterie d’événements fictifs.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Présenter trois événements avec date, lieu, capacité et tarifs normal/réduit ; tous les contenus sont fictifs.\n2. Pour l’événement principal, fixer une capacité restante de cinq places, un tarif normal à 20 € et réduit à 12 €.\n3. Choisir les quantités sans dépasser cinq au total, saisir un nom et un courriel, puis confirmer localement. Deux places normales et une réduite valent 52 €.\n4. Après confirmation, diminuer la jauge une seule fois ; permettre l’annulation pour restituer les places. Interdire les quantités négatives.\n5. Afficher complet à zéro place et ne demander aucun paiement réel.",
+      "notes": "Vérifier le total de 52 €, le plafond de cinq places, les clics répétés et la restitution après annulation.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-immobilier-comparateur",
+      "set": "web",
+      "title": "Comparateur de logements",
+      "description": "Filtrer des annonces et comparer leurs caractéristiques.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "intermédiaire",
+        "recherche",
+        "comparaison"
+      ],
+      "prompt": "Crée : Comparateur de logements.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Inventer huit annonces avec ville, prix, surface, pièces et type ; afficher un visuel en CSS ou SVG.\n2. Combiner ville, budget maximal, nombre minimum de pièces et tri par prix ; calculer le prix au mètre carré à partir des données.\n3. Sélectionner de deux à trois annonces pour un tableau comparatif. Empêcher une quatrième sélection avec un message explicite.\n4. Retirer une annonce de la comparaison et conserver une sélection cohérente lors des changements de filtres.\n5. Afficher un état sans résultat et préciser que les annonces sont des démonstrations.",
+      "notes": "Vérifier les filtres combinés, le prix au mètre carré, la limite de trois annonces et le retrait de sélection.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-planning-scolaire",
+      "set": "web",
+      "title": "Planning de cours",
+      "description": "Placer des cours sans conflits de salle ou d’enseignant.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "avancé",
+        "planning",
+        "contraintes"
+      ],
+      "prompt": "Crée : Planning de cours.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Afficher une semaine du lundi au vendredi avec six créneaux d’une heure par jour, deux salles et trois enseignants fictifs.\n2. Créer un cours avec matière, jour, heure, salle et enseignant ; initialiser deux cours qui permettent de tester les conflits.\n3. Refuser deux cours dans la même salle au même créneau et deux cours pour un même enseignant au même créneau, même dans des salles différentes.\n4. Permettre de modifier et supprimer un cours. Lors d’une modification, ne pas détecter le cours comme conflit avec lui-même.\n5. Offrir une vue liste sur mobile et des formulaires entièrement accessibles au clavier.",
+      "notes": "Vérifier les deux types de conflits, la modification sans faux positif et la libération d’un créneau après suppression.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-editeur-devis",
+      "set": "web",
+      "title": "Éditeur de devis fictifs",
+      "description": "Créer des lignes et calculer remise, TVA et total TTC.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "intermédiaire",
+        "documents",
+        "calculs"
+      ],
+      "prompt": "Crée : Éditeur de devis fictifs.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Créer un devis de démonstration avec client fictif, numéro, date et lignes modifiables : libellé, quantité, prix unitaire hors taxes.\n2. Initialiser deux lignes : deux heures à 50 € et un article à 20 € ; sous-total HT 120 €.\n3. Appliquer une remise globale de 10 % avant une TVA de 20 %. Afficher remise 12 €, net HT 108 €, TVA 21,60 € et total TTC 129,60 €.\n4. Ajouter et retirer des lignes, gérer les décimales en français et interdire les quantités ou prix négatifs. Arrondir de manière explicite aux centimes.\n5. Proposer une impression avec une feuille de style dédiée et marquer le document « Démonstration — sans valeur contractuelle ».",
+      "notes": "Vérifier le total TTC de 129,60 €, les arrondis, la suppression de toutes les lignes et l’impression.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-suivi-habitudes",
+      "set": "web",
+      "title": "Suivi d’habitudes hebdomadaire",
+      "description": "Cocher des habitudes et calculer les progrès sans changer les données.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "débutant",
+        "productivité",
+        "suivi"
+      ],
+      "prompt": "Crée : Suivi d’habitudes hebdomadaire.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Afficher sept jours fixes du 9 au 15 novembre 2026 et trois habitudes : Lire, Marcher et Dessiner.\n2. Permettre de cocher et décocher chaque jour pour chaque habitude, puis calculer le total hebdomadaire et le taux de réussite sur sept jours.\n3. Une habitude cochée trois jours doit afficher 3/7 et environ 43 %. Décocher un jour recalcule immédiatement les valeurs.\n4. Ajouter, renommer et supprimer une habitude avec confirmation ; empêcher les noms vides et les doublons insensibles à la casse.\n5. Inclure une réinitialisation confirmée de la semaine et une alternative lisible sur petit écran.",
+      "notes": "Vérifier 3/7 ≈ 43 %, le décochage, les doublons et l’annulation d’une réinitialisation.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-documentation-recherche",
+      "set": "web",
+      "title": "Documentation avec recherche",
+      "description": "Naviguer entre articles et retrouver des informations dans leur contenu.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "débutant",
+        "documentation",
+        "recherche"
+      ],
+      "prompt": "Crée : Documentation avec recherche.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Écrire six courts articles originaux de documentation d’un produit fictif, organisés en trois rubriques.\n2. Créer une navigation latérale, un sommaire de l’article et des liens internes qui permettent d’ouvrir directement un article via le fragment de l’URL.\n3. Une recherche doit porter sur le titre et le contenu, afficher un extrait et un état sans résultat ; afficher les surbrillances sans injecter du HTML saisi.\n4. Prévoir navigation précédente/suivante, menu mobile et styles de focus visibles.\n5. Copier le lien d’un article avec confirmation ; si l’API de presse-papiers est indisponible, proposer le lien à sélectionner manuellement.",
+      "notes": "Vérifier recherche dans le corps, lien direct après rechargement, navigation et absence d’injection par la recherche.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-recettes-portions",
+      "set": "web",
+      "title": "Carnet de recettes et portions",
+      "description": "Adapter les ingrédients et réunir une liste de courses.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "intermédiaire",
+        "recettes",
+        "calculs"
+      ],
+      "prompt": "Crée : Carnet de recettes et portions.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Présenter six recettes fictives avec durée, régime et ingrédients ; filtrer par durée maximale et régime.\n2. Inclure une recette pour deux personnes avec 200 g de pâtes, 150 g de tomates et deux cuillères d’huile. Quatre portions demandent 400 g, 300 g et quatre cuillères.\n3. Permettre un changement de portions entre une et huit avec recalcul immédiat ; ne jamais accepter zéro ou un nombre négatif.\n4. Ajouter plusieurs recettes à une liste de courses. Fusionner uniquement les ingrédients de même nom et de même unité ; ne jamais additionner des grammes à des millilitres.\n5. Permettre de cocher un ingrédient acheté et de vider la liste avec confirmation.",
+      "notes": "Vérifier le doublement des ingrédients, les unités séparées, les filtres et le retrait d’une recette de la liste.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-studio-audio",
+      "set": "web",
+      "title": "Lecteur audio synthétique",
+      "description": "Piloter une courte séquence sonore sans fichier distant.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "intermédiaire",
+        "audio",
+        "interactions"
+      ],
+      "prompt": "Crée : Lecteur audio synthétique.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Créer un lecteur de démonstration qui synthétise une séquence mélodique de dix secondes avec Web Audio ; ne charger aucun son externe.\n2. Initialiser l’audio uniquement après une action de l’utilisateur. Prévoir lecture, pause, reprise, arrêt et volume.\n3. Afficher une barre de progression liée au temps sonore réel ; à la fin, revenir à un état arrêté cohérent.\n4. Ne jamais superposer deux lectures lors de clics rapides. Pause/reprise conserve la position ; Arrêter revient au début.\n5. Prévoir un message si Web Audio est indisponible et rendre les commandes accessibles au clavier.",
+      "notes": "Vérifier l’absence de son au chargement, pause/reprise, arrêt, fin de séquence et clics rapides sans superposition.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-carte-interactive",
+      "set": "web",
+      "title": "Carte interactive de lieux fictifs",
+      "description": "Explorer une carte SVG avec zoom, filtres et informations.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "intermédiaire",
+        "carte",
+        "svg"
+      ],
+      "prompt": "Crée : Carte interactive de lieux fictifs.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Dessiner une carte de quartier fictif en SVG avec douze lieux de trois catégories : Culture, Nature et Services.\n2. Afficher les lieux par filtres combinés et par recherche ; proposer une liste textuelle synchronisée avec les marqueurs.\n3. Ajouter zoom avant/arrière, recentrage et sélection d’un lieu depuis la carte ou la liste. La sélection montre titre, catégorie et description.\n4. Garder les infobulles dans la fenêtre et fournir des boutons de zoom utilisables au clavier, sans dépendre du seul glisser de souris.\n5. Afficher un état vide quand aucun lieu ne correspond et ne pas appeler de service de cartographie.",
+      "notes": "Vérifier la synchronisation carte/liste, le zoom, les filtres combinés et les infobulles aux bords.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-tableur-csv",
+      "set": "web",
+      "title": "Explorateur de données CSV",
+      "description": "Importer un tableau et filtrer correctement des valeurs complexes.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "avancé",
+        "données",
+        "import"
+      ],
+      "prompt": "Crée : Explorateur de données CSV.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Fournir un exemple CSV intégré avec en-têtes nom, ville et montant, dont une valeur entre guillemets contenant une virgule et une autre contenant des guillemets doublés.\n2. Permettre le collage et l’import d’un fichier local ; analyser les guillemets correctement au lieu d’utiliser un simple découpage par virgules.\n3. Refuser un fichier incohérent avec un message donnant la ligne concernée. Afficher les valeurs comme du texte, jamais comme du HTML.\n4. Ajouter recherche, tri numérique sur montant et pagination de cinq lignes ; afficher le nombre filtré et la somme des montants visibles après filtre.\n5. Exporter les lignes filtrées en CSV en rééchappant correctement les valeurs. Neutraliser les cellules commençant par =, +, - ou @ pour éviter leur interprétation comme formules dans un tableur.",
+      "notes": "Vérifier virgules et guillemets échappés, erreurs de ligne, tri numérique, filtrage et neutralisation des formules exportées.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    },
+    {
+      "id": "web-composants-accessibles",
+      "set": "web",
+      "title": "Laboratoire de composants accessibles",
+      "description": "Tester onglets, accordéons et dialogues avec le clavier.",
+      "category": "html-js",
+      "tags": [
+        "site-web",
+        "avancé",
+        "accessibilité",
+        "composants"
+      ],
+      "prompt": "Crée : Laboratoire de composants accessibles.\n\nProduis un seul document HTML complet avec CSS et JavaScript intégrés, directement exécutable dans un navigateur. Tout le texte de l’interface doit être en français. Aucun serveur, aucune clé API, aucun appel réseau et aucune dépendance externe : utiliser des données fictives et des illustrations CSS ou SVG. Ne simule pas une fonctionnalité par un simple message si une interaction est demandée. Respecte le clavier, des libellés de formulaire explicites et une mise en page adaptée au téléphone. Le stockage persistant n’est pas requis ; si le stockage du navigateur est indisponible dans le bac à sable, le site doit rester utilisable en mémoire.\n\nExigences :\n1. Créer une page de démonstration contenant un groupe de trois onglets, une FAQ accordéon et une boîte de dialogue de confirmation.\n2. Les onglets prennent en charge Flèche gauche/droite, Début et Fin, avec rôles ARIA et panneau associé ; un seul onglet est dans l’ordre de tabulation.\n3. Les accordéons indiquent leur état ouvert/fermé. Le dialogue reçoit le focus, le contient, se ferme avec Échap et restitue le focus au déclencheur.\n4. Afficher un compteur de confirmations qui ne s’incrémente qu’avec le bouton Confirmer, jamais avec Annuler ou Échap.\n5. Fournir un contraste lisible, des styles de focus visibles, une réduction des animations et une mise en page à 375 px.",
+      "notes": "Vérifier tout le parcours au clavier, les attributs ARIA, le focus du dialogue et le compteur après annulation.",
+      "createdAt": "2026-11-09T00:00:00Z"
+    }
+  ]
+}

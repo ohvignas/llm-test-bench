@@ -2999,3 +2999,8 @@ button.create-run-label:hover { text-decoration: underline; }
 
 /* Refine: the big Play button under the title (shared .btn-play). */
 .refine-play { text-align: left; margin: 2px 0 4px; }
+
+/* Keep the readable brief distinct from the exact model instruction. */
+.library-card-instruction { margin: 10px 0; font-size: 12px; color: var(--text-secondary); }
+.library-card-instruction pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; max-height: 300px; overflow-y: auto; }
+.library-card-prompt:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }

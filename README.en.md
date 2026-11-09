@@ -90,3 +90,11 @@ This configuration targets local installations, not an Internet-facing shared se
 [Contributing](CONTRIBUTING.md) · [Issues](https://github.com/ohvignas/llm-test-bench/issues) · [MIT license](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 Original project by Techdread/Peter Edwards. Original notices and vendored-library licenses are retained; this fork adds Docker, authentication, the vault and French-interface changes.
+
+## French prompt library
+
+The library now contains 164 prompts: 92 core, 40 advanced, 8 flagship simulations and 24 original French website briefs in **Prompts → Sites web** (also available in **Lots**). The original 140 entries have French titles, descriptions and summaries of evaluation points. Expanding a card reveals the exact original model instruction. Original instructions, evaluation notes, identifiers and generation folders are preserved for historical comparisons. Personal descriptions can be edited.
+
+The new website set covers storefronts, portfolios, reservations, dashboards, forms, CSV handling and accessible interactions. Every brief requests a standalone HTML document with fictional data and no external network calls. Checkpoints and sample numeric results support manual verification; they are not a new automated scoring suite.
+
+Coverage was informed by [FrontendBench](https://arxiv.org/abs/2506.13832) and [Vision2Web](https://vision2web-bench.github.io/). These are original briefs, not copied dataset tasks or an official implementation of either benchmark. References are recorded in `prompt-gallery/data/library-web.json`.

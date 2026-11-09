@@ -5,6 +5,7 @@ import { CATEGORIES } from '../services/library.js';
 export function PromptFormDialog({ initial, onSave, onClose, addToast }) {
   const isEdit = !!initial?.id;
   const [title, setTitle] = useState(initial?.title || '');
+  const [description, setDescription] = useState(initial?.description || '');
   const [category, setCategory] = useState(initial?.category || 'html-js');
   const [tags, setTags] = useState((initial?.tags || []).join(', '));
   const [promptText, setPromptText] = useState(initial?.prompt || '');
@@ -30,12 +31,13 @@ export function PromptFormDialog({ initial, onSave, onClose, addToast }) {
     }
     onSave({
       title: title.trim(),
+      description: description.trim(),
       category,
       tags: tags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean).slice(0, 8),
       prompt: promptText.trim(),
       notes: notes.trim(),
     });
-  }, [title, category, tags, promptText, notes, onSave, addToast]);
+  }, [title, description, category, tags, promptText, notes, onSave, addToast]);
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Escape') onClose();
@@ -62,8 +64,14 @@ export function PromptFormDialog({ initial, onSave, onClose, addToast }) {
               placeholder="ex. Nuages en raymarching"
             />
             <span style=${{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              Les exécutions de ce prompt sont enregistrées dans un dossier nommé à partir du titre
+              Les exécutions utilisent un dossier dérivé du titre ; les prompts traduits conservent leur dossier d’origine
             </span>
+          </div>
+
+          <div class="form-group">
+            <label>Description</label>
+            <textarea class="form-input" value=${description}
+              onInput=${e => setDescription(e.target.value)} placeholder="Résumé du test affiché dans la bibliothèque…"></textarea>
           </div>
 
           <div class="form-group">

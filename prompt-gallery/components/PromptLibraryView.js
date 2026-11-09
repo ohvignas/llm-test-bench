@@ -36,11 +36,16 @@ function PromptCard({ prompt, stats, onUse, onRun, onEdit, onRemove, isGeneratin
       `}
       <div
         class=${`library-card-prompt ${expanded ? 'expanded' : ''}`}
+        role="button" tabIndex="0" aria-expanded=${expanded}
         onClick=${() => setExpanded(e => !e)}
+        onKeyDown=${e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(v => !v); } }}
         title=${expanded ? 'Cliquer pour réduire' : 'Cliquer pour développer'}
-      >${prompt.prompt}</div>
-      ${expanded && prompt.notes && html`
-        <div class="library-card-notes"><i class="fa-solid fa-circle-info"></i> ${prompt.notes}</div>
+      >${prompt.description || prompt.prompt}</div>
+      ${expanded && prompt.description && html`
+        <div class="library-card-instruction"><strong>Consigne envoyée au modèle${prompt.originalTitle ? ' (version originale)' : ''}</strong><pre>${prompt.prompt}</pre></div>
+      `}
+      ${expanded && (prompt.notesFr || prompt.notes) && html`
+        <div class="library-card-notes"><i class="fa-solid fa-circle-info"></i> ${prompt.notesFr || prompt.notes}</div>
       `}
       ${(prompt.tags || []).length > 0 && html`
         <div class="gallery-card-tags">
@@ -113,6 +118,8 @@ export function PromptLibraryView({
       const q = search.trim().toLowerCase();
       list = list.filter(p =>
         p.title.toLowerCase().includes(q)
+        || (p.description || '').toLowerCase().includes(q)
+        || (p.originalTitle || '').toLowerCase().includes(q)
         || (p.prompt || '').toLowerCase().includes(q)
         || (p.tags || []).some(t => t.toLowerCase().includes(q))
       );

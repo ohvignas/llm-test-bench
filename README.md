@@ -60,6 +60,16 @@ Dans **Options d’exécution**, les appels OpenRouter utilisent par défaut un 
 
 Les nouvelles tentatives sont désactivées par défaut. Vous pouvez activer des tentatives supplémentaires après une erreur de connexion, mais une réponse vide, un budget épuisé ou un document HTML incomplet ne déclenche jamais une relance automatique. Examinez l’erreur et les mesures avant de relancer manuellement. Les tokens de raisonnement peuvent être facturés même si aucun site n’est produit ([documentation OpenRouter](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens)).
 
+## Bibliothèque de prompts en français
+
+La bibliothèque propose **164 prompts** : 92 de base, 40 avancés, 8 simulations complexes et **24 nouveaux tests « Sites web »**. Ouvrir **Prompts → Sites web** pour les parcourir ; dans **Lots**, choisir cette même série pour les comparer sur plusieurs modèles.
+
+Les 140 fiches d’origine ont un titre, une description et un résumé des points de contrôle en français. Développer une fiche affiche la consigne originale exacte : son texte et ses notes d’évaluation restent conservés pour comparer les résultats historiques. Les noms de dossiers et les identifiants d’origine ne changent pas. Les descriptions personnelles peuvent être modifiées dans le formulaire d’édition.
+
+Les 24 nouveaux prompts sont entièrement en français et couvrent boutiques, portfolios, réservations, tableaux de bord, formulaires, accessibilité, données CSV et outils interactifs. Ils demandent un document HTML autonome, des données fictives et aucun appel réseau. Ils comportent des interactions vérifiables et, lorsque pertinent, des jeux de données avec des résultats numériques attendus. Les points de contrôle sont des critères de vérification ; ils ne constituent pas une nouvelle suite de tests automatiques.
+
+Ces briefs sont originaux. Leur couverture s’inspire des travaux [FrontendBench](https://arxiv.org/abs/2506.13832) et [Vision2Web](https://vision2web-bench.github.io/), sans reproduire les tâches de ces jeux de données ni constituer leur évaluation officielle. Les références figurent aussi dans `prompt-gallery/data/library-web.json`.
+
 ## Changer le port si nécessaire
 
 Le lancement par défaut ne nécessite aucun fichier `.env`. Si le port 8085 est occupé, copier `.env.example` vers `.env` :
@@ -133,7 +143,7 @@ Pour signaler un problème : [ouvrir une issue dans ce fork](https://github.com/
 
 Une personne contrôlant Docker ou les deux volumes peut déchiffrer la clé. Notebook Lab et Algorithm Visualizer exécutent encore du JavaScript avec les privilèges de la page : y utiliser du code de confiance. Les aperçus HTML de Prompt Gallery conservent leur isolation. Les autres fournisseurs gardent les mécanismes de configuration de l'amont ; le coffre ajouté concerne OpenRouter.
 
-Cette configuration n'est pas un service public avec comptes et données séparés. Le pont privé des agents CLI de l'auteur n'est pas inclus. La galerie de sites et les réglages principaux sont en français ; certaines autres applications, les aides et les prompts d'exemple restent en anglais. Consulter [SECURITY.md](SECURITY.md) pour les détails.
+Cette configuration n'est pas un service public avec comptes et données séparés. Le pont privé des agents CLI de l'auteur n'est pas inclus. La galerie de sites et les réglages principaux sont en français ; certaines autres applications, les aides et les consignes originales de certains prompts restent en anglais. Consulter [SECURITY.md](SECURITY.md) pour les détails.
 
 ## Contribuer et crédits
 

@@ -39,6 +39,11 @@ export function slugify(title) {
     .slice(0, 60) || 'untitled';
 }
 
+/** Display translations must not rename folders containing earlier results. */
+export function promptFolderId(prompt) {
+  return prompt?.generationSlug || slugify(prompt?.title);
+}
+
 function normalizeText(text) {
   return String(text || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
@@ -49,6 +54,7 @@ function normalizeText(text) {
 // runs one set at a time and every batch generation records which set it came
 // from. A prompt without `set` is core — that covers the user's own prompts.
 export const PROMPT_SETS = [
+  { id: 'web', label: 'Sites web', icon: 'fa-globe', hint: '24 sites et outils interactifs, avec consignes en français et critères de vérification' },
   { id: 'core', label: 'Base', icon: 'fa-layer-group', hint: 'Les prompts d’origine' },
   { id: 'advanced', label: 'Avancés', icon: 'fa-mountain', hint: 'Sujets plus difficiles : chaque prompt de base est enrichi d’exigences numérotées' },
   { id: 'flagship', label: 'Simulations complexes', icon: 'fa-rocket', hint: 'Grandes simulations graphiques destinées aux modèles les plus puissants' },
@@ -66,6 +72,7 @@ export function promptSetLabel(id) {
 // core prompts.
 const SEED_FILES = [
   { url: './data/library.json', set: 'core' },
+  { url: './data/library-web.json', set: 'web' },
   { url: './data/library-advanced.json', set: 'advanced' },
   { url: './data/library-flagship.json', set: 'flagship' },
 ];
@@ -74,7 +81,7 @@ let seedsCache = null;
 
 export async function loadSeeds() {
   if (seedsCache) return seedsCache;
-  const lists = await Promise.all(SEED_FILES.map(async (file) => {
+  const [lists, french] = await Promise.all([Promise.all(SEED_FILES.map(async (file) => {
     try {
       const res = await fetch(file.url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -84,8 +91,26 @@ export async function loadSeeds() {
       console.warn(`[library] failed to load seed prompts from ${file.url}:`, e?.message || e);
       return [];
     }
-  }));
-  seedsCache = lists.flat();
+  })), (async () => {
+    try {
+      const res = await fetch('./data/library-fr.json');
+      if (!res.ok) return {};
+      return (await res.json()).prompts || {};
+    } catch { return {}; }
+  })()]);
+  seedsCache = lists.flat().map(prompt => {
+    const translated = french[prompt.id];
+    return {
+      ...prompt,
+      generationSlug: slugify(prompt.title),
+      ...(translated ? {
+        originalTitle: prompt.title,
+        title: translated.title,
+        description: translated.description,
+        notesFr: translated.notes,
+      } : {}),
+    };
+  });
   return seedsCache;
 }
 
@@ -123,7 +148,7 @@ export async function getLibrary(rootHandle) {
   for (const seed of seeds) {
     if (user.hiddenSeedIds.includes(seed.id)) continue;
     const override = user.seedOverrides[seed.id];
-    merged.push(override ? { ...seed, ...override, id: seed.id, source: 'curated' } : seed);
+    merged.push(override ? { ...seed, ...override, notesFr: override.notes ?? seed.notesFr, id: seed.id, source: 'curated' } : seed);
   }
   for (const p of user.prompts) {
     merged.push({ ...p, source: 'user' });
@@ -135,7 +160,8 @@ export async function addPrompt(rootHandle, data) {
   const user = await loadUserLibrary(rootHandle);
   const entry = {
     id: `user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-    title: data.title || 'Untitled',
+    title: data.title || 'Sans titre',
+    description: data.description || '',
     category: data.category || 'html-js',
     tags: data.tags || [],
     prompt: data.prompt || '',
@@ -209,7 +235,7 @@ export async function removePrompt(rootHandle, id) {
  * "-2"/"-3" suffix saveGeneration appends when prompts diverge).
  */
 export function statsForPrompt(generations, prompt) {
-  const slug = slugify(prompt.title);
+  const slug = promptFolderId(prompt);
   const matching = (generations || []).filter(g => {
     const folder = g.folderId || g.id;
     if (folder === slug) return true;
