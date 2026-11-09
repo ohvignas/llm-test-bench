@@ -421,6 +421,18 @@ async function streamChatCompletionRaw({ modelId, messages, tools, appTitle, onC
   return response;
 }
 
+// Empty, completed answers must not silently trigger another paid attempt.
+function requireCompletionContent(content, stats) {
+  if (content.trim()) return;
+  const exhausted = stats.finishReason === 'length';
+  const detail = stats.reasoningTokens != null ? ` (${stats.reasoningTokens} tokens de raisonnement)` : '';
+  const error = new Error(exhausted
+    ? `Budget de sortie épuisé sans contenu${detail}. Réduisez le raisonnement ou augmentez le budget total avant de relancer manuellement.`
+    : 'Le modèle a terminé sans renvoyer de contenu. Aucun nouvel appel automatique.');
+  Object.assign(error, { code: exhausted ? 'OUTPUT_TOKEN_LIMIT' : 'EMPTY_RESPONSE', retryable: false, stats });
+  throw error;
+}
+
 // ── Generic streaming chat completion ──
 
 async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onChunk, params, onStats, telemetry, signal }) {
@@ -509,19 +521,21 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
     } finally {
       try { await reader.cancel(); } catch { /* already closed */ }
     }
-    onStats?.(stats.finish());
+    const resultStats = stats.finish();
+    onStats?.(resultStats);
+    requireCompletionContent(full, resultStats);
     return full;
   }
 
   // Non-streaming response
   const data = await res.json();
   const content = data.choices?.[0]?.message?.content || '';
-  if (onStats || telemetry) {
-    if (data.choices?.[0]?.message?.reasoning) stats.markReasoning();
-    stats.setFinishReason(data.choices?.[0]?.finish_reason);
-    stats.setUsage(data.usage);
-    onStats?.(stats.finish());
-  }
+  if (data.choices?.[0]?.message?.reasoning) stats.markReasoning();
+  stats.setFinishReason(data.choices?.[0]?.finish_reason);
+  stats.setUsage(data.usage);
+  const resultStats = stats.finish();
+  onStats?.(resultStats);
+  requireCompletionContent(content, resultStats);
   return content;
 }
 

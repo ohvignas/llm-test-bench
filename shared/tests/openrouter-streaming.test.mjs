@@ -70,3 +70,13 @@ test('reasoning is observed before HTML without inserting private reasoning into
   assert.equal(await pending,'<html>ok</html>');
   assert.deepEqual(chunks,['<html>ok</html>']);
 });
+
+test('a reasoning-only exhausted stream reports the token budget and disables automatic retry',async()=>{
+  globalThis.fetch=async()=>new Response('data: {"choices":[{"delta":{},"finish_reason":"length"}],"usage":{"completion_tokens":65536,"completion_tokens_details":{"reasoning_tokens":65536}}}\n\ndata: [DONE]\n\n');
+  await assert.rejects(raw.streamChat(args),error=>error.code==='OUTPUT_TOKEN_LIMIT'&&error.retryable===false&&error.message.includes('65536'));
+});
+
+test('a non-streamed exhausted answer reports the same failure instead of returning an empty success',async()=>{
+  globalThis.fetch=async()=>Response.json({choices:[{message:{content:''},finish_reason:'length'}],usage:{completion_tokens:65536,completion_tokens_details:{reasoning_tokens:65536}}});
+  await assert.rejects(raw.streamChat({...args,onChunk:null}),error=>error.code==='OUTPUT_TOKEN_LIMIT'&&error.retryable===false);
+});

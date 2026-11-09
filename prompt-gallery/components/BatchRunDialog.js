@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'preact/hooks'
 import { ExecutorModelSelector } from '../../shared/components/ExecutorModelSelector.js';
 import { CellEditor } from '../../shared/components/CellEditor.js';
 import { HtmlLightbox } from './BatchReview.js';
+import { DEFAULT_HTML_BUDGET, htmlGenerationParams } from '../services/generationBudget.js';
 import { runBatch } from '../services/batchRunner.js';
 import { getInFlight, subscribeInFlight } from '../../shared/services/generation-telemetry.js';
 import { batchLiveStatus, batchItemRunning } from '../services/batchLiveProgress.js';
@@ -106,7 +107,9 @@ export function BatchRunDialog({
   const [maxRepairRounds, setMaxRepairRounds] = useState(1);
   const [saveBothOnHeal] = useState(true); // per product decision: always keep original + healed
   const [skipExisting, setSkipExisting] = useState(false);
-  const [apiRetries, setApiRetries] = useState(1);
+  const [apiRetries, setApiRetries] = useState(0);
+  const [totalTokens, setTotalTokens] = useState(DEFAULT_HTML_BUDGET.totalTokens);
+  const [reasoningTokens, setReasoningTokens] = useState(DEFAULT_HTML_BUDGET.reasoningTokens);
   const [delaySec, setDelaySec] = useState(0);
   const [showLiveOutput, setShowLiveOutput] = useState(true);
   // Several models in one launch: empty means "just the model picked above".
@@ -299,7 +302,11 @@ export function BatchRunDialog({
     const list = setPrompts.filter(p => selectedIds.has(p.id));
     if (list.length === 0) { addToast('Sélectionnez au moins un prompt', 'error'); return; }
 
-    const plan = planBatchLanes({ prompts: list, models: runModels, runId });
+    const generationBudget = { totalTokens, reasoningTokens };
+    try {
+      htmlGenerationParams({ providerType: 'openrouter', modelId: 'anthropic/validation', budget: generationBudget });
+    } catch (error) { addToast(error.message, 'error'); return; }
+    const plan = planBatchLanes({ prompts: list, models: runModels.map(m => ({ ...m, generationBudget })), runId });
     setRunList(plan.runList);
     setItems(plan.runList.map(() => ({ status: 'queued' })));
     setOutputs(showLiveOutput ? plan.runList.map(() => '') : []);
@@ -374,7 +381,7 @@ export function BatchRunDialog({
       setPhase('done');
     }
   }, [canRun, hasDirectory, setPrompts, selectedIds, runModels, laneMode, mode, healAttempts, maxRepairRounds, saveBothOnHeal,
-      skipExisting, delaySec, apiRetries, showLiveOutput, runId, deps, handleEvent, waitAtPauseBoundary, addToast]);
+      skipExisting, delaySec, apiRetries, totalTokens, reasoningTokens, showLiveOutput, runId, deps, handleEvent, waitAtPauseBoundary, addToast]);
 
   const pause = useCallback(() => {
     if (pauseRequestedRef.current || stopRef.current) return;
@@ -668,11 +675,23 @@ export function BatchRunDialog({
             <span class="batch-opt-hint">Désactiver pour réduire la mémoire utilisée lors des grands lots.</span>
           </label>
           <label class="batch-opt">
-            <span>Réessayer en cas d’échec de l’API</span>
+            <span>Nouvelles tentatives après erreur de connexion</span>
             <select class="form-input batch-num" value=${apiRetries} onChange=${(e) => setApiRetries(Number(e.target.value))}>
               ${[0, 1, 2, 3].map(n => html`<option key=${n} value=${n}>${n}</option>`)}
             </select>
           </label>
+          <div class="batch-opt-hint">Les nouvelles tentatives sont désactivées par défaut. Une réponse vide ou incomplète ne sera jamais relancée automatiquement.</div>
+          <label class="batch-opt">
+            <span>Budget total OpenRouter par réponse (tokens)</span>
+            <input class="form-input" style=${{ width: '110px' }} type="number" min="2048" max="200000" step="1"
+              value=${totalTokens} onChange=${e => setTotalTokens(Number(e.target.value))} />
+          </label>
+          <label class="batch-opt">
+            <span>Dont raisonnement Claude (tokens)</span>
+            <input class="form-input" style=${{ width: '110px' }} type="number" min="1024" max=${totalTokens - 1} step="1"
+              value=${reasoningTokens} onChange=${e => setReasoningTokens(Number(e.target.value))} />
+          </label>
+          <div class="batch-opt-hint">Le total comprend le raisonnement et le code généré. Limites par appel, appliquées uniquement à OpenRouter ; le raisonnement séparé concerne Claude. Les modèles peuvent appliquer leurs propres contraintes. Ce n’est pas un plafond de coût du lot.</div>
           <label class="batch-opt">
             <span>Délai entre les prompts</span>
             <input class="form-input batch-num" type="number" min="0" max="120" step="1"

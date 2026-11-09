@@ -3,7 +3,8 @@
 // Keeps backward compat exports for OpenRouter API key management
 
 import { getApiKey, saveApiKey, hasApiKey } from '../../shared/services/providers-openrouter.js';
-import { streamChat } from '../../shared/services/model-providers.js';
+import { streamChat, getProvider } from '../../shared/services/model-providers.js';
+import { htmlGenerationParams } from './generationBudget.js';
 import { streamHtmlDocument } from './htmlOutput.js';
 import { PROMPT_GALLERY_CHAT_AGENT_BUDGETS } from './codingAgent.js';
 
@@ -36,7 +37,7 @@ export async function generateHtml(prompt, providerId, modelId, onChunk, onStats
     appTitle: 'Prompt Gallery',
     onChunk,
     onStats,
-    params,
+    params: htmlGenerationParams({ providerType: getProvider(providerId)?.type, modelId, params }),
     signal,
     agentBudgets: PROMPT_GALLERY_CHAT_AGENT_BUDGETS,
   });

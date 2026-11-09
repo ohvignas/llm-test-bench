@@ -56,6 +56,10 @@ Les métriques dépendent des informations transmises par le modèle ou le fourn
 
 Pendant le lot, chaque ligne indique la phase de son modèle, notamment le raisonnement avant l'arrivée du HTML. Sélectionner une ligne change l'aperçu et le flux de code affichés ; les autres modèles continuent en parallèle. Pour voir les rendus côte à côte, ouvrir **Comparer** après leur enregistrement et sélectionner deux à quatre générations.
 
+Dans **Options d’exécution**, les appels OpenRouter utilisent par défaut un budget total de **32768 tokens par réponse**, dont **4096 tokens de raisonnement pour Claude**. Ces deux limites sont réglables pour les lots. Le raisonnement et le code consomment le même budget total ; ces limites ne constituent pas un plafond monétaire du lot. Les modèles peuvent imposer d’autres contraintes. Les générations simples utilisent les mêmes valeurs par défaut.
+
+Les nouvelles tentatives sont désactivées par défaut. Vous pouvez activer des tentatives supplémentaires après une erreur de connexion, mais une réponse vide, un budget épuisé ou un document HTML incomplet ne déclenche jamais une relance automatique. Examinez l’erreur et les mesures avant de relancer manuellement. Les tokens de raisonnement peuvent être facturés même si aucun site n’est produit ([documentation OpenRouter](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens)).
+
 ## Changer le port si nécessaire
 
 Le lancement par défaut ne nécessite aucun fichier `.env`. Si le port 8085 est occupé, copier `.env.example` vers `.env` :

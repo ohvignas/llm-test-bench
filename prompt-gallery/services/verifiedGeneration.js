@@ -105,6 +105,7 @@ export async function runVerifiedGeneration({ promptItem, model, options, deps, 
         });
         emit({ type: 'retry', role, attempt, message: error?.message || String(error) });
         if (checkStop(`${role}_error`)) return { stopped: true };
+        if (error?.retryable === false || error?.name === 'AbortError') break;
       }
     }
     throw lastError || new Error(`${role} failed`);

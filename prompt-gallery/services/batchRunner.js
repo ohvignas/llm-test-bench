@@ -197,12 +197,13 @@ export async function runBatch({ prompts, model, options, deps, onEvent, shouldS
         });
         genError = null;
         if (genHtml && genHtml.trim()) break;
-        genError = new Error('Model returned an empty response');
+        genError = Object.assign(new Error('Le modèle a terminé sans contenu. Aucun nouvel appel automatique.'), { code: 'EMPTY_RESPONSE', retryable: false });
       } catch (e) {
         genError = e;
       }
       if (genError) {
         emit({ type: 'log', index: i, message: `Generation attempt ${attempt + 1} failed: ${genError.message}` });
+        if (genError.retryable === false || genError.name === 'AbortError') break;
         if (attempt < opts.apiRetries && !stop()) await interruptibleDelay(1000 * (attempt + 1), stop, pause);
       }
     }

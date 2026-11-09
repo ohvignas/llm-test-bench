@@ -6,6 +6,10 @@ Give several AI models the same prompt, run generations in parallel, preview the
 
 During a batch, each row shows its model's live phase, including reasoning before HTML arrives. Select a row to switch the single preview and HTML stream; other models continue in parallel. After saving, use **Comparer** to view two to four generations side by side.
 
+OpenRouter HTML requests default to **32768 total output tokens per response**, with a **4096-token reasoning budget for Claude**. Both limits can be changed in the batch execution options. Reasoning and code share the total token budget; these limits are not a monetary cap for the batch. Models may impose additional constraints. Single-page generation uses the same defaults.
+
+Automatic retries default to zero. Optional connection retries never repeat an empty answer, an exhausted output budget or incomplete HTML. Check the error and usage before manually launching another attempt. Reasoning tokens may be billed even when no page is produced ([OpenRouter documentation](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens)).
+
 This MIT-licensed fork of [Techdread/llm-test-bench](https://github.com/Techdread/llm-test-bench) adds local sign-in, an encrypted server-side OpenRouter vault, persistent Docker storage and a French main interface. Everyone can install their own copy with their own credentials and key. Each installation has **one administrator account**; this is not an isolated multi-user hosted service.
 
 ## Requirements

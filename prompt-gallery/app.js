@@ -12,6 +12,7 @@ import { PromptLibraryView } from './components/PromptLibraryView.js';
 import { PromptFormDialog } from './components/PromptFormDialog.js';
 import { ImportPromptsDialog } from './components/ImportPromptsDialog.js';
 import { RefineView } from './components/RefineView.js';
+import { htmlGenerationParams } from './services/generationBudget.js';
 import { BatchRunDialog } from './components/BatchRunDialog.js';
 import { runHtmlSandbox, runStatusLabel } from './services/sandboxRunner.js';
 import { addConsoleEntry, consoleCounts, mergePreviewErrors } from './services/previewConsole.js';
@@ -1266,7 +1267,7 @@ function App() {
     modelId: mdl?.modelId || '',
     params: mdl?.backend === 'agent'
       ? { reasoning_effort: getAgentModelEffort(mdl.agentId, mdl.agentModelId) }
-      : undefined,
+      : htmlGenerationParams({ providerType: modelProviders.getProvider(mdl?.providerId)?.type, modelId: mdl?.modelId, budget: mdl?.generationBudget }),
   }), [batchModel]);
 
   // Injected operations the batch runner drives. Rebuilt when the model,

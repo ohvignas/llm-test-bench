@@ -31,7 +31,7 @@ export async function streamHtmlDocument(stream, { onChunk, ...options }) {
     });
     const document = extractHtmlDocument(typeof result === 'string' ? result : accumulated);
     if (!document || !/<html(?:\s|>)/i.test(document) || !/<\/html\s*>\s*$/i.test(document)) {
-      throw new Error('Generation did not return a complete HTML document. Progress messages and error text cannot be saved as a page.');
+      throw Object.assign(new Error('Le modèle n’a pas renvoyé de document HTML complet. Aucun nouvel appel automatique ; vérifiez le budget avant de relancer.'), { code: 'INCOMPLETE_HTML', retryable: false });
     }
     onChunk?.(document);
     return document;
