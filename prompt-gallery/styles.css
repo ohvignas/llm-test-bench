@@ -3028,3 +3028,10 @@ button.create-run-label:hover { text-decoration: underline; }
 .batch-log-empty { padding:12px; color:var(--text-muted); font-size:12px; }
 .batch-generation-log.is-finished { max-height:380px; margin-top:12px; }
 @media(max-width:800px) { .batch-generation-log { min-height:330px; } .batch-log-head select { max-width:170px; } }
+
+.batch-prompt-search { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
+.batch-prompt-search > label { font-size:12px; color:var(--text-secondary); }
+.batch-prompt-search-input { display:flex; align-items:center; gap:8px; }
+.batch-prompt-search-input input { min-width:0; flex:1; }
+.batch-search-summary { font-size:12px; color:var(--text-secondary); }
+.batch-empty .btn { margin:8px 6px 0 0; }

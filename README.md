@@ -47,7 +47,7 @@ La clé est chiffrée côté serveur et n'est jamais réaffichée par une route 
 
 ### Comparer deux modèles
 
-1. Ouvrir **Lots** et sélectionner le prompt à tester.
+1. Ouvrir **Lots** et sélectionner le prompt à tester. La barre **Rechercher un prompt** filtre les titres français, les noms d’origine, les descriptions et les étiquettes. Sans résultat dans la série choisie, des raccourcis proposent les autres séries correspondantes. Seuls les résultats cochés et affichés sont lancés ; **Tous** et **Aucun** agissent sur ces résultats.
 2. Sélectionner chaque modèle et l'ajouter à la liste des modèles à exécuter.
 3. Choisir **Simultanément**, puis lancer.
 4. Retrouver les résultats sauvegardés dans **Exécutions**, **Galerie** et **Comparer**.

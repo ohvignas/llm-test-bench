@@ -120,6 +120,7 @@ export function PromptLibraryView({
         p.title.toLowerCase().includes(q)
         || (p.description || '').toLowerCase().includes(q)
         || (p.originalTitle || '').toLowerCase().includes(q)
+        || (p.aliases || []).some(alias => alias.toLowerCase().includes(q))
         || (p.prompt || '').toLowerCase().includes(q)
         || (p.tags || []).some(t => t.toLowerCase().includes(q))
       );

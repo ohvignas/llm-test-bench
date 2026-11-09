@@ -108,6 +108,7 @@ export async function loadSeeds() {
         title: translated.title,
         description: translated.description,
         notesFr: translated.notes,
+        aliases: translated.aliases || prompt.aliases || [],
       } : {}),
     };
   });

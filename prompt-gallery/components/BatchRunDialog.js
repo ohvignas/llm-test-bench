@@ -7,6 +7,7 @@ import { BatchGenerationLog } from './BatchGenerationLog.js';
 import { createBatchJournal, logModelKey } from '../services/batchGenerationLog.js';
 import { HtmlLightbox } from './BatchReview.js';
 import { DEFAULT_HTML_BUDGET, htmlGenerationParams } from '../services/generationBudget.js';
+import { batchPromptChoices } from '../services/batchPromptSearch.js';
 import { runBatch } from '../services/batchRunner.js';
 import { getInFlight, subscribeInFlight } from '../../shared/services/generation-telemetry.js';
 import { batchLiveStatus, batchItemRunning } from '../services/batchLiveProgress.js';
@@ -105,6 +106,7 @@ export function BatchRunDialog({
   // One prompt set at a time. Ticks are remembered per prompt, but only the set
   // on screen is counted or run, so Core and Advanced never get lumped together.
   const [promptSet, setPromptSet] = useState('core');
+  const [promptSearch, setPromptSearch] = useState('');
   const availableSets = useMemo(
     () => PROMPT_SETS
       .map(s => ({ ...s, count: prompts.filter(p => promptSetOf(p) === s.id).length }))
@@ -113,6 +115,10 @@ export function BatchRunDialog({
   );
   const setPrompts = useMemo(() => prompts.filter(p => promptSetOf(p) === promptSet), [prompts, promptSet]);
   const activeSetMeta = availableSets.find(s => s.id === promptSet);
+  const promptChoices = useMemo(() => batchPromptChoices({prompts,setId:promptSet,query:promptSearch,selectedIds}),
+    [prompts,promptSet,promptSearch,selectedIds]);
+  const visiblePrompts = promptChoices.visible;
+  const selectedPrompts = promptChoices.selected;
 
   // Options
   const [mode, setMode] = useState('quick');
@@ -173,18 +179,18 @@ export function BatchRunDialog({
   const isMulti = runModels.length > 1;
   const canRun = runModels.length > 0;
   const selectedInList = hasModel && batchModels.some(m => batchModelKey(m) === batchModelKey(model));
-  const selectedCount = setPrompts.filter(p => selectedIds.has(p.id)).length;
+  const selectedCount = selectedPrompts.length;
 
   const alreadyRunCount = useMemo(() => {
     let n = 0;
     for (const m of runModels) {
-      for (const p of setPrompts) {
+      for (const p of visiblePrompts) {
         if (!selectedIds.has(p.id)) continue;
         try { if (deps.hasExistingForModel?.(p, m)) n++; } catch (e) { /* ignore */ }
       }
     }
     return n;
-  }, [setPrompts, selectedIds, runModels, deps]);
+  }, [visiblePrompts, selectedIds, runModels, deps]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -205,14 +211,14 @@ export function BatchRunDialog({
   // All / None touch only the set on screen.
   const selectAll = useCallback(() => setSelectedIds(prev => {
     const next = new Set(prev);
-    for (const p of setPrompts) next.add(p.id);
+    for (const p of visiblePrompts) next.add(p.id);
     return next;
-  }), [setPrompts]);
+  }), [visiblePrompts]);
   const selectNone = useCallback(() => setSelectedIds(prev => {
     const next = new Set(prev);
-    for (const p of setPrompts) next.delete(p.id);
+    for (const p of visiblePrompts) next.delete(p.id);
     return next;
-  }), [setPrompts]);
+  }), [visiblePrompts]);
 
   useEffect(() => {
     if (phase !== 'running') return;
@@ -320,7 +326,7 @@ export function BatchRunDialog({
   const start = useCallback(async () => {
     if (!canRun) { addToast('Sélectionnez d’abord un modèle', 'error'); return; }
     if (!hasDirectory) { addToast('Connectez d’abord un dossier : les générations y seront enregistrées', 'error'); return; }
-    const list = setPrompts.filter(p => selectedIds.has(p.id));
+    const list = selectedPrompts;
     if (list.length === 0) { addToast('Sélectionnez au moins un prompt', 'error'); return; }
 
     const generationBudget = { totalTokens, reasoningTokens };
@@ -411,7 +417,7 @@ export function BatchRunDialog({
       setActiveIndex(-1);
       setPhase('done');
     }
-  }, [canRun, hasDirectory, setPrompts, selectedIds, runModels, laneMode, mode, healAttempts, maxRepairRounds, saveBothOnHeal,
+  }, [canRun, hasDirectory, selectedPrompts, runModels, laneMode, mode, healAttempts, maxRepairRounds, saveBothOnHeal,
       skipExisting, delaySec, apiRetries, totalTokens, reasoningTokens, showLiveOutput, runId, deps, handleEvent, waitAtPauseBoundary, addToast]);
 
   const pause = useCallback(() => {
@@ -626,10 +632,10 @@ export function BatchRunDialog({
 
       <div class="batch-section">
         <div class="batch-section-head">
-          <span><i class="fa-solid fa-list-check"></i> Prompts (${selectedCount}/${setPrompts.length})</span>
+          <span><i class="fa-solid fa-list-check"></i> Prompts (${selectedCount}/${visiblePrompts.length})</span>
           <span class="batch-select-actions">
-            <button class="btn btn-xs" onClick=${selectAll} title="Sélectionner tous les prompts de cette série">Tous</button>
-            <button class="btn btn-xs" onClick=${selectNone} title="Désélectionner tous les prompts de cette série">Aucun</button>
+            <button class="btn btn-xs" onClick=${selectAll} title="Sélectionner tous les prompts affichés">Tous</button>
+            <button class="btn btn-xs" onClick=${selectNone} title="Désélectionner tous les prompts affichés">Aucun</button>
           </span>
         </div>
         ${availableSets.length > 1 && html`
@@ -647,10 +653,23 @@ export function BatchRunDialog({
             ${activeSetMeta?.hint && html`<span class="batch-set-hint">${activeSetMeta.hint}. Seule cette série sera exécutée.</span>`}
           </div>
         `}
+        <div class="batch-prompt-search">
+          <label for="batch-prompt-search">Rechercher un prompt</label>
+          <div class="batch-prompt-search-input">
+            <input id="batch-prompt-search" class="form-input" type="search" value=${promptSearch} maxLength="200"
+              placeholder="Titre, nom d’origine, description ou étiquette…" onInput=${e => setPromptSearch(e.target.value)} />
+            ${promptSearch && html`<button class="btn btn-sm" onClick=${() => setPromptSearch('')}>Effacer la recherche</button>`}
+          </div>
+          ${promptSearch.trim() && html`<div class="batch-search-summary" role="status">${visiblePrompts.length} résultat(s) dans ${activeSetMeta?.label || 'cette série'}, sur ${setPrompts.length} prompts. Seuls les résultats cochés seront lancés.</div>`}
+        </div>
         <div class="batch-prompt-list">
-          ${setPrompts.length === 0
-            ? html`<div class="batch-empty">Aucun prompt à exécuter dans cette série.</div>`
-            : setPrompts.map(p => html`
+          ${visiblePrompts.length === 0
+            ? html`<div class="batch-empty">${promptSearch.trim() ? 'Aucun résultat dans cette série.' : 'Aucun prompt à exécuter dans cette série.'}
+                ${promptSearch.trim() && availableSets.filter(s => s.id !== promptSet && promptChoices.matchingSets[s.id]).map(s => html`
+                  <button key=${s.id} class="btn btn-sm" onClick=${() => setPromptSet(s.id)}>Voir ${promptChoices.matchingSets[s.id]} résultat(s) dans ${s.label}</button>
+                `)}
+              </div>`
+            : visiblePrompts.map(p => html`
               <label class="batch-prompt-row" key=${p.id}>
                 <input type="checkbox" checked=${selectedIds.has(p.id)} onChange=${() => toggleOne(p.id)} />
                 <span class="batch-prompt-title" title=${p.title}>${p.title}</span>
