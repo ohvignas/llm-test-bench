@@ -1,3 +1,4 @@
+import {secureMode,secureFetch} from './secure-session.js';
 // Prevent accidental repeat billing after a failed Prompt Gallery request.
 // Only SHA-256 fingerprints are persisted: no prompts, responses or credentials.
 const KEY='prompt-gallery-failed-calls-v1';
@@ -36,4 +37,10 @@ export function createSpendGuard(storage) {
 }
 let defaultGuard;
 export function generationSpendGuard(){return defaultGuard??=createSpendGuard(globalThis.localStorage);}
-export function clearFailedGenerationBlocks(){generationSpendGuard().clear();}
+export async function clearFailedGenerationBlocks(){
+ if(secureMode()){
+  const response=await secureFetch('/api/openrouter/retry-blocks',{method:'DELETE'});
+  if(!response.ok)throw new Error('Impossible de réinitialiser les blocages du serveur.');
+ }
+ generationSpendGuard().clear();
+}

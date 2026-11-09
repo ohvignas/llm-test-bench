@@ -265,6 +265,65 @@ class SecurityTests(unittest.TestCase):
         self.assertEqual(typical['total']['p50'], 1000)
         self.assertEqual(typical['costUsd']['p50'], .01)
 
+    def test_paid_failure_is_blocked_on_server_even_from_another_tab(self):
+        self.setup()
+        self.client.put('/api/settings/key', headers=self.headers, json={'key': 'dummy-key'})
+        upstream = Mock(status_code=200)
+        upstream.iter_content.return_value = [b'data: {"choices":[{"delta":{},"finish_reason":"length"}],"usage":{"cost":0.65934}}\n\ndata: [DONE]\n\n']
+        payload = {'model': 'dummy/model', 'messages': [{'role': 'user', 'content': 'private prompt'}], 'stream': True, 'max_tokens': 32768}
+        with patch('server.proxy.requests.request', return_value=upstream) as call:
+            first = self.client.post('/api/openrouter/chat/completions', headers=self.headers, json=payload)
+            self.assertIn(b'0.65934', first.data)
+            first.close()
+            retry = self.client.post('/api/openrouter/chat/completions', headers=self.headers, json={**payload, 'max_tokens': 128000})
+            self.assertEqual(retry.status_code, 409)
+            self.assertEqual(call.call_count, 1)
+            self.assertEqual(self.client.delete('/api/openrouter/retry-blocks').status_code, 403)
+            self.assertEqual(self.client.delete('/api/openrouter/retry-blocks', headers=self.headers).status_code, 200)
+            second = self.client.post('/api/openrouter/chat/completions', headers=self.headers, json=payload)
+            second.data
+            second.close()
+            self.assertEqual(call.call_count, 2)
+        with sqlite3.connect(self.root / 'data' / 'app.sqlite3') as connection:
+            self.assertNotIn('private prompt', str(connection.execute('SELECT * FROM generation_guard').fetchall()))
+
+    def test_successful_proxy_request_releases_server_retry_block(self):
+        self.setup()
+        self.client.put('/api/settings/key', headers=self.headers, json={'key': 'dummy-key'})
+        payload = {'model': 'dummy/model', 'messages': [{'role': 'user', 'content': 'page'}], 'stream': False}
+        upstream = Mock(status_code=200)
+        upstream.json.return_value = {'choices': [{'message': {'content': '<html>ok</html>'}, 'finish_reason': 'stop'}]}
+        with patch('server.proxy.requests.request', return_value=upstream) as call:
+            for _ in range(2):
+                response = self.client.post('/api/openrouter/chat/completions', headers=self.headers, json=payload)
+                self.assertEqual(response.status_code, 200)
+            self.assertEqual(call.call_count, 2)
+
+
+    def test_reservation_is_atomic_and_reset_does_not_unlock_an_active_call(self):
+        from server.spend_guard import reserve, clear_failed, finish
+        payload = {'model': 'dummy/model', 'messages': [{'role': 'user', 'content': 'page'}]}
+        with self.app.app_context():
+            identity = reserve(payload)
+            self.assertIsNotNone(identity)
+            self.assertIsNone(reserve(payload))
+            clear_failed()
+            self.assertIsNone(reserve(payload))
+            finish(identity, False)
+            clear_failed()
+            self.assertIsNotNone(reserve(payload))
+
+    def test_reset_recovers_an_interrupted_call_from_a_dead_worker(self):
+        from server.spend_guard import reserve, clear_failed
+        from server.storage import db
+        payload = {'model': 'dummy/model', 'messages': []}
+        with self.app.app_context():
+            identity = reserve(payload)
+            db().execute("UPDATE generation_guard SET state='pending:999999999:0' WHERE fingerprint=?", (identity,))
+            db().commit()
+            clear_failed()
+            self.assertIsNotNone(reserve(payload))
+
 
 if __name__ == '__main__':
     unittest.main()

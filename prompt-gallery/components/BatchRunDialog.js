@@ -807,8 +807,8 @@ export function BatchRunDialog({
           </label>
           <div class="batch-opt-hint">Les nouvelles tentatives sont désactivées par défaut. Une réponse vide ou incomplète ne sera jamais relancée automatiquement.</div>
           <label class="batch-opt"><input type="checkbox" checked=${spendProtection} onChange=${e=>setSpendProtection(e.target.checked)}/><span>Protection des dépenses : un appel à la fois, arrêt au premier échec, aucune nouvelle tentative automatique</span></label>
-          <p class="batch-opt-hint">Un appel interrompu, vide ou filtré peut rester facturé. Les coûts affichés viennent de l’API. Les relances identiques après un échec sont bloquées dans ce navigateur, même après actualisation.</p>
-          <button class="btn btn-sm" onClick=${()=>{try{clearFailedGenerationBlocks();addToast('Relances autorisées : un nouvel appel pourra être facturé.','info');}catch(error){addToast(error.message,'error');}}}>Autoriser les relances après échec (nouveau coût possible)</button>
+          <p class="batch-opt-hint">Un appel interrompu, vide ou filtré peut rester facturé. Les coûts affichés viennent de l’API. Les relances après un échec sont bloquées dans ce navigateur et dans le serveur local, même après actualisation.</p>
+          <button class="btn btn-sm" onClick=${async()=>{try{await clearFailedGenerationBlocks();addToast('Relances autorisées : un nouvel appel pourra être facturé.','info');}catch(error){addToast(error.message,'error');}}}>Autoriser les relances après échec (nouveau coût possible)</button>
           <label class="batch-opt"><span>Adaptation aux capacités API</span>
             <select class="form-input" value=${settingsProfile} onChange=${e=>{setSettingsProfile(e.target.value);setSettingsOverrides({});}}>
               <option value="maximum">Effort maximal — risque de coût élevé</option><option value="code">Génération de code — raisonnement réduit</option><option value="manual">Budget personnalisé — plafonné par l’API</option>

@@ -7,6 +7,7 @@ import requests
 
 from .auth import json_object
 from .storage import api_key
+from .spend_guard import reserve, finish, clear_failed
 
 proxy = Blueprint('proxy', __name__)
 UPSTREAM = 'https://openrouter.ai/api/v1'
@@ -22,6 +23,9 @@ def relay():
     payload = json_object() if chat else None
     if chat and (not isinstance(payload.get('model'), str) or not isinstance(payload.get('messages'), list)):
         abort(400, description='Un modèle et une liste de messages sont requis.')
+    identity = reserve(payload) if chat else None
+    if chat and identity is None:
+        abort(409, description='Appel bloqué : ce prompt et ce modèle sont déjà en cours ou ont échoué. Aucun nouvel appel envoyé. Modifiez le prompt, ou autorisez volontairement les relances dans les options du lot.')
     stream = bool(chat and payload.get('stream'))
     headers = {'Accept': 'text/event-stream' if stream else 'application/json',
                'Content-Type': 'application/json'}
@@ -33,8 +37,12 @@ def relay():
                                     headers=headers, json=payload, stream=stream,
                                     timeout=(10, 180), allow_redirects=False)
     except requests.RequestException:
+        if identity:
+            finish(identity, False)
         abort(502, description='OpenRouter est injoignable. Réessayez plus tard.')
     if not 200 <= upstream.status_code < 300:
+        if identity:
+            finish(identity, False)
         status = upstream.status_code
         try:
             error_body = upstream.json()
@@ -56,6 +64,23 @@ def relay():
         return response
     if stream:
         def chunks():
+            received = False
+            stop_reason = None
+            failed = False
+            def observe(line):
+                nonlocal received, stop_reason, failed
+                if not line.startswith(b'data:'):
+                    return
+                try:
+                    event = json.loads(line[5:])
+                except (ValueError, TypeError):
+                    return
+                if not isinstance(event, dict):
+                    return
+                failed = failed or bool(event.get('error'))
+                for choice in event.get('choices', []):
+                    received = received or bool((choice.get('delta') or {}).get('content'))
+                    stop_reason = choice.get('finish_reason') or stop_reason
             try:
                 # Reassemble lines before redaction so credentials split across chunks
                 # cannot leak through a malicious or broken upstream error response.
@@ -64,26 +89,43 @@ def relay():
                     buffer += chunk
                     while b'\n' in buffer:
                         line, buffer = buffer.split(b'\n', 1)
+                        observe(line)
                         yield (line.replace(key.encode(), b'[redacted]') if key else line) + b'\n'
                     if len(buffer) > 4 * 1024 * 1024:
                         yield b'data: {"error":"Flux OpenRouter trop volumineux."}\n\n'
                         return
                 if buffer:
+                    observe(buffer)
                     yield buffer.replace(key.encode(), b'[redacted]') if key else buffer
             except requests.RequestException:
                 yield b'data: {"error":"Connexion OpenRouter interrompue."}\n\n'
             finally:
                 upstream.close()
+                finish(identity, not failed and ((received and stop_reason == 'stop') or stop_reason == 'tool_calls'))
         return Response(stream_with_context(chunks()), mimetype='text/event-stream',
                         headers={'X-Accel-Buffering': 'no', 'Cache-Control': 'no-store'})
     try:
         result = upstream.json()
         # Normally the service never echoes credentials; enforce this at our boundary.
+        if identity:
+            choices = result.get('choices', []) if isinstance(result, dict) else []
+            successful = bool(choices) and all(choice.get('finish_reason') in ('stop', 'tool_calls') and
+                bool((choice.get('message') or {}).get('content') or (choice.get('message') or {}).get('tool_calls')) for choice in choices)
+            finish(identity, successful)
         encoded = json.dumps(result, ensure_ascii=False)
         if key:
             encoded = encoded.replace(key, '[redacted]')
         return Response(encoded, mimetype='application/json')
     except (ValueError, TypeError):
+        if identity:
+            finish(identity, False)
         abort(502, description='Réponse OpenRouter illisible.')
     finally:
         upstream.close()
+
+
+@proxy.delete('/api/openrouter/retry-blocks')
+def clear_retry_blocks():
+    # The application boundary enforces authentication, Origin and CSRF.
+    clear_failed()
+    return jsonify({'ok': True})
