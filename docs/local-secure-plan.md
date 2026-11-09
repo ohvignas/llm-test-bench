@@ -8,6 +8,6 @@ Objectif : satisfaire la demande dans docs/local-secure-design.md, puis lancer D
 4. [x] Français : traduire les contrôles des écrans principaux sans modifier prompts ni code ; vérifier syntaxe et comportement.
 5. [x] Docker : image non privilégiée, volumes données/secrets, publication loopback, healthcheck ; construire et lancer.
 6. [x] Revue : examiner sécurité et intégration, corriger les problèmes concrets ; vérifier connexion, clé fictive, session, stockage et redémarrage sur instance jetable.
-7. [ ] Livrer : documentation française, commit et push dans le fork, instance finale disponible sans compte de test, rapport concis des limites.
+7. [x] Livrer : documentation française, commit et push dans le fork, instance finale disponible sans compte de test, rapport concis des limites.
 
 Vérification : 18 tests serveur et 25 tests JavaScript réussis, 54 fichiers JS analysés. Revue indépendante : deux défauts P2 corrigés et revérifiés. Image Docker saine. Recréation du conteneur de test avec volumes : compte, session, clé fictive et projet conservés.
