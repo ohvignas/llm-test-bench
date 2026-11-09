@@ -47,7 +47,7 @@ La clé est chiffrée côté serveur et n'est jamais réaffichée par une route 
 
 ### Comparer deux modèles
 
-1. Ouvrir **Lots** et sélectionner le prompt à tester. La barre **Rechercher un prompt** filtre les titres français, les noms d’origine, les descriptions et les étiquettes. Sans résultat dans la série choisie, des raccourcis proposent les autres séries correspondantes. Seuls les résultats cochés et affichés sont lancés ; **Tous** et **Aucun** agissent sur ces résultats.
+1. Ouvrir **Lots** et sélectionner le prompt à tester. La barre **Rechercher un prompt** filtre les titres français, les noms d’origine, les descriptions et les étiquettes. Sans résultat dans la série choisie, des raccourcis proposent les autres séries correspondantes. Les cases commencent décochées. Vous pouvez sélectionner un prompt dans **Base**, puis un autre dans **Avancés** ou une autre catégorie : les choix s’additionnent dans le même lot. La catégorie et la recherche filtrent uniquement la liste, sans modifier les choix. **Tout cocher ici** et **Tout décocher ici** agissent uniquement sur les résultats affichés. Le récapitulatif **Sélection du lot** montre tous les prompts qui seront lancés, y compris ceux d’autres catégories ; retirez un prompt individuellement ou utilisez **Vider la sélection** pour tout désélectionner. Le bouton **Lancer** indique le nombre total de prompts sélectionnés.
 2. Sélectionner chaque modèle et l'ajouter à la liste des modèles à exécuter.
 3. Choisir **Simultanément**, puis lancer.
 4. Retrouver les résultats sauvegardés dans **Exécutions**, **Galerie** et **Comparer**.

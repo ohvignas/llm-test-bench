@@ -1,4 +1,4 @@
-// Search only affects this launch; hidden selections remain checked for later.
+// Category and search filter the library, while the explicit launch selection spans all categories.
 function normalized(value) {
   return String(value || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 }
@@ -15,5 +15,14 @@ export function batchPromptChoices({prompts, setId, query = '', selectedIds = ne
     const set = prompt.set || 'core';
     matchingSets[set] = (matchingSets[set] || 0) + 1;
   }
-  return {visible, selected:visible.filter(prompt => selectedIds.has(prompt.id)), matchingSets};
+  const selected=prompts.filter(prompt=>selectedIds.has(prompt.id));
+  const selectedBySet={};
+  for(const prompt of selected) {const set=prompt.set||'core';selectedBySet[set]=(selectedBySet[set]||0)+1;}
+  return {visible,selected,selectedBySet,matchingSets};
+}
+
+export function setVisibleSelection(selectedIds,visible,checked) {
+  const next=new Set(selectedIds);
+  for(const prompt of visible) {if(checked)next.add(prompt.id);else next.delete(prompt.id);}
+  return next;
 }

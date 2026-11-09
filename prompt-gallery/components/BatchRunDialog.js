@@ -11,7 +11,7 @@ import { HtmlLightbox } from './BatchReview.js';
 import { DEFAULT_HTML_BUDGET } from '../services/generationBudget.js';
 import {resolveModelSettings} from '../../shared/services/model-capabilities.js';
 import {ModelSettingsPanel} from './ModelSettingsPanel.js';
-import { batchPromptChoices } from '../services/batchPromptSearch.js';
+import { batchPromptChoices, setVisibleSelection } from '../services/batchPromptSearch.js';
 import { runBatch } from '../services/batchRunner.js';
 import { getInFlight, subscribeInFlight } from '../../shared/services/generation-telemetry.js';
 import { batchLiveStatus, batchItemRunning } from '../services/batchLiveProgress.js';
@@ -106,11 +106,10 @@ export function BatchRunDialog({
   const [liveCalls, setLiveCalls] = useState(getInFlight);
   useEffect(() => subscribeInFlight(setLiveCalls), []);
 
-  // Selection — start with everything ticked so "just press Go" runs all.
-  const [selectedIds, setSelectedIds] = useState(() => new Set(prompts.map(p => p.id)));
+  // Prompts enter the launch only after an explicit checkbox or bulk selection.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
 
-  // One prompt set at a time. Ticks are remembered per prompt, but only the set
-  // on screen is counted or run, so Core and Advanced never get lumped together.
+  // Categories filter the library; the launch selection is shared across them.
   const [promptSet, setPromptSet] = useState('core');
   const [promptSearch, setPromptSearch] = useState('');
   const availableSets = useMemo(
@@ -221,13 +220,12 @@ export function BatchRunDialog({
   const alreadyRunCount = useMemo(() => {
     let n = 0;
     for (const m of runModels) {
-      for (const p of visiblePrompts) {
-        if (!selectedIds.has(p.id)) continue;
+      for (const p of selectedPrompts) {
         try { if (deps.hasExistingForModel?.(p, m)) n++; } catch (e) { /* ignore */ }
       }
     }
     return n;
-  }, [visiblePrompts, selectedIds, runModels, deps]);
+  }, [selectedPrompts, runModels, deps]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -245,17 +243,9 @@ export function BatchRunDialog({
     });
   }, []);
 
-  // All / None touch only the set on screen.
-  const selectAll = useCallback(() => setSelectedIds(prev => {
-    const next = new Set(prev);
-    for (const p of visiblePrompts) next.add(p.id);
-    return next;
-  }), [visiblePrompts]);
-  const selectNone = useCallback(() => setSelectedIds(prev => {
-    const next = new Set(prev);
-    for (const p of visiblePrompts) next.delete(p.id);
-    return next;
-  }), [visiblePrompts]);
+  // Bulk actions apply to the displayed results without touching other choices.
+  const selectAll = useCallback(() => setSelectedIds(prev => setVisibleSelection(prev,visiblePrompts,true)),[visiblePrompts]);
+  const selectNone = useCallback(() => setSelectedIds(prev => setVisibleSelection(prev,visiblePrompts,false)),[visiblePrompts]);
 
   useEffect(() => {
     if (phase !== 'running') return;
@@ -689,10 +679,10 @@ export function BatchRunDialog({
 
       <div class="batch-section">
         <div class="batch-section-head">
-          <span><i class="fa-solid fa-list-check"></i> Prompts (${selectedCount}/${visiblePrompts.length})</span>
+          <span><i class="fa-solid fa-list-check"></i> Prompts (${selectedCount} sélectionné(s) au total)</span>
           <span class="batch-select-actions">
-            <button class="btn btn-xs" onClick=${selectAll} title="Sélectionner tous les prompts affichés">Tous</button>
-            <button class="btn btn-xs" onClick=${selectNone} title="Désélectionner tous les prompts affichés">Aucun</button>
+            <button class="btn btn-xs" onClick=${selectAll} title="Sélectionner tous les prompts affichés">Tout cocher ici</button>
+            <button class="btn btn-xs" onClick=${selectNone} title="Désélectionner tous les prompts affichés">Tout décocher ici</button>
           </span>
         </div>
         ${availableSets.length > 1 && html`
@@ -705,9 +695,9 @@ export function BatchRunDialog({
                 aria-pressed=${promptSet === s.id}
                 title=${s.hint}
                 onClick=${() => setPromptSet(s.id)}
-              ><i class=${`fa-solid ${s.icon}`}></i>${s.label}<span class="batch-set-count">${s.count}</span></button>
+              ><i class=${`fa-solid ${s.icon}`}></i>${s.label}<span class="batch-set-count">${promptChoices.selectedBySet[s.id]||0}/${s.count}</span></button>
             `)}
-            ${activeSetMeta?.hint && html`<span class="batch-set-hint">${activeSetMeta.hint}. Seule cette série sera exécutée.</span>`}
+            ${activeSetMeta?.hint && html`<span class="batch-set-hint">${activeSetMeta.hint}. Vous pouvez réunir plusieurs catégories dans le même lot.</span>`}
           </div>
         `}
         <div class="batch-prompt-search">
@@ -717,7 +707,7 @@ export function BatchRunDialog({
               placeholder="Titre, nom d’origine, description ou étiquette…" onInput=${e => setPromptSearch(e.target.value)} />
             ${promptSearch && html`<button class="btn btn-sm" onClick=${() => setPromptSearch('')}>Effacer la recherche</button>`}
           </div>
-          ${promptSearch.trim() && html`<div class="batch-search-summary" role="status">${visiblePrompts.length} résultat(s) dans ${activeSetMeta?.label || 'cette série'}, sur ${setPrompts.length} prompts. Seuls les résultats cochés seront lancés.</div>`}
+          ${promptSearch.trim() && html`<div class="batch-search-summary" role="status">${visiblePrompts.length} résultat(s) dans ${activeSetMeta?.label || 'cette série'}, sur ${setPrompts.length} prompts. La recherche ne modifie pas la sélection du lot.</div>`}
         </div>
         <div class="batch-prompt-list">
           ${visiblePrompts.length === 0
@@ -740,6 +730,15 @@ export function BatchRunDialog({
           <div class="batch-note"><i class="fa-solid fa-forward"></i> ${alreadyRunCount} prompt${alreadyRunCount === 1 ? '' : 's'} ignoré(s) : déjà exécuté(s) pour ${isMulti ? 'ce modèle' : 'le modèle actuel'}.</div>
         `}
       </div>
+
+      <section class="batch-prompt-selection" aria-label="Prompts sélectionnés pour le lot">
+        <div class="batch-section-head"><strong>Sélection du lot : ${selectedCount} prompt(s)</strong>
+          <button class="btn btn-xs" disabled=${!selectedCount} onClick=${()=>setSelectedIds(new Set())}>Vider la sélection</button></div>
+        ${selectedCount?html`<p>Tous les prompts ci-dessous seront exécutés, quelle que soit la catégorie ou la recherche affichée.</p>
+          <ul>${selectedPrompts.map(p=>html`<li key=${p.id}><span class="batch-selection-set">${PROMPT_SETS.find(set=>set.id===promptSetOf(p))?.label||'Base'}</span><span>${p.title}</span>
+            <button class="btn btn-xs" aria-label=${`Retirer ${p.title} de la sélection`} onClick=${()=>toggleOne(p.id)}>Retirer</button></li>`)}</ul>`
+          :html`<p>Cochez les prompts à tester. Vous pouvez en choisir dans Base, Avancés, Sites web et Simulations complexes.</p>`}
+      </section>
 
       <div class="batch-section">
         <div class="batch-section-head"><span><i class="fa-solid fa-wand-magic-sparkles"></i> Mode de génération</span></div>
