@@ -4,7 +4,7 @@
 
 import { getApiKey, saveApiKey, hasApiKey } from '../../shared/services/providers-openrouter.js';
 import { streamChat, getProvider } from '../../shared/services/model-providers.js';
-import { streamHtmlDocument } from './htmlOutput.js';
+import { streamHtmlDocument, requireHtmlDocument } from './htmlOutput.js';
 import { PROMPT_GALLERY_CHAT_AGENT_BUDGETS } from './codingAgent.js';
 
 export { getApiKey, saveApiKey, hasApiKey };
@@ -37,7 +37,7 @@ export async function generateHtml(prompt, providerId, modelId, onChunk, onStats
     onChunk,
     onStats,
     params,
-    generationOptions,
+    generationOptions:{...generationOptions,validateResult:requireHtmlDocument},
     signal,
     agentBudgets: PROMPT_GALLERY_CHAT_AGENT_BUDGETS,
   });

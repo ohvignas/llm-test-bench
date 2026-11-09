@@ -29,14 +29,20 @@ export async function streamHtmlDocument(stream, { onChunk, ...options }) {
         onChunk?.(extractHtmlDocument(accumulated));
       },
     });
-    const document = extractHtmlDocument(typeof result === 'string' ? result : accumulated);
-    if (!document || !/<html(?:\s|>)/i.test(document) || !/<\/html\s*>\s*$/i.test(document)) {
-      throw Object.assign(new Error('Le modèle n’a pas renvoyé de document HTML complet. Aucun nouvel appel automatique ; vérifiez le budget avant de relancer.'), { code: 'INCOMPLETE_HTML', retryable: false });
-    }
+    const document = requireHtmlDocument(typeof result === 'string' ? result : accumulated);
     onChunk?.(document);
     return document;
   } catch (error) {
     onChunk?.('');
     throw error;
   }
+}
+
+// Also used inside the spending guard, so invalid HTML blocks an identical retry.
+export function requireHtmlDocument(value) {
+  const document=extractHtmlDocument(value);
+  if(!document || !/<html(?:\s|>)/i.test(document) || !/<\/html\s*>\s*$/i.test(document)) {
+    throw Object.assign(new Error('Le modèle n’a pas renvoyé de document HTML complet. Aucun nouvel appel automatique ; vérifiez le budget avant de relancer.'),{code:'INCOMPLETE_HTML',retryable:false});
+  }
+  return document;
 }

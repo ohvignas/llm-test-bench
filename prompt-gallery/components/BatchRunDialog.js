@@ -10,6 +10,7 @@ import { createBatchJournal, logModelKey, safeLogText } from '../services/batchG
 import { HtmlLightbox } from './BatchReview.js';
 import { DEFAULT_HTML_BUDGET } from '../services/generationBudget.js';
 import {resolveModelSettings} from '../../shared/services/model-capabilities.js';
+import {clearFailedGenerationBlocks} from '../../shared/services/generation-spend-guard.js';
 import {ModelSettingsPanel} from './ModelSettingsPanel.js';
 import { batchPromptChoices, setVisibleSelection } from '../services/batchPromptSearch.js';
 import { runBatch } from '../services/batchRunner.js';
@@ -29,7 +30,8 @@ import {
 // comparison is one click.
 const MODELS_KEY = 'prompt-gallery-batch-models';
 const LANE_MODE_KEY = 'prompt-gallery-batch-lane-mode';
-const SETTINGS_KEY = 'prompt-gallery-model-adaptation-v1';
+// Reset old maximum/xhigh defaults: those settings caused expensive empty answers.
+const SETTINGS_KEY = 'prompt-gallery-model-adaptation-v2';
 
 function readStored(key, fallback) {
   try {
@@ -51,6 +53,7 @@ import {
 } from '../services/batchMetrics.js';
 
 const STATUS_META = {
+  'not-started': {icon:'fa-regular fa-circle',cls:'queued',label:'Non lancé — lot arrêté'},
   queued:     { icon: 'fa-regular fa-circle',        cls: 'queued',  label: 'En attente' },
   planning:   { icon: 'fa-solid fa-list-check',      cls: 'active',  label: 'Planification' },
   generating: { icon: 'fa-solid fa-bolt',            cls: 'active',  label: 'Génération' },
@@ -132,9 +135,10 @@ export function BatchRunDialog({
   const [saveBothOnHeal] = useState(true); // per product decision: always keep original + healed
   const [skipExisting, setSkipExisting] = useState(false);
   const [apiRetries, setApiRetries] = useState(0);
+  const [spendProtection,setSpendProtection]=useState(true);
   const [totalTokens, setTotalTokens] = useState(()=>{const n=readStored(SETTINGS_KEY,{}).totalTokens;return Number.isSafeInteger(n)&&n>0?n:DEFAULT_HTML_BUDGET.totalTokens;});
   const [reasoningTokens, setReasoningTokens] = useState(()=>{const n=readStored(SETTINGS_KEY,{}).reasoningTokens;return Number.isSafeInteger(n)&&n>0?n:DEFAULT_HTML_BUDGET.reasoningTokens;});
-  const [settingsProfile,setSettingsProfile]=useState(()=>{const profile=readStored(SETTINGS_KEY,{}).profile;return ['maximum','code','manual'].includes(profile)?profile:'maximum';});
+  const [settingsProfile,setSettingsProfile]=useState(()=>{const profile=readStored(SETTINGS_KEY,{}).profile;return ['maximum','code','manual'].includes(profile)?profile:'code';});
   const [settingsOverrides,setSettingsOverrides]=useState(()=>{const value=readStored(SETTINGS_KEY,{}).overrides;return value&&typeof value==='object'&&!Array.isArray(value)?value:{};});
   useEffect(()=>writeStored(SETTINGS_KEY,{profile:settingsProfile,overrides:settingsOverrides,totalTokens,reasoningTokens}),[settingsProfile,settingsOverrides,totalTokens,reasoningTokens]);
   const [apiCatalogue,setApiCatalogue]=useState([]);
@@ -411,10 +415,11 @@ export function BatchRunDialog({
 
     // Each lane is one model over the whole list, reporting into its own slice
     // of the run list. Its 'done' is held back: the summary covers every lane.
+    let safetyTripped=false;
     const runOne = async (lane) => {
       runningLanesRef.current += 1;
       try {
-        return await runBatch({
+        const result=await runBatch({
           prompts: lane.prompts,
           model: lane.model,
           options: {
@@ -426,6 +431,7 @@ export function BatchRunDialog({
             skipExisting,
             delayMs: Math.max(0, Math.round(delaySec * 1000)),
             apiRetries,
+            stopOnFailure:spendProtection,
             runId: lane.model.batchRunId,
           },
           deps,
@@ -437,7 +443,10 @@ export function BatchRunDialog({
           shouldPause: () => pauseRequestedRef.current,
           waitIfPaused: waitAtPauseBoundary,
         });
+        if(spendProtection && (result.failed>0||result.stopped))safetyTripped=true;
+        return result;
       } catch (e) {
+        if(spendProtection)safetyTripped=true;
         handleEvent({type:'item',status:'error',index:lane.offset,model:lane.model,message:e.message});
         addToast(`Erreur d’exécution par lot${plan.multi ? ` (${lane.model.label || lane.model.modelId})` : ''}: ${e.message}`, 'error');
         return null;
@@ -451,8 +460,9 @@ export function BatchRunDialog({
     };
 
     try {
-      const summaries = await runLanes({ lanes: plan.lanes, mode: laneMode, runOne, shouldStop: () => stopRef.current });
-      setSummary(combineSummaries(summaries.filter(Boolean)));
+      const summaries = await runLanes({ lanes: plan.lanes, mode: spendProtection?'sequential':laneMode, runOne, shouldStop: () => stopRef.current||safetyTripped });
+      setSummary({...combineSummaries(summaries.filter(Boolean)),protectionStopped:safetyTripped});
+      setItems(rows=>rows.map(row=>row.status==='queued'?{...row,status:'not-started'}:row));
     } catch (e) {
       addToast('Erreur d’exécution par lot : ' + e.message, 'error');
     } finally {
@@ -465,7 +475,7 @@ export function BatchRunDialog({
       startingRef.current=false;
     }
   }, [canRun, hasDirectory, selectedPrompts, runModels, laneMode, mode, healAttempts, maxRepairRounds, saveBothOnHeal,
-      skipExisting, delaySec, apiRetries, totalTokens, reasoningTokens, settingsProfile, settingsOverrides, apiCatalogue, allModels, showLiveOutput, runId, deps, refreshCapabilities, handleEvent, waitAtPauseBoundary, addToast]);
+      skipExisting, delaySec, apiRetries, spendProtection, totalTokens, reasoningTokens, settingsProfile, settingsOverrides, apiCatalogue, allModels, showLiveOutput, runId, deps, refreshCapabilities, handleEvent, waitAtPauseBoundary, addToast]);
 
   const pause = useCallback(() => {
     if (pauseRequestedRef.current || stopRef.current) return;
@@ -657,12 +667,12 @@ export function BatchRunDialog({
         ${isMulti && html`
           <div class="batch-options batch-lane-modes" role="radiogroup" aria-label="Mode d’exécution des modèles">
             <label class="batch-opt batch-mode-opt">
-              <input type="radio" name="batch-lane-mode" value="parallel" checked=${laneMode === 'parallel'} onChange=${() => setLaneMode('parallel')} />
+              <input type="radio" name="batch-lane-mode" value="parallel" disabled=${spendProtection} checked=${!spendProtection && laneMode === 'parallel'} onChange=${() => setLaneMode('parallel')} />
               <span><strong>Simultanément</strong><small>Tous les modèles traitent la liste en parallèle. Plus rapide pour les agents CLI et les modèles hébergés.</small></span>
             </label>
             <label class="batch-opt batch-mode-opt">
-              <input type="radio" name="batch-lane-mode" value="sequential" checked=${laneMode === 'sequential'} onChange=${() => setLaneMode('sequential')} />
-              <span><strong>L’un après l’autre</strong><small>Terminer un modèle avant le suivant. À utiliser si les modèles partagent le même GPU local.</small></span>
+              <input type="radio" name="batch-lane-mode" value="sequential" checked=${spendProtection || laneMode === 'sequential'} onChange=${() => setLaneMode('sequential')} />
+              <span><strong>L’un après l’autre</strong><small>Terminer un modèle avant le suivant. La protection des dépenses impose ce mode pour arrêter le lot au premier échec.</small></span>
             </label>
           </div>
         `}
@@ -791,16 +801,19 @@ export function BatchRunDialog({
           </label>
           <label class="batch-opt">
             <span>Nouvelles tentatives après erreur de connexion</span>
-            <select class="form-input batch-num" value=${apiRetries} onChange=${(e) => setApiRetries(Number(e.target.value))}>
+            <select class="form-input batch-num" disabled=${spendProtection} value=${spendProtection?0:apiRetries} onChange=${(e) => setApiRetries(Number(e.target.value))}>
               ${[0, 1, 2, 3].map(n => html`<option key=${n} value=${n}>${n}</option>`)}
             </select>
           </label>
           <div class="batch-opt-hint">Les nouvelles tentatives sont désactivées par défaut. Une réponse vide ou incomplète ne sera jamais relancée automatiquement.</div>
+          <label class="batch-opt"><input type="checkbox" checked=${spendProtection} onChange=${e=>setSpendProtection(e.target.checked)}/><span>Protection des dépenses : un appel à la fois, arrêt au premier échec, aucune nouvelle tentative automatique</span></label>
+          <p class="batch-opt-hint">Un appel interrompu, vide ou filtré peut rester facturé. Les coûts affichés viennent de l’API. Les relances identiques après un échec sont bloquées dans ce navigateur, même après actualisation.</p>
+          <button class="btn btn-sm" onClick=${()=>{try{clearFailedGenerationBlocks();addToast('Relances autorisées : un nouvel appel pourra être facturé.','info');}catch(error){addToast(error.message,'error');}}}>Autoriser les relances après échec (nouveau coût possible)</button>
           <label class="batch-opt"><span>Adaptation aux capacités API</span>
             <select class="form-input" value=${settingsProfile} onChange=${e=>{setSettingsProfile(e.target.value);setSettingsOverrides({});}}>
-              <option value="maximum">Qualité maximale — limites API</option><option value="code">Génération de code — raisonnement réduit</option><option value="manual">Budget personnalisé — plafonné par l’API</option>
+              <option value="maximum">Effort maximal — risque de coût élevé</option><option value="code">Génération de code — raisonnement réduit</option><option value="manual">Budget personnalisé — plafonné par l’API</option>
             </select></label>
-          <p class="batch-opt-hint">Qualité maximale utilise l’effort le plus élevé et la sortie maximale annoncés par chaque modèle. Les appels peuvent durer plus longtemps et coûter davantage. Les tokens de raisonnement peuvent consommer tout le budget ; aucun site complet n’est garanti. Aucun appel payant n’est lancé par l’actualisation.</p>
+          <p class="batch-opt-hint">Le profil par défaut utilise un raisonnement réduit et un plafond de 32 768 tokens, ajustés selon l’API. Le profil maximal utilise l’effort le plus élevé et la sortie maximale annoncés par chaque modèle. Les appels peuvent durer plus longtemps et coûter davantage. Les tokens de raisonnement peuvent consommer tout le budget ; aucun site complet n’est garanti. Aucun appel payant n’est lancé par l’actualisation.</p>
           ${settingsProfile==='manual'&&html`<label class="batch-opt"><span>Budget total demandé par appel</span><input class="form-input" type="number" min="1" value=${totalTokens} onChange=${e=>setTotalTokens(Number(e.target.value))}/></label>
             <label class="batch-opt"><span>Budget de raisonnement demandé (si l’API l’accepte)</span><input class="form-input" type="number" min="1" value=${reasoningTokens} onChange=${e=>setReasoningTokens(Number(e.target.value))}/></label>`}
           <${ModelSettingsPanel} reports=${previewReports} loading=${settingsLoading} error=${settingsError}
@@ -859,7 +872,7 @@ export function BatchRunDialog({
       </div>
 
       <${BatchCosts} calls=${costCalls} />
-      ${runIsMulti && html`<div class="batch-note">Les modèles tournent en parallèle. Sélectionnez une ligne pour changer l’aperçu et le flux HTML affichés.</div>`}
+      ${runIsMulti && html`<div class="batch-note">${spendProtection||laneMode==='sequential'?'Les modèles passent l’un après l’autre.':'Les modèles tournent en parallèle.'} Sélectionnez une ligne pour changer l’aperçu et le flux HTML affichés.</div>`}
 
       ${pauseState !== 'running' && html`
         <div class=${`batch-pause-state ${pauseState}`} role="status" aria-live="polite">
@@ -906,7 +919,7 @@ export function BatchRunDialog({
               >
                 <i class=${`batch-run-icon fa ${m.icon} ${m.cls === 'active' ? 'fa-fade' : ''}`}></i>
                 <span class="batch-run-title" title=${rowTitle(p)}>${p.title}${runIsMulti && p.modelLabel ? html`<span class="batch-run-model">${p.modelLabel}</span>` : null}</span>
-                <span class="batch-run-cost">${generationCostLabel(idx)}</span>
+                <span class="batch-run-cost">${it.status==='not-started'?'Aucun appel':generationCostLabel(idx)}</span>
                 <span class="batch-run-status">
                   ${it.status === 'healing' && it.healAttempt ? `correction ${it.healAttempt}`
                     : it.status === 'repairing' && it.repairRound ? `Réparation · cycle ${it.repairRound}`
@@ -1017,7 +1030,7 @@ export function BatchRunDialog({
             <span><strong>${summary?.repairRounds || 0}</strong> cycles de correction</span>
           </div>
         ` : null}
-        ${summary?.stopped ? html`<div class="batch-note"><i class="fa-solid fa-hand"></i> Exécution interrompue.</div>` : null}
+        ${summary?.stopped ? html`<div class="batch-note"><i class="fa-solid fa-hand"></i> ${summary.protectionStopped?'Protection des dépenses : lot arrêté après un échec. Les lignes « Non lancé » n’ont déclenché aucun appel.':'Exécution interrompue.'}</div>` : null}
       </div>
 
       <${BatchCosts} calls=${costCalls} done=${true} />
@@ -1029,7 +1042,7 @@ export function BatchRunDialog({
             <div class=${`batch-run-item ${m.cls}`} key=${p.runKey || p.id}>
               <i class=${`batch-run-icon fa ${m.icon}`}></i>
               <span class="batch-run-title" title=${rowTitle(p)}>${p.title}${runIsMulti && p.modelLabel ? html`<span class="batch-run-model">${p.modelLabel}</span>` : null}</span>
-              <span class="batch-run-cost">${generationCostLabel(idx)}</span>
+              <span class="batch-run-cost">${it.status==='not-started'?'Aucun appel':generationCostLabel(idx)}</span>
                 <span class="batch-run-status">
                 ${m.label}${it.healed ? html` <span class="batch-healed-chip">corrigé</span>` : null}
                 ${it.repairRound ? html` <span class="batch-healed-chip">${it.repairRound} correction${it.repairRound === 1 ? '' : 's'}</span>` : null}

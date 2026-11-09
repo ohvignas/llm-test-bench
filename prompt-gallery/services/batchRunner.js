@@ -61,8 +61,10 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
     skipExisting: false,
     delayMs: 0,
     apiRetries: 0,
+    stopOnFailure: true,
     ...(options || {}),
   };
+  if(opts.stopOnFailure) opts.apiRetries=0;
   const mode = opts.mode || (opts.heal ? 'runtime-heal' : 'quick');
   const emit = (event) => { try { onEvent?.(event); } catch (e) { /* never let a listener break the run */ } };
   const stop = () => { try { return !!shouldStop?.(); } catch (e) { return false; } };
@@ -180,7 +182,7 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
         verificationStatus: verified.status, repairRounds: Math.max(0, candidateCount - 1),
         message: verified.error?.message || '',
       });
-      if (verified.status === 'stopped') break;
+      if (verified.status === 'stopped' || (opts.stopOnFailure && !['passed','warned'].includes(verified.status))) {summary.stopped=true;break;}
       await interruptibleDelay(opts.delayMs, stop, pause);
       continue;
     }
@@ -215,6 +217,7 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
     if (genError || !genHtml || !genHtml.trim()) {
       summary.failed++;
       emit({ type: 'item', index: i, status: 'error', message: genError?.message || 'Empty response' });
+      if(opts.stopOnFailure){summary.stopped=true;break;}
       await interruptibleDelay(opts.delayMs, stop, pause);
       continue;
     }
@@ -225,6 +228,7 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
     let healed = false;
     let healUsed = 0;
     let runStatus = null;
+    let healFailed = false;
 
     // ── Sandbox check + self-heal ──
     if (mode === 'runtime-heal') {
@@ -249,10 +253,12 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
             healed = true;
             try { runStatus = await deps.runSandbox(finalHtml); } catch (e) { runStatus = null; }
           } else {
+            healFailed = true;
             emit({ type: 'log', index: i, message: `La tentative de correction ${healUsed} n’a renvoyé aucun contenu` });
             break;
           }
         } catch (e) {
+          healFailed = true;
           emit({ type: 'log', index: i, message: `Tentative de correction ${healUsed} échouée : ${e.message}` });
           break;
         }
@@ -293,8 +299,10 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
     } catch (e) {
       summary.failed++;
       emit({ type: 'item', index: i, status: 'error', message: 'Échec de l’enregistrement : ' + e.message });
+      if(opts.stopOnFailure){summary.stopped=true;break;}
     }
 
+    if(opts.stopOnFailure && healFailed){summary.stopped=true;break;}
     await interruptibleDelay(opts.delayMs, stop, pause);
   }
 

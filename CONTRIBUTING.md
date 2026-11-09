@@ -17,7 +17,7 @@ docker compose exec -T bench python -m unittest discover -s server/tests -v
 Browser-service tests with Node.js 22 or newer installed locally:
 
 ```sh
-node --test shared/tests/model-adaptation.test.mjs shared/tests/model-capabilities-api.test.mjs shared/tests/batch-costs.test.mjs shared/tests/secure-session.test.mjs shared/tests/openrouter-vault.test.mjs shared/tests/openrouter-streaming.test.mjs shared/tests/batch-live-progress.test.mjs shared/tests/batch-prompt-search.test.mjs shared/tests/batch-generation-log.test.mjs shared/tests/generation-activity.test.mjs shared/tests/prompt-library-fr.test.mjs shared/tests/html-generation-budget.test.mjs shared/tests/batch-retry-safety.test.mjs shared/tests/providers-openai-compatible.test.mjs shared/tests/gen-params.test.mjs shared/tests/distribution.test.mjs
+node --test shared/tests/generation-spend-guard.test.mjs shared/tests/model-adaptation.test.mjs shared/tests/model-capabilities-api.test.mjs shared/tests/batch-costs.test.mjs shared/tests/secure-session.test.mjs shared/tests/openrouter-vault.test.mjs shared/tests/openrouter-streaming.test.mjs shared/tests/batch-live-progress.test.mjs shared/tests/batch-prompt-search.test.mjs shared/tests/batch-generation-log.test.mjs shared/tests/generation-activity.test.mjs shared/tests/prompt-library-fr.test.mjs shared/tests/html-generation-budget.test.mjs shared/tests/batch-retry-safety.test.mjs shared/tests/providers-openai-compatible.test.mjs shared/tests/gen-params.test.mjs shared/tests/distribution.test.mjs
 ```
 
 Validate Compose and rebuild after source changes:
