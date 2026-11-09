@@ -83,7 +83,7 @@ function buildContext(prompt, htmlContent) {
  * Fix the captured runtime errors. Streams the corrected document.
  * onChunk receives the accumulated text so far (not deltas).
  */
-export async function healHtml({ providerId, modelId, prompt, html, errors, onChunk, onStats, params, signal }) {
+export async function healHtml({ providerId, modelId, prompt, html, errors, onChunk, onStats, params, signal, generationOptions }) {
   const parts = buildContext(prompt, html);
   parts.push(`RUNTIME ERRORS CAPTURED IN SANDBOX:\n${errors.map((e, i) => `${i + 1}. ${e}`).join('\n')}`);
   parts.push('Fix these errors and return the complete corrected HTML document.');
@@ -96,7 +96,7 @@ export async function healHtml({ providerId, modelId, prompt, html, errors, onCh
     userPrompt: parts.join('\n\n'),
     appTitle: 'Prompt Gallery',
     ...callLimits(signal),
-    params,
+    params, generationOptions,
     onStats,
     onChunk: (text) => {
       accumulated = text || '';
@@ -167,7 +167,7 @@ function compactSandbox(status) {
 }
 
 /** Fresh acceptance-auditor call. Parsing and host verdicts live in acceptance.js. */
-export async function auditHtml({ providerId, modelId, prompt, notes, checklist, html, sandbox, onStats, params, signal }) {
+export async function auditHtml({ providerId, modelId, prompt, notes, checklist, html, sandbox, onStats, params, signal, generationOptions }) {
   const userPrompt = [
     `ORIGINAL PROMPT:\n${String(prompt || '').trim()}`,
     notes ? `WATCH FOR:\n${String(notes).trim()}` : '',
@@ -184,13 +184,13 @@ export async function auditHtml({ providerId, modelId, prompt, notes, checklist,
     appTitle: 'Prompt Gallery',
     ...callLimits(signal),
     onStats,
-    params,
+    params, generationOptions,
   });
 }
 
 /** Fresh focused repair call. Streams accumulated corrected HTML. */
 export async function repairAgainstAudit({
-  providerId, modelId, prompt, html, sandbox, failedChecks, repairTasks, onChunk, onStats, params, signal,
+  providerId, modelId, prompt, html, sandbox, failedChecks, repairTasks, onChunk, onStats, params, signal, generationOptions,
 }) {
   const errors = sandbox?.timedOut
     ? ['Execution timed out — possible infinite loop or blocked load']
@@ -212,7 +212,7 @@ export async function repairAgainstAudit({
     appTitle: 'Prompt Gallery',
     ...callLimits(signal),
     onStats,
-    params,
+    params, generationOptions,
     onChunk: text => {
       accumulated = text || '';
       onChunk?.(stripCodeFences(accumulated));

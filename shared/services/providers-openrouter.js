@@ -1,7 +1,9 @@
 // OpenRouter provider adapter
 // Wraps the existing shared/services/openrouter.js behind the unified provider adapter contract
 
+import {resolveModelSettings,generationFeedback} from './model-capabilities.js';
 import {
+  getModelCapabilities,
   getApiKey,
   saveApiKey,
   hasApiKey,
@@ -47,8 +49,8 @@ export async function testConnection(provider) {
  * Defaults to fetching ALL models (free + paid). The shared provider layer
  * applies freeOnly filtering client-side via applyModelFilters().
  */
-export async function fetchModels(provider, { freeOnly = false } = {}) {
-  const raw = await fetchOpenRouterModels({ freeOnly });
+export async function fetchModels(provider, { freeOnly = false, refresh = false } = {}) {
+  const raw = await fetchOpenRouterModels({ freeOnly, refresh });
   return raw.map(m => ({
     providerId: provider.id,
     providerType: PROVIDER_TYPE,
@@ -58,6 +60,7 @@ export async function fetchModels(provider, { freeOnly = false } = {}) {
     displayLabel: `${provider.name} / ${m.name || m.id}`,
     supportsStreaming: true,
     contextLength: m.context_length || null,
+    capabilities: m.capabilities || null,
     pricing: m.pricing || null,
     tags: [],
     raw: m,
@@ -67,18 +70,34 @@ export async function fetchModels(provider, { freeOnly = false } = {}) {
 /**
  * Stream a chat completion through OpenRouter.
  */
-export async function streamChat({ provider, modelId, systemPrompt, userPrompt, onChunk, appTitle, params, onStats, telemetry, signal }) {
-  return openRouterStreamChat({
+export async function streamChat({ provider, modelId, systemPrompt, userPrompt, onChunk, appTitle, params, onStats, telemetry, signal, generationOptions }) {
+  let settings = null;
+  if (appTitle === 'Prompt Gallery' || generationOptions) {
+    signal?.throwIfAborted();
+    const model = await getModelCapabilities(modelId,{signal});
+    settings = resolveModelSettings({...generationOptions,model,params});
+    params = settings.params;
+    // Only numeric capabilities and sent settings, never prompts or credentials.
+    if (telemetry) telemetry.meta.params = params;
+    onStats?.({settings});
+  }
+  try { return await openRouterStreamChat({
     systemPrompt,
     userPrompt,
     modelId,
     appTitle,
     onChunk,
     params,
-    onStats,
+    onStats: settings ? stats => onStats?.({...stats,settings,feedback:generationFeedback(stats)}) : onStats,
     telemetry,
     signal,
-  });
+  }); } catch (error) {
+    if (settings && [400,404,422].includes(error.status)) {
+      error.retryable = false;
+      error.message += ' Réglages refusés : actualisez les capacités API avant une relance manuelle. Aucun appel automatique.';
+    }
+    throw error;
+  }
 }
 
 /**

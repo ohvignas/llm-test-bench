@@ -21,6 +21,8 @@ export function withPromptCosts(deps, emit) {
       const publish = () => { calls.set(call.id,{...call}); emit({type:'cost',call:{...call}}); };
       publish();
       args[position] = {...options,onStats:stats => {
+        if (stats?.settings) call.settings={profile:stats.settings.profile,source:stats.settings.source,maxTokens:stats.settings.params.max_tokens??stats.settings.params.max_completion_tokens,reasoningEffort:stats.settings.params.reasoning?.effort||stats.settings.params.reasoning_effort||null,reasoningTokens:stats.settings.params.reasoning?.max_tokens??null};
+        if (stats?.feedback) call.feedback=stats.feedback;
         if (Number.isFinite(stats?.cost) && stats.cost >= 0) call.usd = stats.cost;
         publish();
         options.onStats?.(stats);

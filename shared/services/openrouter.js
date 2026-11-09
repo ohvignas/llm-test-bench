@@ -12,6 +12,7 @@
 
 // settings-sync used to restore LS values from cookies; loaded first to
 // preserve that behaviour while we work through the wider settings migration.
+import { normalizeOpenRouterModel } from './model-capabilities.js';
 import { withHttpDetails } from './provider-errors.js';
 import './settings-sync.js';
 import { applyParams, withUsageReporting, createRunStats } from './gen-params.js';
@@ -36,7 +37,7 @@ const LEGACY_KEY_LS = 'devtools-hub-openrouter-key';
 const CACHE_AREA = 'openrouter-cache';
 const CACHE_FIELD = 'models';
 const LEGACY_CACHE_LS = 'devtools-hub-openrouter-models';
-const MODELS_CACHE_TTL = 1000 * 60 * 60; // 1 hour
+const MODELS_CACHE_TTL = 1000 * 60 * 5; // 5 minutes; capabilities may change independently of model names
 
 // Legacy per-app keys — consolidated into the hub LS key on first load,
 // after which the suite-prefs migration moves the hub key onto disk.
@@ -88,10 +89,14 @@ function describeApiKey(apiKey) {
 
 async function throwOpenRouterError(res, context = {}) {
   const err = await res.json().catch(() => ({}));
-  const message = err.error?.message || `API error: ${res.status}`;
+  const message = err.error?.message || (typeof err.error === 'string' ? err.error : null) || `API error: ${res.status}`;
   // Status, limit headers and OpenRouter's error metadata (where it puts the
   // X-RateLimit-* values) ride on the thrown Error; the message is unchanged.
-  const fail = text => withHttpDetails(new Error(text), res, { metadata: err.error?.metadata || null });
+  const fail = text => {
+    const error = withHttpDetails(new Error(text), res, { metadata: err.error?.metadata || null });
+    if (res.status >= 400 && res.status < 500 && ![408,429].includes(res.status)) error.retryable = false;
+    return error;
+  };
 
   if (res.status === 401) {
     const keyInfo = describeApiKey(context.apiKey);
@@ -173,6 +178,13 @@ async function getApiKeyForRequest() {
   return SERVER_VAULT ? (keyConfigured() ? 'server-vault' : '') : getApiKey();
 }
 
+export async function getModelCapabilities(modelId, options = {}) {
+  const models = await fetchModels({...options,strict:true});
+  const model = models.find(m => m.id === modelId);
+  if (!model) throw Object.assign(new Error('Modèle absent du catalogue API : actualisez la sélection.'), {code:'MODEL_UNAVAILABLE',retryable:false});
+  return model;
+}
+
 // ── Model list ──
 
 /**
@@ -184,11 +196,11 @@ async function getApiKeyForRequest() {
  * @param {string}  [options.search]                Text search on model id and name
  * @returns {Promise<Array<{id:string, name:string, context_length?:number, pricing?:object}>>}
  */
-export async function fetchModels({ freeOnly = false, providerFilter, search } = {}) {
+export async function fetchModels({ freeOnly = false, providerFilter, search, refresh = false, strict = false, signal } = {}) {
   // Check cache first (cache stores the full unfiltered list).
   let allModels = null;
   const cached = getSuiteField(CACHE_AREA, CACHE_FIELD, null);
-  if (cached && Date.now() - cached.timestamp < MODELS_CACHE_TTL) {
+  if (!refresh && cached?.version === 1 && Date.now() - cached.timestamp < MODELS_CACHE_TTL) {
     allModels = cached.models;
   }
 
@@ -199,21 +211,17 @@ export async function fetchModels({ freeOnly = false, providerFilter, search } =
       const apiKey = await getApiKeyForRequest();
       if (apiKey && !SERVER_VAULT) headers['Authorization'] = `Bearer ${apiKey}`;
 
-      const res = await providerFetch(`${API_BASE}/models`, { headers, signal: AbortSignal.timeout(15000) });
+      const res = await providerFetch(`${API_BASE}/models`, { headers, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000) });
       if (!res.ok) throw new Error('Failed to fetch models');
       const data = await res.json();
 
-      allModels = (data.data || []).map(m => ({
-        id: m.id,
-        name: m.name || m.id,
-        context_length: m.context_length,
-        pricing: m.pricing,
-      }));
+      allModels = (data.data || []).map(m => normalizeOpenRouterModel(m));
 
       if (allModels.length > 0) {
-        setSuite(CACHE_AREA, CACHE_FIELD, { models: allModels, timestamp: Date.now() });
+        setSuite(CACHE_AREA, CACHE_FIELD, { version: 1, models: allModels, timestamp: Date.now() });
       }
     } catch (e) {
+      if (strict || signal?.aborted) throw e;
       console.warn('Failed to fetch OpenRouter models, using fallback list:', e.message);
       allModels = null;
     }

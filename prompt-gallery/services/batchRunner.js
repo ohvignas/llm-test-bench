@@ -128,7 +128,7 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
             },
           }),
           sandbox: html => deps.runSandbox(html),
-          audit: args => deps.audit(args),
+          audit: args => deps.audit({...args,onStats:stats=>{args.onStats?.(stats);emit({type:'stats',index:i,stats});}}),
           repair: args => deps.repair({
             ...args,
             onStats: stats => {

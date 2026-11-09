@@ -8,7 +8,9 @@ import { costTotals, formatUsd } from '../services/batchCosts.js';
 import { BatchGenerationLog } from './BatchGenerationLog.js';
 import { createBatchJournal, logModelKey, safeLogText } from '../services/batchGenerationLog.js';
 import { HtmlLightbox } from './BatchReview.js';
-import { DEFAULT_HTML_BUDGET, htmlGenerationParams, usesAdaptiveReasoning } from '../services/generationBudget.js';
+import { DEFAULT_HTML_BUDGET } from '../services/generationBudget.js';
+import {resolveModelSettings} from '../../shared/services/model-capabilities.js';
+import {ModelSettingsPanel} from './ModelSettingsPanel.js';
 import { batchPromptChoices } from '../services/batchPromptSearch.js';
 import { runBatch } from '../services/batchRunner.js';
 import { getInFlight, subscribeInFlight } from '../../shared/services/generation-telemetry.js';
@@ -27,6 +29,7 @@ import {
 // comparison is one click.
 const MODELS_KEY = 'prompt-gallery-batch-models';
 const LANE_MODE_KEY = 'prompt-gallery-batch-lane-mode';
+const SETTINGS_KEY = 'prompt-gallery-model-adaptation-v1';
 
 function readStored(key, fallback) {
   try {
@@ -130,9 +133,14 @@ export function BatchRunDialog({
   const [saveBothOnHeal] = useState(true); // per product decision: always keep original + healed
   const [skipExisting, setSkipExisting] = useState(false);
   const [apiRetries, setApiRetries] = useState(0);
-  const [totalTokens, setTotalTokens] = useState(DEFAULT_HTML_BUDGET.totalTokens);
-  const [reasoningTokens, setReasoningTokens] = useState(DEFAULT_HTML_BUDGET.reasoningTokens);
-  const [reasoningEffort, setReasoningEffort] = useState(DEFAULT_HTML_BUDGET.reasoningEffort);
+  const [totalTokens, setTotalTokens] = useState(()=>{const n=readStored(SETTINGS_KEY,{}).totalTokens;return Number.isSafeInteger(n)&&n>0?n:DEFAULT_HTML_BUDGET.totalTokens;});
+  const [reasoningTokens, setReasoningTokens] = useState(()=>{const n=readStored(SETTINGS_KEY,{}).reasoningTokens;return Number.isSafeInteger(n)&&n>0?n:DEFAULT_HTML_BUDGET.reasoningTokens;});
+  const [settingsProfile,setSettingsProfile]=useState(()=>{const profile=readStored(SETTINGS_KEY,{}).profile;return ['maximum','code','manual'].includes(profile)?profile:'maximum';});
+  const [settingsOverrides,setSettingsOverrides]=useState(()=>{const value=readStored(SETTINGS_KEY,{}).overrides;return value&&typeof value==='object'&&!Array.isArray(value)?value:{};});
+  useEffect(()=>writeStored(SETTINGS_KEY,{profile:settingsProfile,overrides:settingsOverrides,totalTokens,reasoningTokens}),[settingsProfile,settingsOverrides,totalTokens,reasoningTokens]);
+  const [apiCatalogue,setApiCatalogue]=useState([]);
+  const [settingsLoading,setSettingsLoading]=useState(false);
+  const [settingsError,setSettingsError]=useState('');
   const [delaySec, setDelaySec] = useState(0);
   const [showLiveOutput, setShowLiveOutput] = useState(true);
   // Several models in one launch: empty means "just the model picked above".
@@ -158,6 +166,9 @@ export function BatchRunDialog({
   const [pauseContext, setPauseContext] = useState(null);
   const [rateClock, setRateClock] = useState(() => Date.now());
   const stopRef = useRef(false);
+  const startingRef=useRef(false);
+  const mountedRef=useRef(true);
+  useEffect(()=>()=>{mountedRef.current=false;},[]);
   const pauseRequestedRef = useRef(false);
   // One resolver per lane waiting at a pause boundary (lanes can run side by side).
   const pauseResolversRef = useRef([]);
@@ -180,6 +191,28 @@ export function BatchRunDialog({
     const snap = snapshotModel(model);
     return snap ? [snap] : [];
   }, [batchModels, model]);
+  const isOpenRouterModel=selected=>selected.providerId==='openrouter'||deps.getProviderType?.(selected.providerId)==='openrouter'||allModels.find(m=>m.providerId===selected.providerId&&m.modelId===selected.modelId)?.providerType==='openrouter';
+  const needsApiCapabilities=runModels.some(isOpenRouterModel);
+  const refreshCapabilities = useCallback(async () => {
+    if (!needsApiCapabilities || !deps.fetchModelCapabilities) return [];
+    setSettingsLoading(true); setSettingsError('');
+    try { const models=await deps.fetchModelCapabilities({refresh:true}); setApiCatalogue(models); return models; }
+    catch(error) { setSettingsError('Lecture API impossible : '+error.message); throw error; }
+    finally { setSettingsLoading(false); }
+  },[deps.fetchModelCapabilities,needsApiCapabilities]);
+  useEffect(()=>{ refreshCapabilities().catch(()=>{}); },[refreshCapabilities]);
+  const settingsReports = (catalogue=apiCatalogue) => runModels.map(selected => {
+    const original=allModels.find(m=>m.providerId===selected.providerId&&m.modelId===selected.modelId);
+    const isOpenRouter=isOpenRouterModel(selected);
+    if(!isOpenRouter)return {model:selected,isOpenRouter:false};
+    const api=catalogue.find(m=>(m.modelId||m.id)===selected.modelId)||original;
+    const override=settingsOverrides[batchModelKey(selected)]||{};
+    try {return {model:selected,isOpenRouter:true,settings:resolveModelSettings({model:api,profile:settingsProfile,...override,budget:{totalTokens,reasoningTokens,...override}})};}
+    catch(error) {return {model:selected,isOpenRouter:true,error:error.message};}
+  });
+  const previewReports=settingsReports();
+  const overrideSettings=(selected,patch)=>setSettingsOverrides(previous=>({...previous,[batchModelKey(selected)]:{...(previous[batchModelKey(selected)]||{}),...patch}}));
+
   const isMulti = runModels.length > 1;
   const canRun = runModels.length > 0;
   const selectedInList = hasModel && batchModels.some(m => batchModelKey(m) === batchModelKey(model));
@@ -333,16 +366,29 @@ export function BatchRunDialog({
   };
 
   const start = useCallback(async () => {
+    if(startingRef.current)return;
     if (!canRun) { addToast('Sélectionnez d’abord un modèle', 'error'); return; }
     if (!hasDirectory) { addToast('Connectez d’abord un dossier : les générations y seront enregistrées', 'error'); return; }
     const list = selectedPrompts;
     if (list.length === 0) { addToast('Sélectionnez au moins un prompt', 'error'); return; }
 
-    const generationBudget = { totalTokens, reasoningTokens, reasoningEffort };
+    startingRef.current=true;
+    let reports;
     try {
-      for (const selected of runModels) htmlGenerationParams({ providerType: 'openrouter', modelId: selected.modelId, budget: generationBudget });
-    } catch (error) { addToast(error.message, 'error'); return; }
-    const plan = planBatchLanes({ prompts: list, models: runModels.map(m => ({ ...m, generationBudget })), runId });
+      const catalogue=deps.fetchModelCapabilities?await refreshCapabilities():apiCatalogue;
+      if(!mountedRef.current){startingRef.current=false;return;}
+      reports=settingsReports(catalogue);
+      const failure=reports.find(report=>report.error);
+      if(failure)throw new Error(failure.error);
+    } catch(error) {startingRef.current=false;if(mountedRef.current)addToast(error.message,'error');return;}
+    const configured=reports.map(report=>{
+      if(!report.isOpenRouter)return report.model;
+      const override=settingsOverrides[batchModelKey(report.model)]||{};
+      const shown=previewReports.find(r=>batchModelKey(r.model)===batchModelKey(report.model))?.settings;
+      return {...report.model,generationOptions:{profile:settingsProfile,...override,budget:{totalTokens,reasoningTokens,...override},
+        reviewedMaxTokens:shown?.params.max_tokens??shown?.params.max_completion_tokens??report.settings.params.max_tokens??report.settings.params.max_completion_tokens}};
+    });
+    const plan = planBatchLanes({ prompts: list, models: configured, runId });
     const startedAt = Date.now();
     journalStartedAtRef.current = startedAt;
     setRateClock(startedAt);
@@ -426,9 +472,10 @@ export function BatchRunDialog({
       setPauseContext(null);
       setActiveIndex(-1);
       setPhase('done');
+      startingRef.current=false;
     }
   }, [canRun, hasDirectory, selectedPrompts, runModels, laneMode, mode, healAttempts, maxRepairRounds, saveBothOnHeal,
-      skipExisting, delaySec, apiRetries, totalTokens, reasoningTokens, reasoningEffort, showLiveOutput, runId, deps, handleEvent, waitAtPauseBoundary, addToast]);
+      skipExisting, delaySec, apiRetries, totalTokens, reasoningTokens, settingsProfile, settingsOverrides, apiCatalogue, allModels, showLiveOutput, runId, deps, refreshCapabilities, handleEvent, waitAtPauseBoundary, addToast]);
 
   const pause = useCallback(() => {
     if (pauseRequestedRef.current || stopRef.current) return;
@@ -750,23 +797,15 @@ export function BatchRunDialog({
             </select>
           </label>
           <div class="batch-opt-hint">Les nouvelles tentatives sont désactivées par défaut. Une réponse vide ou incomplète ne sera jamais relancée automatiquement.</div>
-          <label class="batch-opt">
-            <span>Budget total OpenRouter par réponse (tokens)</span>
-            <input class="form-input" style=${{ width: '110px' }} type="number" min="2048" max="200000" step="1"
-              value=${totalTokens} onChange=${e => setTotalTokens(Number(e.target.value))} />
-          </label>
-          ${runModels.some(m => /^~?anthropic\//i.test(m.modelId || '') && !usesAdaptiveReasoning(m.modelId)) && html`<label class="batch-opt">
-            <span>Raisonnement des anciens Claude (tokens)</span>
-            <input class="form-input" style=${{ width: '110px' }} type="number" min="1024" max=${totalTokens - 1} step="1"
-              value=${reasoningTokens} onChange=${e => setReasoningTokens(Number(e.target.value))} />
-          </label>`}
-          ${runModels.some(m => usesAdaptiveReasoning(m.modelId)) && html`<label class="batch-opt">
-            <span>Effort des Claude adaptatifs</span>
-            <select class="form-input" value=${reasoningEffort} onChange=${e=>setReasoningEffort(e.target.value)}>
-              <option value="low">Faible — par défaut</option><option value="medium">Moyen</option><option value="high">Élevé</option>
-            </select>
-          </label>`}
-          <div class="batch-opt-hint">Le total comprend le raisonnement et le code. Les Claude récents utilisent un effort adaptatif : leur limite séparée de tokens de raisonnement est ignorée et ne leur est pas envoyée. L’effort faible réduit le raisonnement sans garantir un résultat. Ces réglages OpenRouter ne constituent pas un plafond monétaire.</div>
+          <label class="batch-opt"><span>Adaptation aux capacités API</span>
+            <select class="form-input" value=${settingsProfile} onChange=${e=>{setSettingsProfile(e.target.value);setSettingsOverrides({});}}>
+              <option value="maximum">Qualité maximale — limites API</option><option value="code">Génération de code — raisonnement réduit</option><option value="manual">Budget personnalisé — plafonné par l’API</option>
+            </select></label>
+          <p class="batch-opt-hint">Qualité maximale utilise l’effort le plus élevé et la sortie maximale annoncés par chaque modèle. Les appels peuvent durer plus longtemps et coûter davantage. Les tokens de raisonnement peuvent consommer tout le budget ; aucun site complet n’est garanti. Aucun appel payant n’est lancé par l’actualisation.</p>
+          ${settingsProfile==='manual'&&html`<label class="batch-opt"><span>Budget total demandé par appel</span><input class="form-input" type="number" min="1" value=${totalTokens} onChange=${e=>setTotalTokens(Number(e.target.value))}/></label>
+            <label class="batch-opt"><span>Budget de raisonnement demandé (si l’API l’accepte)</span><input class="form-input" type="number" min="1" value=${reasoningTokens} onChange=${e=>setReasoningTokens(Number(e.target.value))}/></label>`}
+          <${ModelSettingsPanel} reports=${previewReports} loading=${settingsLoading} error=${settingsError}
+            onRefresh=${()=>refreshCapabilities().catch(()=>{})} onOverride=${overrideSettings} onReset=${()=>setSettingsOverrides({})}/>
           <label class="batch-opt">
             <span>Délai entre les prompts</span>
             <input class="form-input batch-num" type="number" min="0" max="120" step="1"
@@ -779,7 +818,7 @@ export function BatchRunDialog({
 
     <div class="modal-footer">
       <button class="btn" onClick=${onClose}>Annuler</button>
-      <button class="btn btn-primary btn-generate" onClick=${start} disabled=${!canRun || !hasDirectory || selectedCount === 0}>
+      <button class="btn btn-primary btn-generate" onClick=${start} disabled=${!canRun || !hasDirectory || selectedCount === 0 || settingsLoading || previewReports.some(r=>r.error)}>
         <i class="fa-solid fa-play"></i> Lancer ${selectedCount} prompt${selectedCount === 1 ? '' : 's'}${isMulti ? ` × ${runModels.length} modèles` : ''}
       </button>
     </div>

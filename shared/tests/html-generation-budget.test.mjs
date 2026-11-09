@@ -1,32 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {htmlGenerationParams} from '../../prompt-gallery/services/generationBudget.js';
-
-test('adaptive Claude receives effort instead of an ignored thinking budget',()=>{
-  const p=htmlGenerationParams({providerType:'openrouter',modelId:'anthropic/claude-opus-5.5'});
-  assert.equal(p.max_tokens,32768);
-  assert.deepEqual(p.reasoning,{effort:'low'});
+import {normalizeOpenRouterModel} from '../services/model-capabilities.js';
+test('HTML generation uses API limits rather than guessed limits from a Claude version',()=>{
+ const model=normalizeOpenRouterModel({id:'anthropic/claude-future',top_provider:{max_completion_tokens:8192},supported_parameters:['max_tokens','reasoning'],reasoning:{mandatory:true,supported_efforts:['high','low']}});
+ const p=htmlGenerationParams({providerType:'openrouter',model,profile:'maximum'});
+ assert.equal(p.max_tokens,8192);assert.deepEqual(p.reasoning,{effort:'high'});
 });
-test('the batch token controls are forwarded without changing other generation parameters',()=>{
-  const p=htmlGenerationParams({providerType:'openrouter',modelId:'anthropic/claude-sonnet-4.5',params:{temperature:.3},budget:{totalTokens:24000,reasoningTokens:2048}});
-  assert.deepEqual(p,{temperature:.3,max_tokens:24000,reasoning:{max_tokens:2048}});
+test('unknown API capabilities fail before a completion can be prepared',()=>{
+ assert.throws(()=>htmlGenerationParams({providerType:'openrouter',modelId:'anthropic/claude-opus-5.5'}),/capacités/i);
 });
-test('reasoning cannot consume the entire requested total budget',()=>{
-  assert.throws(()=>htmlGenerationParams({providerType:'openrouter',modelId:'anthropic/test',budget:{totalTokens:4096,reasoningTokens:4096}}),/raisonnement|budget/i);
-});
-test('non-Claude requests are bounded without adding an Anthropic reasoning block',()=>{
-  assert.deepEqual(htmlGenerationParams({providerType:'openrouter',modelId:'openai/gpt-6-astra'}),{max_tokens:32768});
-});
-test('explicit reasoning choices survive and local providers keep their own settings',()=>{
-  const params={reasoning:{enabled:false},max_tokens:16000};
-  assert.deepEqual(htmlGenerationParams({providerType:'openrouter',modelId:'anthropic/test',params}),params);
-  assert.deepEqual(htmlGenerationParams({providerType:'lmstudio',modelId:'local',params:{seed:42}}),{seed:42});
-});
-
-test('adaptive effort remains configurable without claiming a fixed reasoning cap',()=>{
-  for(const modelId of ['anthropic/claude-fable-5.2','anthropic/claude-sonnet-4.7','~anthropic/claude-opus-latest']) {
-    const p=htmlGenerationParams({providerType:'openrouter',modelId,budget:{reasoningTokens:4096,reasoningEffort:'medium'}});
-    assert.deepEqual(p.reasoning,{effort:'medium'});
-  }
-  assert.throws(()=>htmlGenerationParams({providerType:'openrouter',modelId:'anthropic/claude-opus-5.5',params:{reasoning:{max_tokens:4096}}}),/adaptatif/i);
+test('local provider settings are left with their own provider contract',()=>{
+ assert.deepEqual(htmlGenerationParams({providerType:'lmstudio',params:{seed:42}}),{seed:42});
 });

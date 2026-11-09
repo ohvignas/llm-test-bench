@@ -4,7 +4,6 @@
 
 import { getApiKey, saveApiKey, hasApiKey } from '../../shared/services/providers-openrouter.js';
 import { streamChat, getProvider } from '../../shared/services/model-providers.js';
-import { htmlGenerationParams } from './generationBudget.js';
 import { streamHtmlDocument } from './htmlOutput.js';
 import { PROMPT_GALLERY_CHAT_AGENT_BUDGETS } from './codingAgent.js';
 
@@ -28,7 +27,7 @@ Make the output visually polished and modern.`;
  *   bridge and detaches any other stream. CLI agents run with no time limit,
  *   so this is how a run that will not finish gets ended.
  */
-export async function generateHtml(prompt, providerId, modelId, onChunk, onStats, params, { signal } = {}) {
+export async function generateHtml(prompt, providerId, modelId, onChunk, onStats, params, { signal, generationOptions } = {}) {
   return streamHtmlDocument(streamChat, {
     providerId,
     modelId,
@@ -37,7 +36,8 @@ export async function generateHtml(prompt, providerId, modelId, onChunk, onStats
     appTitle: 'Prompt Gallery',
     onChunk,
     onStats,
-    params: htmlGenerationParams({ providerType: getProvider(providerId)?.type, modelId, params }),
+    params,
+    generationOptions,
     signal,
     agentBudgets: PROMPT_GALLERY_CHAT_AGENT_BUDGETS,
   });

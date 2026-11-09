@@ -12,7 +12,7 @@ import { PromptLibraryView } from './components/PromptLibraryView.js';
 import { PromptFormDialog } from './components/PromptFormDialog.js';
 import { ImportPromptsDialog } from './components/ImportPromptsDialog.js';
 import { RefineView } from './components/RefineView.js';
-import { htmlGenerationParams } from './services/generationBudget.js';
+import { fetchModels as fetchOpenRouterCatalogue } from '../shared/services/openrouter.js';
 import { BatchRunDialog } from './components/BatchRunDialog.js';
 import { runHtmlSandbox, runStatusLabel } from './services/sandboxRunner.js';
 import { addConsoleEntry, consoleCounts, mergePreviewErrors } from './services/previewConsole.js';
@@ -1267,12 +1267,15 @@ function App() {
     modelId: mdl?.modelId || '',
     params: mdl?.backend === 'agent'
       ? { reasoning_effort: getAgentModelEffort(mdl.agentId, mdl.agentModelId) }
-      : htmlGenerationParams({ providerType: modelProviders.getProvider(mdl?.providerId)?.type, modelId: mdl?.modelId, budget: mdl?.generationBudget }),
+      : undefined,
+    generationOptions: mdl?.generationOptions || {profile:'code'},
   }), [batchModel]);
 
   // Injected operations the batch runner drives. Rebuilt when the model,
   // directory, or the generations snapshot (skip/has-run data) changes.
   const batchDeps = useMemo(() => ({
+    getProviderType: id => modelProviders.getProvider(id)?.type,
+    fetchModelCapabilities: async ({refresh=false}={}) => (await fetchOpenRouterCatalogue({refresh,strict:true})).map(m=>({...m,providerType:'openrouter',modelId:m.id})),
     beginRun: () => { batchAbortRef.current = new AbortController(); },
     abortInFlight: () => batchAbortRef.current.abort(),
     generate: async (promptText, { model: mdl, promptItem, checklist, onChunk, onStats } = {}) => {
@@ -1287,7 +1290,7 @@ function App() {
       await openrouter.generateHtml(generationPrompt, target.providerId, target.modelId, (partial) => {
         finalHtml = stripCodeFences(partial);
         onChunk?.(finalHtml);
-      }, onStats, target.params, { signal: batchAbortRef.current.signal });
+      }, onStats, target.params, { signal: batchAbortRef.current.signal, generationOptions: target.generationOptions });
       return finalHtml;
     },
     runSandbox: (h) => runHtmlSandbox(h),

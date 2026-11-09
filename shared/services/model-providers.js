@@ -369,12 +369,12 @@ export async function fetchProviderModels(providerId, options = {}) {
   // hide a newly available model or preserve the old parser's default-only row.
   const synthetic = isSyntheticProvider(provider);
   const cached = synthetic ? null : getCachedModels(providerId);
-  if (cached) return applyModelFilters(cached, options);
+  if (cached && !options.refresh) return applyModelFilters(cached, options);
 
   // Always fetch the full list — no filter options passed to adapter
   try {
     const adapter = getAdapter(provider.type);
-    const models = await adapter.fetchModels(provider);
+    const models = await adapter.fetchModels(provider, {refresh: options.refresh === true});
 
     // Cache the full results
     if (!synthetic && models.length > 0) {
@@ -496,7 +496,7 @@ export async function fetchEnabledModels(options = {}) {
  */
 export async function refreshProviderModels(providerId, options = {}) {
   clearModelCache(providerId);
-  return fetchProviderModels(providerId, options);
+  return fetchProviderModels(providerId, {...options,refresh:true});
 }
 
 /**
@@ -574,7 +574,7 @@ export function setDefaultModel(providerId, modelId) {
  */
 export async function streamChat({
   providerId, modelId, systemPrompt, userPrompt, onChunk, appTitle, params, onStats, telemetryMeta,
-  onAgentEvent, onAgentLive, signal, agentBudgets,
+  onAgentEvent, onAgentLive, signal, agentBudgets, generationOptions,
 }) {
   const provider = getProvider(providerId);
   if (!provider) throw new Error(`Provider "${providerId}" not found`);
@@ -596,7 +596,7 @@ export async function streamChat({
   }), (telemetry) => raceAbort(adapter.streamChat({
     provider, modelId, systemPrompt, userPrompt, appTitle, params, onStats,
     onChunk: telemetry ? telemetry.wrapOnChunk(guardedChunk) : guardedChunk,
-    telemetry, onAgentEvent, onAgentLive, signal, agentBudgets,
+    telemetry, onAgentEvent, onAgentLive, signal, agentBudgets, generationOptions,
   }), signal));
 }
 

@@ -1,5 +1,6 @@
 """A deliberately fixed OpenRouter boundary; browser credentials are ignored."""
 import json
+import re
 
 from flask import Blueprint, Response, abort, jsonify, request, stream_with_context
 import requests
@@ -35,10 +36,23 @@ def relay():
         abort(502, description='OpenRouter est injoignable. Réessayez plus tard.')
     if not 200 <= upstream.status_code < 300:
         status = upstream.status_code
-        upstream.close()
-        response = jsonify({'error': 'OpenRouter a refusé la requête. Vérifiez votre clé, votre crédit et le modèle.',
-                            'upstreamStatus': status})
-        response.status_code = 502
+        try:
+            error_body = upstream.json()
+            detail = error_body.get('error', {}) if isinstance(error_body, dict) else {}
+            message = detail.get('message') if isinstance(detail, dict) else detail
+            if not isinstance(message, str):
+                message = 'OpenRouter a refusé la requête. Vérifiez votre clé, votre crédit et le modèle.'
+            if key:
+                message = message.replace(key, '[clé masquée]')
+            message = re.sub(r'(?i)\bsk-[a-z0-9_-]+', '[clé masquée]', message)
+            message = re.sub(r'(?i)\bBearer\s+[^\s,;"\']+', 'Bearer [masqué]', message)
+            message = re.sub(r"(?i)(api[_-]?key|authorization|access[_-]?token|secret)\s*[:=]\s*[^\s,;]+", r'\1=[masqué]', message)
+        except (ValueError, TypeError):
+            message = 'OpenRouter a renvoyé une erreur illisible.'
+        finally:
+            upstream.close()
+        response = jsonify({'error': {'message': message[:2000], 'code': status}, 'upstreamStatus': status})
+        response.status_code = status if 400 <= status < 600 else 502
         return response
     if stream:
         def chunks():

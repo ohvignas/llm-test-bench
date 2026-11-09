@@ -212,6 +212,20 @@ class SecurityTests(unittest.TestCase):
         self.assertNotIn(b'dummy-secret', self.client.get('/api/openrouter/models').data)
 
     @patch('server.proxy.requests.request')
+    def test_provider_parameter_error_is_actionable_and_redacted(self, upstream):
+        self.setup()
+        self.client.put('/api/settings/key', headers=self.headers, json={'key': 'dummy-secret'})
+        upstream.return_value = Mock(status_code=400)
+        upstream.return_value.json.return_value = {'error': {'code': 400, 'message': 'reasoning effort invalid dummy-secret sk-or-test-secret Bearer another-secret', 'metadata': {'raw': 'do not expose'}}}
+        response = self.client.post('/api/openrouter/chat/completions', headers=self.headers,
+                                    json={'model': 'vendor/model', 'messages': [], 'stream': True})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('reasoning effort invalid', response.json['error']['message'])
+        for secret in (b'dummy-secret', b'sk-or-test-secret', b'another-secret', b'do not expose'):
+            self.assertNotIn(secret, response.data)
+        self.assertEqual(response.json['upstreamStatus'], 400)
+
+    @patch('server.proxy.requests.request')
     def test_chat_stream_and_sanitized_telemetry(self, upstream):
         self.setup()
         self.client.put('/api/settings/key', headers=self.headers, json={'key': 'dummy-secret'})

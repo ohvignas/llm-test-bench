@@ -3049,3 +3049,14 @@ button.create-run-label:hover { text-decoration: underline; }
 .batch-done > .batch-summary { flex-shrink:0; }
 .batch-done > .batch-run-list-done { flex:0 0 auto; }
 .batch-done > .batch-generation-log { flex:0 0 auto; height:380px; }
+.model-settings-panel {border:1px solid var(--border-color);border-radius:8px;padding:12px;}
+.model-settings-head {display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.model-settings-head>strong {flex:1;}
+.model-settings-row {padding:12px 0;border-top:1px solid var(--border-color);margin-top:10px;overflow-wrap:anywhere;}
+.model-settings-row p {font-size:12px;margin:6px 0;color:var(--text-secondary);}
+.model-settings-controls {display:flex;gap:14px;align-items:center;flex-wrap:wrap;}
+.model-settings-controls label {display:flex;flex-direction:column;gap:4px;font-size:12px;}
+.model-settings-controls input {width:150px;}
+.model-settings-row pre {font-size:11px;white-space:pre-wrap;}
+.model-settings-error {color:var(--danger)!important;}
+.model-settings-panel details {font-size:12px;}

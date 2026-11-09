@@ -62,3 +62,14 @@ test('unchanged counters never create fake progress events while the provider st
  journal.observeCalls([call],12000);
  assert.equal(journal.entries().filter(e=>e.stage==='progress').length,before);
 });
+
+test('API settings and usage diagnostics are logged once without arbitrary parameter bodies',()=>{
+ const model={providerId:'openrouter',modelId:'test',label:'Test'};
+ const journal=createBatchJournal({models:[model],startedAt:1});
+ const settings={profile:'maximum',params:{max_tokens:128000,reasoning:{effort:'max'},tools:[{private:'DO_NOT_STORE_PARAMETER_BODY'}]}};
+ const event={type:'stats',index:0,model,stats:{settings}};
+ journal.event(event,{model,index:0,title:'Page'});journal.event(event,{model,index:0,title:'Page'});
+ const rows=journal.entries();
+ assert.equal(rows.filter(e=>e.stage==='settings').length,1);
+ assert.match(rows[0].message,/128000/);assert.doesNotMatch(JSON.stringify(rows),/DO_NOT_STORE_PARAMETER_BODY/);
+});
