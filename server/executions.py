@@ -174,13 +174,13 @@ def enqueue(call_id, payload, context, headers, seed='', parent_id=None, origina
     return jsonify({'id': call_id}), 202
 
 
-def recovery_source(call_id, fallback=None):
+def recovery_source(call_id, fallback=None, restart=False):
     row = db().execute('SELECT * FROM browser_executions WHERE id=?', (identifier(call_id),)).fetchone()
     if row is None:
         abort(404, description='Cet ancien appel ne contient pas de point de reprise.')
     info = record(row)
-    if info['state'] in LIVE or info['state'] == 'ok':
-        abort(409, description='Seul un appel interrompu ou en échec peut être repris.')
+    if info['state'] in LIVE or (info['state'] == 'ok' and not restart):
+        abort(409, description='Attendez la fin de cet appel avant de préparer un nouvel essai.')
     if info['finish_reason'] == 'content_filter' or info['error'].get('status') == 403:
         abort(409, description='Appel filtré par le fournisseur : modifiez la consigne avant un nouvel essai.')
     if db().execute('SELECT 1 FROM browser_executions WHERE parent_id=?', (call_id,)).fetchone():
@@ -192,15 +192,17 @@ def recovery_source(call_id, fallback=None):
     guard = db().execute('SELECT state FROM generation_guard WHERE fingerprint=?', (fingerprint(payload),)).fetchone()
     if guard and guard['state'] == 'filtered':
         abort(409, description='Appel filtré par le fournisseur : modifiez la consigne avant un nouvel essai.')
-    if len(row['output']) >= MAX_OUTPUT:
+    if not restart and len(row['output']) >= MAX_OUTPUT:
         abort(409, description='Le code conservé atteint la limite de taille. Exportez-le avant de le modifier.')
     return row, info, payload
 
 
 @executions.post('/api/executions/<call_id>/recovery-plan')
 def recovery_plan(call_id):
-    row, info, payload = recovery_source(call_id, json_object().get('fallback'))
-    return jsonify({'source_id':call_id, 'mode':'continue' if row['output'] else 'retry',
+    body = json_object()
+    restart = body.get('restart') is True
+    row, info, payload = recovery_source(call_id, body.get('fallback'), restart=restart)
+    return jsonify({'source_id':call_id, 'mode':'restart' if restart else 'continue' if row['output'] else 'retry',
                     'title':info['context'].get('title', 'Création'), 'model':row['model'],
                     'model_label':info['context'].get('modelLabel',row['model']),
                     'output_chars':len(row['output']), 'request_saved':bool(row['request_payload']),
@@ -221,9 +223,10 @@ def recover_execution(call_id):
         if existing['parent_id'] == call_id:
             return jsonify({'id':new_id}), 200
         abort(409, description='Identifiant déjà utilisé.')
-    row, info, original = recovery_source(call_id, body.get('fallback'))
+    restart = body.get('restart') is True
+    row, info, original = recovery_source(call_id, body.get('fallback'), restart=restart)
     payload = {**original, 'stream':True}
-    seed = row['output']
+    seed = '' if restart else row['output']
     if seed:
         continuation = {'role':'system','content':('RECOVERY MODE: this request continues an interrupted HTML answer. '
             'Exception to the initial full-document formatting rule: return ONLY the suffix missing after the '

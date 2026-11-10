@@ -6,6 +6,12 @@ export function recoveryCandidates(calls=[]){
   for(const call of calls.toSorted((a,b)=>b.started-a.started))if(!latest.has(call.model))latest.set(call.model,call);
   return [...latest.values()].filter(canRecoverExecution);
 }
+export function comparisonRetryCandidates(calls=[]){
+  if(calls.some(c=>['queued','running','connecting','waiting','reasoning','writing'].includes(c.state)))return [];
+  const latest=new Map();
+  for(const call of calls.toSorted((a,b)=>b.started-a.started))if(!latest.has(call.model))latest.set(call.model,call);
+  return [...latest.values()].filter(c=>c.durable&&['ok','error','cancelled','interrupted'].includes(c.state));
+}
 export function recoveryFallback(call,prompts=[]){
   if(call.request_saved)return undefined;
   const prompt=prompts.find(p=>p.id===call.context?.promptId);

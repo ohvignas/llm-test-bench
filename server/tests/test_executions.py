@@ -222,4 +222,44 @@ class ExecutionTests(unittest.TestCase):
                 submit.assert_not_called()
 
 
+    def test_full_comparison_retry_restarts_successful_and_failed_models_without_reusing_output(self):
+        bodies=[self.body(1),self.body(4)]
+        with patch('server.executions.POOL.submit'):
+            for body in bodies:self.start(body)
+        with self.app.app_context():
+            for body,state in zip(bodies,['ok','error']):
+                db().execute('UPDATE browser_executions SET state=?,output=? WHERE id=?',(state,'<html>previous</html>',body['id']))
+            db().commit()
+        workers=[]
+        with patch('server.executions.POOL.submit') as submit,patch('server.proxy.requests.request') as api:
+            for i,source in enumerate(bodies):
+                path='/api/executions/'+source['id']
+                plan=self.client.post(path+'/recovery-plan',headers=self.headers,json={'restart':True})
+                self.assertEqual(plan.status_code,200);self.assertEqual(plan.json['mode'],'restart')
+                api.assert_not_called()
+                response=self.client.post(path+'/recover',headers=self.headers,json={'id':f'{10+i:032x}','confirmed':True,'restart':True})
+                self.assertEqual(response.status_code,202)
+                workers.append(submit.call_args.args)
+                self.assertEqual(workers[-1][3],source['request'])
+                self.assertEqual(self.client.get('/api/executions/'+f'{10+i:032x}').json['output'],'')
+        self.assertEqual(len(workers),2)
+        for i,source in enumerate(bodies):
+            response=Mock(status_code=200)
+            response.iter_content.return_value=[b'data: {"choices":[{"delta":{"content":"<html>new</html>"},"finish_reason":"stop"}],"usage":{"cost":0.01}}\n\n']
+            with patch('server.proxy.requests.request',return_value=response):run_execution(*workers[i][1:])
+            self.assertEqual(self.client.get('/api/executions/'+source['id']).json['output'],'<html>previous</html>')
+            result=self.client.get('/api/executions/'+f'{10+i:032x}').json
+            self.assertEqual(result['output'],'<html>new</html>');self.assertEqual(result['state'],'ok')
+
+    def test_full_comparison_retry_still_rejects_active_and_filtered_calls(self):
+        source=self.stopped_source()
+        path='/api/executions/'+source['id']+'/recover'
+        for state,error in [('running','{}'),('error','{"status":403}')]:
+            with self.app.app_context():
+                db().execute('UPDATE browser_executions SET state=?,error=? WHERE id=?',(state,error,source['id']));db().commit()
+            with patch('server.executions.POOL.submit') as submit:
+                result=self.client.post(path,headers=self.headers,json={'id':'a'*32,'confirmed':True,'restart':True})
+                self.assertEqual(result.status_code,409);submit.assert_not_called()
+
+
 if __name__ == '__main__': unittest.main()

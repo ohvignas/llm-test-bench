@@ -96,3 +96,13 @@ test('recovery only targets the latest failed model attempt and preserves succes
   assert.equal(recoveryFallback({...call,request_saved:true},[]),undefined);
   assert.equal(recoveryFallback(call,[]),undefined);
 });
+
+test('retrying a complete prompt comparison includes every latest model, successful or failed, once',async()=>{
+  const {comparisonRetryCandidates,recoveryCandidates}=await import('../../prompt-gallery/services/executionRecovery.js');
+  const calls=[{id:'old',model:'a',state:'error',durable:true,started:1},
+    {id:'success',model:'a',state:'ok',durable:true,started:2},
+    {id:'failure',model:'b',state:'error',durable:true,started:2}];
+  assert.deepEqual(comparisonRetryCandidates(calls).map(c=>c.id),['success','failure']);
+  assert.deepEqual(recoveryCandidates(calls).map(c=>c.id),['failure']);
+  assert.deepEqual(comparisonRetryCandidates([...calls,{id:'active',model:'c',state:'reasoning',durable:true,started:3}]),[]);
+});
