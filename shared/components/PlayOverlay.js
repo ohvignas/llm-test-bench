@@ -1,6 +1,7 @@
 import { html } from 'htm/preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { playableHtml } from '../services/playable-html.js';
+import { withPreviewStorage } from '../services/preview-storage.js';
 
 /**
  * Full-window player for generated HTML, with a list of versions to choose
@@ -79,7 +80,7 @@ export function PlayOverlay({ versions, initialId = '', title = '', backLabel = 
         title=${`${title || 'Code'}: ${version.label}`}
         sandbox="allow-scripts allow-pointer-lock"
         allow="fullscreen; gamepad; autoplay"
-        srcdoc=${srcdoc}
+        srcdoc=${withPreviewStorage(srcdoc)}
         onLoad=${focusGame}
       ></iframe>
     </div>`;

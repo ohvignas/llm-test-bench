@@ -1,4 +1,5 @@
 import { html } from 'htm/preact';
+import { withPreviewStorage } from '../../shared/services/preview-storage.js';
 import { Fragment } from 'preact';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'preact/hooks';
 import { ExecutorModelSelector } from '../../shared/components/ExecutorModelSelector.js';
@@ -849,8 +850,8 @@ export function BatchRunDialog({
               <option value="maximum">Effort maximal — risque de coût élevé</option><option value="code">Génération de code — raisonnement réduit</option><option value="manual">Budget personnalisé — plafonné par l’API</option>
             </select></label>
           <p class="batch-opt-hint">Le profil par défaut utilise un raisonnement réduit et un plafond de 32 768 tokens, ajustés selon l’API. Le profil maximal utilise l’effort le plus élevé et la sortie maximale annoncés par chaque modèle. Les appels peuvent durer plus longtemps et coûter davantage. Les tokens de raisonnement peuvent consommer tout le budget ; aucun site complet n’est garanti. Aucun appel payant n’est lancé par l’actualisation.</p>
-          ${settingsProfile==='manual'&&html`<label class="batch-opt"><span>Budget total demandé par appel</span><input class="form-input" type="number" min="1" value=${totalTokens} onChange=${e=>setTotalTokens(Number(e.target.value))}/></label>
-            <label class="batch-opt"><span>Budget de raisonnement demandé (si l’API l’accepte)</span><input class="form-input" type="number" min="1" value=${reasoningTokens} onChange=${e=>setReasoningTokens(Number(e.target.value))}/></label>`}
+          ${settingsProfile==='manual'&&html`<label class="batch-opt"><span>Budget total demandé par appel</span><input class="form-input" type="number" min="1" value=${totalTokens} onInput=${e=>{const value=Number(e.target.value);if(Number.isSafeInteger(value)&&value>0)setTotalTokens(value);}}/></label>
+            <label class="batch-opt"><span>Budget de raisonnement demandé (si l’API l’accepte)</span><input class="form-input" type="number" min="1" value=${reasoningTokens} onInput=${e=>{const value=Number(e.target.value);if(Number.isSafeInteger(value)&&value>0)setReasoningTokens(value);}}/></label>`}
           ${progressiveActive && html`<p class="batch-opt-hint">Les réglages ci-dessous s’appliquent aux générations en un appel. Sur OpenRouter, les plafonds et le profil Génération de code annoncés dans le plan prennent priorité pour les étapes GTA VI ; un plafond individuel plus bas reste respecté.</p>`}
           <${ModelSettingsPanel} reports=${previewReports} loading=${settingsLoading} error=${settingsError}
             onRefresh=${()=>refreshCapabilities().catch(()=>{})} onOverride=${overrideSettings} onReset=${()=>setSettingsOverrides({})}/>
@@ -992,7 +993,7 @@ export function BatchRunDialog({
                 </span>
               </div>
               ${displayedHtml
-                ? html`<iframe class="batch-preview-frame" sandbox="allow-scripts" srcdoc=${displayedHtml} title=${`Aperçu : ${inspectedTitle || 'génération en cours'}`}></iframe>`
+                ? html`<iframe class="batch-preview-frame" sandbox="allow-scripts" srcdoc=${withPreviewStorage(displayedHtml)} title=${`Aperçu : ${inspectedTitle || 'génération en cours'}`}></iframe>`
                 : html`<div class="batch-preview-empty"><i class="fa-solid fa-hourglass-half"></i><span>L’aperçu en direct apparaîtra ici</span></div>`}
             </div>`
           : html`

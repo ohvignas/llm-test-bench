@@ -1,5 +1,6 @@
 import { html } from 'htm/preact';
 import { useLazyHtml } from './useLazyHtml.js';
+import { withPreviewStorage } from '../../shared/services/preview-storage.js';
 import { useMemo, useState } from 'preact/hooks';
 import { RatingWidget } from './RatingWidget.js';
 import { ratingOf } from '../services/rating.js';
@@ -33,7 +34,7 @@ function ComparePane({ generation, loadHtml }) {
   const { html: page, loading } = useLazyHtml(generation.id, loadHtml, { initial: generation.response || '' });
   if (loading && !page) return html`<div class="compare-pane-loading">Chargement…</div>`;
   return html`<iframe
-    srcdoc=${page || ''}
+    srcdoc=${withPreviewStorage(page || '')}
     sandbox="allow-scripts allow-modals allow-pointer-lock"
     title=${generation.id}
   ></iframe>`;

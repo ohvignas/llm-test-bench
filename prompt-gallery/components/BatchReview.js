@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'preact/hooks'
 import { VerificationBadge, VerificationDetails } from './VerificationBadge.js';
 import { RatingWidget } from './RatingWidget.js';
 import { ratingFromKey, RATING_MAX } from '../services/rating.js';
+import { withPreviewStorage } from '../../shared/services/preview-storage.js';
 
 // Live HTML preview in a sandboxed iframe. srcdoc is (re)applied after the
 // element is laid out and cleared first, so swapping generations tears down the
@@ -13,7 +14,7 @@ export function HtmlLive({ html: content }) {
     const node = ref.current;
     if (!node) return;
     node.srcdoc = '';
-    const id = requestAnimationFrame(() => { if (ref.current) ref.current.srcdoc = content || ''; });
+    const id = requestAnimationFrame(() => { if (ref.current) ref.current.srcdoc = withPreviewStorage(content || ''); });
     return () => cancelAnimationFrame(id);
   }, [content]);
   return html`<iframe class="batch-html-live" ref=${ref}

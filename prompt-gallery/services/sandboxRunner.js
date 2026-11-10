@@ -1,6 +1,7 @@
 // Hidden-iframe sandbox runner for generated HTML. In addition to the legacy
 // console/error fields it collects compact deterministic evidence for the
 // opt-in Verified Generation pilot. The iframe remains opaque and script-only.
+import { withPreviewStorage } from '../../shared/services/preview-storage.js';
 
 const DEFAULT_TIMEOUT_MS = 10000;
 const SETTLE_MS = 2500;
@@ -86,6 +87,7 @@ function injectCapture(htmlContent, runId, { probe = false, settleMs = SETTLE_MS
         var afterDom = signature();
         var afterCanvas = secondFrames.map(function(x){ return x.value; }).join('|');
         var evidence = {
+          previewStorage: window.__PG_PREVIEW_STORAGE__ || null,
           documentTitle: bounded(document.title, 240),
           elementCounts: {
             button: document.querySelectorAll('button,[role="button"],input[type="button"],input[type="submit"]').length,
@@ -156,7 +158,7 @@ function runOne(htmlContent, { timeoutMs, probe, settleMs }) {
       });
     }
     window.addEventListener('message', onMessage);
-    iframe.srcdoc = injectCapture(htmlContent, runId, { probe, settleMs });
+    iframe.srcdoc = injectCapture(withPreviewStorage(htmlContent), runId, { probe, settleMs });
   });
 }
 
@@ -164,6 +166,7 @@ function mergeEvidence(base, probe) {
   const first = base?.evidence || {};
   const second = probe?.evidence || {};
   return {
+    previewStorage: first.previewStorage || second.previewStorage || null,
     documentTitle: truncate(first.documentTitle || second.documentTitle || '', 240),
     elementCounts: first.elementCounts || second.elementCounts || { button: 0, input: 0, canvas: 0, svg: 0 },
     buttonLabels: (first.buttonLabels || second.buttonLabels || []).slice(0, 20).map(value => truncate(value, 120)),

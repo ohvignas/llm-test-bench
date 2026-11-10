@@ -2,6 +2,7 @@ import { html } from 'htm/preact';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'preact/hooks';
 import { injectPreviewConsole, PREVIEW_CONSOLE_MESSAGE } from '../services/previewConsole.js';
 import { captureThumbnail, withThumbnailShim } from '../services/thumbnail.js';
+import { withPreviewStorage } from '../../shared/services/preview-storage.js';
 
 let loadCounter = 0;
 
@@ -30,7 +31,7 @@ export function PreviewPane({ htmlContent, onConsoleEntry, onConsoleReset, regis
   const load = useMemo(() => {
     if (!srcdoc) return null;
     const channel = `pg-preview-${++loadCounter}`;
-    return { channel, doc: injectPreviewConsole(withThumbnailShim(srcdoc), channel) };
+    return { channel, doc: injectPreviewConsole(withThumbnailShim(withPreviewStorage(srcdoc)), channel) };
   }, [srcdoc]);
 
   // Layout effects run in the same commit that sets srcdoc, so they are in

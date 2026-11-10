@@ -16,6 +16,7 @@ import { fetchModels as fetchOpenRouterCatalogue } from '../shared/services/open
 import { BatchRunDialog } from './components/BatchRunDialog.js';
 import { runHtmlSandbox, runStatusLabel } from './services/sandboxRunner.js';
 import { addConsoleEntry, consoleCounts, mergePreviewErrors } from './services/previewConsole.js';
+import { withPreviewStorage } from '../shared/services/preview-storage.js';
 import { planRunMerge } from './services/runs.js';
 import { generationRoute, parseGalleryRoute } from './services/routes.js';
 import { withRating, ratingFromKey, RATING_MAX } from './services/rating.js';
@@ -1814,7 +1815,7 @@ function ViewIframe({ generationId, html: htmlContent }) {
     const apply = () => {
       if (cancelled || !node.isConnected) return;
       if (node.offsetWidth > 0 && node.offsetHeight > 0) {
-        node.srcdoc = htmlContent;
+        node.srcdoc = withPreviewStorage(htmlContent);
       } else {
         requestAnimationFrame(apply);
       }

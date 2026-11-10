@@ -4,6 +4,7 @@ import { RatingWidget } from './RatingWidget.js';
 import { ratingOf, RATING_MAX } from '../services/rating.js';
 import { FilterBar } from './FilterBar.js';
 import { useLazyHtml } from './useLazyHtml.js';
+import { withPreviewStorage } from '../../shared/services/preview-storage.js';
 import {
   collectGalleryFacets,
   filterProjects,
@@ -117,7 +118,7 @@ function LazyThumb({ id, srcdoc, title, genId, loadHtml, hasThumbnail = false, l
       : html`<div class="gallery-thumb-placeholder"><i class="fa-solid fa-image"></i></div>`;
   } else {
     body = live
-      ? html`<iframe srcdoc=${loaded || ''} sandbox="allow-scripts" title=${title} tabindex="-1"></iframe>`
+      ? html`<iframe srcdoc=${withPreviewStorage(loaded || '')} sandbox="allow-scripts" title=${title} tabindex="-1"></iframe>`
       : html`<div class="gallery-thumb-placeholder"><i class="fa-solid fa-image"></i></div>`;
   }
 

@@ -6,6 +6,7 @@ import { runHtmlSandbox, runStatusLabel } from '../services/sandboxRunner.js';
 import * as refine from '../services/refine.js';
 import { createRefineBilling } from '../services/refineBilling.js';
 import { BatchCosts } from './BatchCosts.js';
+import { withPreviewStorage } from '../../shared/services/preview-storage.js';
 
 // The Refine call in flight. Module-level rather than a ref: the session (and
 // its `busy` flag) outlives this view when the user switches tabs mid-call, and
@@ -59,7 +60,7 @@ function LiveHtmlFrame({ frameKey, html: htmlContent }) {
     const apply = () => {
       if (cancelled || !node.isConnected) return;
       if (node.offsetWidth > 0 && node.offsetHeight > 0) {
-        node.srcdoc = withResizeShim(htmlContent);
+        node.srcdoc = withResizeShim(withPreviewStorage(htmlContent));
       } else {
         requestAnimationFrame(apply);
       }
