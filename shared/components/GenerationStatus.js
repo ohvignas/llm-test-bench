@@ -13,7 +13,7 @@
 // serve.py; it is simply absent without serve.py or history.
 
 import { html, render } from 'htm/preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { subscribeInFlight, fetchTypical } from '../services/generation-telemetry.js';
 
 const PHASE_LABELS = {
@@ -97,17 +97,31 @@ function useTypical(snapshot) {
  */
 export function GenerationStatus({ filter = null, className = '' }) {
   ensureStyles();
+  const [open, setOpen] = useState(false);
+  const root = useRef(null);
+  const trigger = useRef(null);
   const all = useInFlight();
   const calls = filter ? all.filter(filter) : all;
   const current = calls.length ? calls.reduce((a, b) => (b.startedAt > a.startedAt ? b : a)) : null;
   const typical = useTypical(current);
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOutside = event => { if (!root.current?.contains(event.target)) setOpen(false); };
+    const closeEscape = event => {
+      if (event.key === 'Escape') { setOpen(false); trigger.current?.focus(); }
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    document.addEventListener('keydown', closeEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside);
+      document.removeEventListener('keydown', closeEscape);
+    };
+  }, [open]);
+  useEffect(() => { if (!calls.length) setOpen(false); }, [calls.length]);
   if (!current) return null;
 
   // Snapshots are only taken when an event arrives; the clock keeps moving.
   const elapsed = Math.max(current.elapsedMs, Date.now() - current.startedAt);
-  const detail = current.note ? current.note : current.phase === 'firstThought' && current.thinkingTokens
-    ? `${formatCount(current.thinkingTokens)} tokens`
-    : (current.phase === 'firstToken' && current.outputChars ? `${formatCount(current.outputChars)} caractères` : '');
   const hint = typicalHint(current, typical);
   const label = PHASE_LABELS[current.phase] || current.label;
   const title = [
@@ -115,20 +129,33 @@ export function GenerationStatus({ filter = null, className = '' }) {
     `Démarré il y a ${formatDuration(elapsed)} (${current.entry || 'appel'})`,
     hint,
     calls.length > 1 ? `${calls.length} appels en cours sur cette page` : '',
-    'Ouvrez Generation Observatory pour consulter l’historique.',
+    'Afficher le suivi de chaque appel, sans quitter la page.',
   ].filter(Boolean).join('\n');
 
   return html`
-    <a class=${`gen-status gen-status-${current.phase} ${className}`} href="../generation-observatory/"
-      target="_blank" rel="noopener" title=${title}>
-      <i class=${`fa-solid ${ICONS[current.phase] || 'fa-circle-notch'}`}></i>
-      <span class="gen-status-label">${label}</span>
+    <div class="gen-status-root" ref=${root}>
+    <button type="button" ref=${trigger} class=${`gen-status gen-status-${current.phase} ${className}`}
+      aria-label=${`Suivi des générations : ${calls.length} appel(s) en cours`}
+      aria-expanded=${open} title=${title} onClick=${() => setOpen(value => !value)}>
+      <i aria-hidden="true" class=${`fa-solid ${ICONS[current.phase] || 'fa-circle-notch'}`}></i>
+      <span class="gen-status-label">${calls.length > 1 ? `${calls.length} appels en cours` : label}</span>
       <span class="gen-status-model">${modelLabel(current)}</span>
-      ${detail && html`<span class="gen-status-detail">${detail}</span>`}
       <span class="gen-status-time">${formatDuration(elapsed)}</span>
-      ${hint && html`<span class="gen-status-hint">${hint}</span>`}
-      ${calls.length > 1 && html`<span class="gen-status-more">+${calls.length - 1}</span>`}
-    </a>
+    </button>
+    ${open && html`<section class="gen-status-panel" aria-label="Suivi des générations">
+      <header><strong>Suivi des générations · ${calls.length}</strong>
+        <button type="button" aria-label="Fermer le suivi" onClick=${() => {setOpen(false);trigger.current?.focus();}}>×</button></header>
+      <div class="gen-status-calls">${calls.map(call => html`<article key=${call.id}>
+        <strong>${modelLabel(call)}</strong>
+        <div class="gen-status-metrics"><span>${PHASE_LABELS[call.phase] || call.label}</span>
+          <span>${formatDuration(Math.max(call.elapsedMs, Date.now() - call.startedAt))}</span></div>
+        <div>${Number(call.outputChars || 0).toLocaleString('fr-FR')} caractères reçus · ${Number(call.reasoningChunks || 0).toLocaleString('fr-FR')} signaux de raisonnement</div>
+        <small>${Number.isFinite(call.lastReceivedAt) ? `Dernier signal reçu il y a ${formatDuration(Date.now() - call.lastReceivedAt)}` : 'En attente du premier signal du fournisseur'}</small>
+        ${!call.outputChars && call.phase === 'firstThought' && html`<p>Le fournisseur signale du raisonnement ; aucun code reçu pour cet appel.</p>`}
+      </article>`)}</div>
+      <footer>Les signaux ne sont pas des tokens. Ils ne permettent pas de vérifier le contenu du raisonnement interne. Les coûts confirmés figurent dans le journal du lot.</footer>
+    </section>`}
+    </div>
   `;
 }
 
@@ -154,21 +181,40 @@ function ensureStyles() {
   const style = document.createElement('style');
   style.dataset.owner = 'generation-status';
   style.textContent = `
-.gen-status { display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+.gen-status-root { position: relative; max-width: 100%; font-family: system-ui, sans-serif; }
+.gen-status { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; cursor: pointer;
   padding: 3px 10px; border-radius: 999px; font-size: 12px; line-height: 18px;
   background: var(--bg-tertiary, #2a2a2a); color: var(--text-primary, #eee);
   border: 1px solid var(--border-color, #444); text-decoration: none; white-space: nowrap;
   overflow: hidden; }
 .gen-status:hover { border-color: var(--accent, #60a5fa); }
+.gen-status:focus-visible { outline: 2px solid var(--accent, #60a5fa); outline-offset: 3px; }
 .gen-status i { color: var(--accent, #60a5fa); }
 .gen-status-firstThought i { animation: gen-status-pulse 1.6s ease-in-out infinite; }
-.gen-status-label { font-weight: 600; }
-.gen-status-model { color: var(--text-secondary, #bbb); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.gen-status-label { font-weight: 600; flex-shrink: 0; }
+.gen-status-model { color: var(--text-secondary, #bbb); overflow: hidden; text-overflow: ellipsis; min-width: 0; max-width: 220px; }
+.gen-status-time { flex-shrink: 0; }
 .gen-status-detail, .gen-status-time { font-variant-numeric: tabular-nums; }
 .gen-status-hint { color: var(--text-muted, #888); }
 .gen-status-more { color: var(--text-muted, #888); }
 .gen-status-host { position: fixed; z-index: 9000; max-width: calc(100vw - 24px); pointer-events: none; }
 .gen-status-host .gen-status { pointer-events: auto; box-shadow: var(--shadow, 0 2px 8px rgba(0,0,0,.3)); }
+.gen-status-panel { position: absolute; bottom: calc(100% + 10px); left: 0; width: min(420px, calc(100vw - 24px));
+  box-sizing: border-box; max-height: min(600px, calc(100dvh - 110px)); display: flex; flex-direction: column;
+  pointer-events: auto; background: var(--bg-secondary, #202124); color: var(--text-primary, #eee);
+  border: 1px solid var(--border-color, #555); border-radius: 12px; box-shadow: 0 8px 36px #0008;
+  font-size: 13px; line-height: 1.5; white-space: normal; overflow: hidden; text-align: left; }
+.gen-status-panel header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; }
+.gen-status-panel header button { border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; font-size: 24px; padding: 0 8px; }
+.gen-status-calls { overflow: auto; min-height: 0; }
+.gen-status-calls article { padding: 12px 14px; border-top: 1px solid var(--border-color, #444); overflow-wrap: anywhere; }
+.gen-status-metrics { display: flex; justify-content: space-between; gap: 12px; margin: 5px 0; color: var(--accent, #60a5fa); }
+.gen-status-calls p { margin: 7px 0 0; color: #fbbf24; }
+.gen-status-calls small, .gen-status-panel footer { color: var(--text-secondary, #bbb); }
+.gen-status-panel footer { padding: 10px 14px; border-top: 1px solid var(--border-color, #444); font-size: 12px; }
+.gen-status-host-bottom-right .gen-status-panel, .gen-status-host-top-right .gen-status-panel { left: auto; right: 0; }
+.gen-status-host-top-right .gen-status-panel { bottom: auto; top: calc(100% + 10px); }
+@media (max-width: 480px) { .gen-status-model { max-width: 105px; } }
 .gen-status-host-bottom-left { left: 12px; bottom: 12px; }
 .gen-status-host-bottom-right { right: 12px; bottom: 12px; }
 .gen-status-host-top-right { right: 12px; top: 56px; }

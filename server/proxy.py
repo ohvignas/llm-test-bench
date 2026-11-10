@@ -9,6 +9,7 @@ from werkzeug.exceptions import HTTPException
 from .auth import json_object
 from .storage import api_key
 from .spend_guard import reserve, finish, clear_failed
+from .activity import Activity
 
 proxy = Blueprint('proxy', __name__)
 UPSTREAM = 'https://openrouter.ai/api/v1'
@@ -45,6 +46,7 @@ def relay():
     identity = reserve(payload, automatic) if chat else None
     if chat and identity is None:
         return unsent_error(409, 'Appel bloqué : ce prompt et ce modèle sont déjà en cours ou ont échoué. Aucun nouvel appel envoyé. Modifiez le prompt, ou autorisez volontairement les relances dans les options du lot.')
+    activity = Activity(payload, automatic) if chat else None
     stream = bool(chat and payload.get('stream'))
     headers = {'Accept': 'text/event-stream' if stream else 'application/json',
                'Content-Type': 'application/json'}
@@ -58,10 +60,12 @@ def relay():
     except requests.RequestException:
         if identity:
             finish(identity, False)
+            activity.finish('error')
         abort(502, description='OpenRouter est injoignable. Réessayez plus tard.')
     if not 200 <= upstream.status_code < 300:
         if identity:
             finish(identity, False, filtered=upstream.status_code == 403)
+            activity.finish('error')
         status = upstream.status_code
         try:
             error_body = upstream.json()
@@ -90,6 +94,8 @@ def relay():
             stop_reason = None
             failed = False
             filtered = False
+            completed = False
+            cancelled = False
             def observe(line):
                 nonlocal received, stop_reason, failed, filtered
                 if not line.startswith(b'data:'):
@@ -115,22 +121,29 @@ def relay():
                         raise ValueError('Invalid choice')
                     received = received or bool((delta or {}).get('content'))
                     stop_reason = choice.get('finish_reason') or stop_reason
+                activity.observe(event)
             try:
                 # Reassemble lines before redaction so credentials split across chunks
                 # cannot leak through a malicious or broken upstream error response.
                 buffer = b''
                 for chunk in upstream.iter_content(chunk_size=None):
+                    if activity.cancelled():
+                        cancelled = True
+                        yield b'data: {"error":{"code":"CANCELLED_BY_OPERATOR","message":"Appel arrete depuis la CLI locale."}}\n\n'
+                        return
                     buffer += chunk
                     while b'\n' in buffer:
                         line, buffer = buffer.split(b'\n', 1)
                         observe(line)
                         yield (line.replace(key.encode(), b'[redacted]') if key else line) + b'\n'
                     if len(buffer) > 4 * 1024 * 1024:
+                        failed = True
                         yield b'data: {"error":"Flux OpenRouter trop volumineux."}\n\n'
                         return
                 if buffer:
                     observe(buffer)
                     yield buffer.replace(key.encode(), b'[redacted]') if key else buffer
+                completed = True
             except requests.RequestException:
                 failed = True
                 yield b'data: {"error":"Connexion OpenRouter interrompue."}\n\n'
@@ -139,13 +152,16 @@ def relay():
                 yield b'data: {"error":"Flux OpenRouter illisible."}\n\n'
             finally:
                 upstream.close()
-                finish(identity, not failed and ((received and stop_reason == 'stop') or stop_reason == 'tool_calls'), filtered=filtered or stop_reason == 'content_filter')
+                successful = completed and not failed and ((received and stop_reason == 'stop') or stop_reason == 'tool_calls')
+                finish(identity, successful, filtered=filtered or stop_reason == 'content_filter')
+                activity.finish('ok' if successful else 'cancelled' if cancelled or not completed and not failed else 'error')
         return Response(stream_with_context(chunks()), mimetype='text/event-stream',
                         headers={'X-Accel-Buffering': 'no', 'Cache-Control': 'no-store'})
     try:
         result = upstream.json()
         # Normally the service never echoes credentials; enforce this at our boundary.
         if identity:
+            activity.observe(result)
             choices = result.get('choices', []) if isinstance(result, dict) else []
             if (not isinstance(choices, list) or not choices
                     or any(not isinstance(choice, dict)
@@ -154,6 +170,7 @@ def relay():
             successful = bool(choices) and all(choice.get('finish_reason') in ('stop', 'tool_calls') and
                 bool((choice.get('message') or {}).get('content') or (choice.get('message') or {}).get('tool_calls')) for choice in choices)
             finish(identity, successful, filtered=any(choice.get('finish_reason') == 'content_filter' for choice in choices))
+            activity.finish('ok' if successful else 'error')
         encoded = json.dumps(result, ensure_ascii=False)
         if key:
             encoded = encoded.replace(key, '[redacted]')
@@ -161,6 +178,7 @@ def relay():
     except (ValueError, TypeError):
         if identity:
             finish(identity, False)
+            activity.finish('error')
         abort(502, description='Réponse OpenRouter illisible.')
     finally:
         upstream.close()

@@ -55,6 +55,12 @@ def initialize(app):
             CREATE TABLE IF NOT EXISTS automatic_runs (
                 id TEXT PRIMARY KEY, model_hash TEXT NOT NULL, calls INTEGER NOT NULL,
                 pending TEXT, created_at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS generation_activity (
+                id TEXT PRIMARY KEY, model TEXT NOT NULL, worker TEXT NOT NULL,
+                started REAL NOT NULL, updated REAL NOT NULL, state TEXT NOT NULL,
+                output_chars INTEGER NOT NULL DEFAULT 0, reasoning_events INTEGER NOT NULL DEFAULT 0,
+                finish_reason TEXT, usage TEXT NOT NULL DEFAULT '{}', settings TEXT NOT NULL DEFAULT '{}',
+                cancel_requested INTEGER NOT NULL DEFAULT 0);
             CREATE TABLE IF NOT EXISTS login_attempts (
                 address TEXT NOT NULL, attempted_at INTEGER NOT NULL);
             CREATE INDEX IF NOT EXISTS login_attempt_time ON login_attempts(attempted_at);

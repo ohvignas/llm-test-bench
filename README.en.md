@@ -59,6 +59,12 @@ Run `docker compose up -d --build --wait` again, then open `http://127.0.0.1:809
 
 Local server logs help diagnose installation problems; model outputs and run metrics are in the app. Before updating a ZIP installation, back up its volumes and follow the [migration instructions](docs/OPERATIONS.md). A differently named folder may use a different Compose project and different volumes.
 
+### Local diagnostic CLI
+
+Run `./benchctl status --json`, `./benchctl doctor`, `./benchctl history --limit 10`, or `./benchctl journal "/path/to/export.json"` from the project directory (Python 3 and Docker required). `./benchctl cancel EXACT_CALL_ID` requests cancellation of one call on its next upstream chunk; it does not retry or erase outputs. Already processed tokens may still be billed. The UI may display a failed item with the explicit CLI cancellation message. Windows: `python benchctl ...`. Without host Python: `docker compose exec -T bench python -m server.diagnostics status --json` (also supports doctor, history and cancel).
+
+These commands never start paid generations or read the vault key. Local Docker permissions provide access; no public admin endpoint is added. Server tracking covers calls started after this update and retains numeric progress, effective settings and reported costs, without prompt, output or reasoning text. Completed tracking records expire after 30 days. Missing costs remain unknown; browser telemetry supplies older history. Counters cannot prove the absence of internal reasoning loops or guarantee success. The floating generation-status button now opens a local panel listing all active models instead of navigating to a missing page.
+
 ## Storage and backups
 
 `bench-data` holds SQLite (password hash, sessions, encrypted credential) and project/settings/metrics files. `bench-secrets` holds the separately generated encryption key. These Docker named volumes are scoped by the Compose project name.

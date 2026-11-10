@@ -151,7 +151,25 @@ Toutes les commandes se lancent depuis le dossier contenant `compose.yaml`.
 | Récupérer un mot de passe oublié | `docker compose exec bench python -m server.manage reset-password` |
 | Exécuter les tests serveur sans Python installé | `docker compose exec -T bench python -m unittest discover -s server/tests -v` |
 
-Les logs ci-dessus servent au diagnostic du serveur local. Les résultats des modèles et les statistiques d'exécution se consultent dans l'application.
+Le bouton flottant **Suivi des générations** ouvre maintenant un panneau sur place : chaque modèle, durée, caractères reçus et signaux de raisonnement sont visibles sans quitter la génération.
+
+### CLI locale pour le diagnostic
+
+Depuis le dossier du projet, avec Python 3 et Docker :
+
+```sh
+./benchctl status --json
+./benchctl doctor
+./benchctl history --limit 10
+./benchctl journal "/chemin/journal-generation.json"
+./benchctl cancel IDENTIFIANT_EXACT_DE_L_APPEL
+```
+
+`status` lit les appels en cours côté serveur, `doctor` signale notamment les sorties épuisées sans code, `history` lit les métriques enregistrées et `journal` analyse un export de l’interface. `cancel` demande l’arrêt d’un seul appel au prochain fragment du fournisseur ; il ne relance rien et n’efface pas les résultats. Les tokens déjà traités peuvent rester facturés. L’interface peut classer cet arrêt comme un échec, avec son message explicite.
+
+Les commandes n’effectuent aucun appel de génération et ne lisent pas la clé du coffre. L’accès repose sur les droits Docker locaux, sans endpoint d’administration public. `--json` fournit une sortie structurée pour les agents. Sans Python sur l’hôte, utiliser `docker compose exec -T bench python -m server.diagnostics status --json` (idem pour `doctor`, `history` et `cancel`). Sur Windows avec Python : `python benchctl status --json`.
+
+Le suivi détaillé serveur commence avec les appels lancés après cette mise à jour ; les anciens appels restent identifiés comme tels. Il conserve uniquement les compteurs, réglages et coûts reçus, pendant 30 jours pour les appels terminés, sans texte des prompts, code ou raisonnement interne. Un coût absent reste inconnu, jamais zéro. `history` dépend des métriques enregistrées par l’interface. Le suivi ne prouve pas qu’un modèle ne boucle pas intérieurement et ne garantit pas la réussite de la génération.
 
 Pour une installation obtenue en ZIP, sauvegarder les volumes avant une mise à jour et suivre le [guide de migration](docs/OPERATIONS.md) : un dossier renommé peut désigner un autre projet Compose et donc d'autres volumes.
 
