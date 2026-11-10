@@ -7,6 +7,7 @@
 // all its previews can be assembled synchronously.
 
 import { modelLabel, humanizeFolderName } from './gallery.js';
+import { costTotals } from './batchCosts.js';
 import { ratingOf } from './rating.js';
 
 // The subject of a generation — what was asked for. Batch prompts come from the
@@ -148,6 +149,7 @@ export function buildRuns(generations) {
       params: m.genParams || null,
       paramsLabel: m.paramsLabel || null,
       stats: m.genStats || null,
+      billing: m.billing || null,
       generatedAt: m.batch?.generatedAt || m.createdAt || '',
       verification: m.verification || null,
       rating: ratingOf(m),
@@ -174,6 +176,8 @@ export function buildRuns(generations) {
       groupId: run.groupId,
       items: run.items,
       count: run.items.length,
+      billing: costTotals(run.items.flatMap(item => item.billing?.calls || [])),
+      billingComplete: run.items.every(item => !!item.billing),
       ratedCount: run.items.filter(item => item.rating > 0).length,
       startedAt: run.mergedAt || run.items[0]?.generatedAt || '',
     });

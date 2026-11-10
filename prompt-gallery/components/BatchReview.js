@@ -1,6 +1,7 @@
 import { html } from 'htm/preact';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'preact/hooks';
 import { VerificationBadge, VerificationDetails } from './VerificationBadge.js';
+import { ExecutionSummary } from './ExecutionSummary.js';
 import { RatingWidget } from './RatingWidget.js';
 import { ratingFromKey, RATING_MAX } from '../services/rating.js';
 import { withPreviewStorage } from '../../shared/services/preview-storage.js';
@@ -204,6 +205,7 @@ export function BatchReview({ rows, resetKey, onOpen, onRate }) {
               ${statsBits(cur.stats) ? html`<span class="batch-stats-line">${statsBits(cur.stats)}</span>` : null}
             </div>
           `}
+          <${ExecutionSummary} calls=${cur.billing?.calls || []} known=${!!cur.billing} compact=${true} />
           ${cur.verification && html`<${VerificationDetails}
             verification=${cur.verification}
             parentId=${cur.parentId}

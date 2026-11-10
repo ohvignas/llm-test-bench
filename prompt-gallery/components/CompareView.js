@@ -2,6 +2,7 @@ import { html } from 'htm/preact';
 import { useLazyHtml } from './useLazyHtml.js';
 import { withPreviewStorage } from '../../shared/services/preview-storage.js';
 import { useMemo, useState } from 'preact/hooks';
+import { ExecutionSummary } from './ExecutionSummary.js';
 import { RatingWidget } from './RatingWidget.js';
 import { ratingOf } from '../services/rating.js';
 import {
@@ -282,6 +283,7 @@ export function CompareView({ generations, compareIds, onCompareIdsChange, onOpe
                 `}
               </div>
             </div>
+            <${ExecutionSummary} calls=${g.metadata?.billing?.calls || []} known=${!!g.metadata?.billing} compact=${true} />
             <${ComparePane} generation=${g} loadHtml=${loadHtml} />
           </div>
         `)}

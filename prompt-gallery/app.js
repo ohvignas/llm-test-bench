@@ -1282,7 +1282,7 @@ function App() {
     params: mdl?.backend === 'agent'
       ? { reasoning_effort: getAgentModelEffort(mdl.agentId, mdl.agentModelId) }
       : undefined,
-    generationOptions: mdl?.generationOptions || {profile:'code'},
+    generationOptions: mdl?.generationOptions || {profile:'benchmark'},
   }), [batchModel]);
 
   // Injected operations the batch runner drives. Rebuilt when the model,

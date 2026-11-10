@@ -36,6 +36,15 @@ test('a missing model blocks the paid completion endpoint',async()=>{
  await assert.rejects(adapter.streamChat({modelId:'vendor/missing',appTitle:'Prompt Gallery',userPrompt:'page'}),e=>e.retryable===false);
  assert.equal(requests.length,before);
 });
+test('ordinary prompts use the comparison default in the actual adapter without a GTA-specific path',async()=>{
+ for (const userPrompt of ['Build a restaurant website','Create a physics simulation']) {
+  let observed;
+  await adapter.streamChat({modelId:'vendor/model',appTitle:'Prompt Gallery',userPrompt,onStats:s=>{observed=s;}});
+  assert.equal(requests.at(-1).max_tokens,64000);
+  assert.equal(requests.at(-1).reasoning.effort,'max'); // Highest available: this fixture only advertises max/low.
+  assert.equal(observed.settings.profile,'benchmark');
+ }
+});
 test('parameter refusal remains non-retryable and carries an actionable API message',async()=>{
  const previous=globalThis.fetch;
  globalThis.fetch=async(url,init)=>url==='/api/openrouter/chat/completions'?Response.json({error:{message:'reasoning effort invalid',code:400}},{status:400}):previous(url,init);

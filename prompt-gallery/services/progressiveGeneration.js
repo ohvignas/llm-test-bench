@@ -9,6 +9,9 @@ export function progressivePlan(prompt) {
 
 export function progressiveModel(model, step) {
   const existing = model.generationOptions || {};
+  // A selected comparison/manual profile is authoritative, including in stages.
+  // The legacy 12k stage ceiling applies only to the economical code profile.
+  if (existing.profile && existing.profile !== 'code') return {...model, generationOptions:{...existing, budget:{...existing.budget}}};
   const ceilings = [step.maxTokens, existing.reviewedMaxTokens, existing.budget?.totalTokens]
     .filter(value => Number.isSafeInteger(value) && value > 0);
   const ceiling = Math.min(...ceilings);

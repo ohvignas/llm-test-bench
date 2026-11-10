@@ -2,6 +2,7 @@ import { html } from 'htm/preact';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'preact/hooks';
 import { BatchReview, HtmlLive, HtmlLightbox } from './BatchReview.js';
 import { buildRuns, canMergeRuns, extractGenTitle } from '../services/runs.js';
+import { ExecutionSummary } from './ExecutionSummary.js';
 import { RatingWidget } from './RatingWidget.js';
 import { promptSetLabel } from '../services/library.js';
 
@@ -213,6 +214,7 @@ export function RunsView({ generations, hasDirectory, onPickDirectory, onOpen, o
     healed: it.healed,
     stats: it.stats,
     paramsLabel: it.paramsLabel,
+    billing: it.billing,
     error: it.hasHtml ? '' : 'Fichier HTML manquant',
     verification: it.verification,
     parentId: it.parentId,
@@ -245,6 +247,8 @@ export function RunsView({ generations, hasDirectory, onPickDirectory, onOpen, o
             <span>${fmtWhen(singleRun.startedAt)} · ${singleRun.count} génération${singleRun.count === 1 ? '' : 's'}</span>
           </div>
         </div>
+        <${ExecutionSummary} calls=${singleRun.billing.calls} known=${singleRun.billingComplete} />
+        <small>Statistiques des résultats enregistrés dans cette exécution.</small>
         <${BatchReview} rows=${singleRows} resetKey=${singleRun.id} onOpen=${onOpen} onRate=${onRate} />
       </div>
     `;
@@ -437,6 +441,7 @@ function CompareRuns({ compareRuns, pageOf, loadingPages, onBack, onOpen, onRate
                 return html`
                   <div class="rcmp-col" key=${r.id}>
                     <div class="rcmp-col-head" title=${r.modelId || r.model}>${r.model}</div>
+                    <${ExecutionSummary} calls=${it?.billing?.calls || []} known=${!!it?.billing} compact=${true} />
                     ${(it?.genTitle || extractGenTitle(page)) ? html`<div class="rcmp-gen" title=${`Généré : ${it?.genTitle || extractGenTitle(page)}`}>${it?.genTitle || extractGenTitle(page)}</div>` : null}
                     <div class=${`rcmp-cell ${hasHtml ? 'is-zoomable' : ''}`}
                       title=${hasHtml ? 'Cliquer pour agrandir' : ''}

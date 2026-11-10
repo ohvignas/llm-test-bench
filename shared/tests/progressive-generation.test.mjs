@@ -20,19 +20,20 @@ test('the shipped advanced GTA brief has six stages and edits keep their own ins
  assert.deepEqual(progressivePlan(ordinary),[]);
 });
 
-test('stage budgets never expand a reviewed ceiling and force code even after a maximum profile',()=>{
- for(const step of progressivePlan(advanced)) {
-  const bounded=progressiveModel(model,step);
-  assert.equal(bounded.generationOptions.profile,'code');
-  assert.ok(bounded.generationOptions.budget.totalTokens<=12288);
-  assert.ok(bounded.generationOptions.budget.totalTokens<=step.maxTokens);
-  assert.equal(bounded.generationOptions.reviewedMaxTokens,bounded.generationOptions.budget.totalTokens);
-  const reviewed=progressiveModel({...model,generationOptions:{...model.generationOptions,reviewedMaxTokens:6000,budget:{totalTokens:5000}}},step);
-  assert.equal(reviewed.generationOptions.budget.totalTokens,5000);
+test('stages honor comparison and manual settings; only economy keeps the small stage cap',()=>{
+ for (const step of progressivePlan(advanced)) {
+  for (const profile of ['benchmark','maximum','manual']) {
+   const selected={...model,generationOptions:{...model.generationOptions,profile,budget:{totalTokens:128000,reasoningEffort:'xhigh'}}};
+   const prepared=progressiveModel(selected,step);
+   assert.deepEqual(prepared.generationOptions,selected.generationOptions);
+   assert.notEqual(prepared.generationOptions,selected.generationOptions);
+  }
+  const economical=progressiveModel({...model,generationOptions:{...model.generationOptions,profile:'code'}},step);
+  assert.equal(economical.generationOptions.profile,'code');
+  assert.equal(economical.generationOptions.budget.totalTokens,12288);
+  const reviewed=progressiveModel({...model,generationOptions:{profile:'code',reviewedMaxTokens:6000,budget:{totalTokens:5000}}},step);
   assert.equal(reviewed.generationOptions.reviewedMaxTokens,5000);
  }
- assert.equal(progressiveModel(model,progressivePlan(advanced)[0]).generationOptions.budget.totalTokens,12288);
- assert.equal(model.generationOptions.profile,'maximum','Preparing stages must not mutate user settings');
  assert.equal(model.generationOptions.budget.totalTokens,128000);
 });
 
@@ -42,7 +43,8 @@ test('six successful stages each verify and save before the next call, carrying 
   generate:async(request,{model:sent,stage,onStats})=>{
    const index=requests.length+1;
    assert.equal(stage.index,index);assert.equal(stage.total,6);
-   assert.equal(sent.generationOptions.profile,'code');
+   assert.equal(sent.generationOptions.profile,'maximum');
+   assert.equal(sent.generationOptions.reviewedMaxTokens,128000);
    assert.equal(saved.length,index-1,'A new paid stage must await the previous save');
    if(index>1)assert.ok(request.includes(documentFor(index-1)),'The previous checkpoint must be the next call input');
    else assert.doesNotMatch(request,/<previous_document>/);

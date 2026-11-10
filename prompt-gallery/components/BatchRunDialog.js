@@ -9,7 +9,7 @@ import { costTotals, formatUsd } from '../services/batchCosts.js';
 import { BatchGenerationLog } from './BatchGenerationLog.js';
 import { createBatchJournal, logModelKey, safeLogText } from '../services/batchGenerationLog.js';
 import { HtmlLightbox } from './BatchReview.js';
-import { DEFAULT_HTML_BUDGET } from '../services/generationBudget.js';
+import { DEFAULT_HTML_BUDGET, restoreGenerationSettings } from '../services/generationBudget.js';
 import {resolveModelSettings} from '../../shared/services/model-capabilities.js';
 import {clearFailedGenerationBlocks} from '../../shared/services/generation-spend-guard.js';
 import {ModelSettingsPanel} from './ModelSettingsPanel.js';
@@ -32,7 +32,7 @@ import {
 // comparison is one click.
 const MODELS_KEY = 'prompt-gallery-batch-models';
 const LANE_MODE_KEY = 'prompt-gallery-batch-lane-mode';
-// Reset old maximum/xhigh defaults: those settings caused expensive empty answers.
+// Keep saved per-model choices; versioned defaults migrate the old economy profile once.
 const SETTINGS_KEY = 'prompt-gallery-model-adaptation-v2';
 
 function readStored(key, fallback) {
@@ -101,6 +101,7 @@ export function BatchRunDialog({
   const [logEntries, setLogEntries] = useState([]);
   const [logModels, setLogModels] = useState([]);
   const [costCalls, setCostCalls] = useState([]);
+  const [batchFinishedAt, setBatchFinishedAt] = useState(null);
   const journalRef = useRef(null);
   const journalStartedAtRef = useRef(0);
   const journalRunListRef = useRef([]);
@@ -139,11 +140,12 @@ export function BatchRunDialog({
   const [skipExisting, setSkipExisting] = useState(false);
   const [apiRetries, setApiRetries] = useState(0);
   const [spendProtection,setSpendProtection]=useState(true);
-  const [totalTokens, setTotalTokens] = useState(()=>{const n=readStored(SETTINGS_KEY,{}).totalTokens;return Number.isSafeInteger(n)&&n>0?n:DEFAULT_HTML_BUDGET.totalTokens;});
-  const [reasoningTokens, setReasoningTokens] = useState(()=>{const n=readStored(SETTINGS_KEY,{}).reasoningTokens;return Number.isSafeInteger(n)&&n>0?n:DEFAULT_HTML_BUDGET.reasoningTokens;});
-  const [settingsProfile,setSettingsProfile]=useState(()=>{const profile=readStored(SETTINGS_KEY,{}).profile;return ['maximum','code','manual'].includes(profile)?profile:'code';});
-  const [settingsOverrides,setSettingsOverrides]=useState(()=>{const value=readStored(SETTINGS_KEY,{}).overrides;return value&&typeof value==='object'&&!Array.isArray(value)?value:{};});
-  useEffect(()=>writeStored(SETTINGS_KEY,{profile:settingsProfile,overrides:settingsOverrides,totalTokens,reasoningTokens}),[settingsProfile,settingsOverrides,totalTokens,reasoningTokens]);
+  const [initialSettings] = useState(() => restoreGenerationSettings(readStored(SETTINGS_KEY, {})));
+  const [totalTokens, setTotalTokens] = useState(()=>{const n=initialSettings.totalTokens;return Number.isSafeInteger(n)&&n>0?n:DEFAULT_HTML_BUDGET.totalTokens;});
+  const [reasoningTokens, setReasoningTokens] = useState(()=>{const n=initialSettings.reasoningTokens;return Number.isSafeInteger(n)&&n>0?n:DEFAULT_HTML_BUDGET.reasoningTokens;});
+  const [settingsProfile,setSettingsProfile]=useState(()=>{return initialSettings.profile;});
+  const [settingsOverrides,setSettingsOverrides]=useState(()=>{const value=initialSettings.overrides;return value&&typeof value==='object'&&!Array.isArray(value)?value:{};});
+  useEffect(()=>writeStored(SETTINGS_KEY,{defaultsVersion:3,profile:settingsProfile,overrides:settingsOverrides,totalTokens,reasoningTokens}),[settingsProfile,settingsOverrides,totalTokens,reasoningTokens]);
   const [apiCatalogue,setApiCatalogue]=useState([]);
   const [settingsLoading,setSettingsLoading]=useState(false);
   const [settingsError,setSettingsError]=useState('');
@@ -235,6 +237,8 @@ export function BatchRunDialog({
   }, 0), 0) : null;
   const stageTokenLimit = (stage, report) => {
     const configured = report.settings?.params.max_tokens ?? report.settings?.params.max_completion_tokens;
+    const selectedProfile = settingsOverrides[batchModelKey(report.model)]?.profile || settingsProfile;
+    if (selectedProfile !== 'code') return configured;
     const selectedBudget = settingsOverrides[batchModelKey(report.model)]?.totalTokens ?? totalTokens;
     return Math.min(...[stage.maxTokens, configured, selectedBudget].filter(value => Number.isSafeInteger(value) && value > 0));
   };
@@ -404,6 +408,7 @@ export function BatchRunDialog({
     const plan = planBatchLanes({ prompts: list, models: configured, runId });
     const startedAt = Date.now();
     journalStartedAtRef.current = startedAt;
+    setBatchFinishedAt(null);
     setRateClock(startedAt);
     journalRunListRef.current = plan.runList;
     journalRef.current = createBatchJournal({models:runModels,startedAt});
@@ -491,6 +496,7 @@ export function BatchRunDialog({
       setPauseState('running');
       setPauseContext(null);
       setActiveIndex(-1);
+      setBatchFinishedAt(Date.now());
       setPhase('done');
       startingRef.current=false;
     }
@@ -847,12 +853,12 @@ export function BatchRunDialog({
           <button class="btn btn-sm" onClick=${async()=>{try{await clearFailedGenerationBlocks();addToast('Relances autorisées : un nouvel appel pourra être facturé.','info');}catch(error){addToast(error.message,'error');}}}>Autoriser les relances après échec (nouveau coût possible)</button>
           <label class="batch-opt"><span>Adaptation aux capacités API</span>
             <select class="form-input" value=${settingsProfile} onChange=${e=>{setSettingsProfile(e.target.value);setSettingsOverrides({});}}>
-              <option value="maximum">Effort maximal — risque de coût élevé</option><option value="code">Génération de code — raisonnement réduit</option><option value="manual">Budget personnalisé — plafonné par l’API</option>
+              <option value="benchmark">Comparaison — sortie maximale et effort très élevé</option><option value="maximum">Effort maximal — risque de coût élevé</option><option value="code">Économe — sortie limitée et raisonnement réduit</option><option value="manual">Budget personnalisé — plafonné par l’API</option>
             </select></label>
-          <p class="batch-opt-hint">Le profil par défaut utilise un raisonnement réduit et un plafond de 32 768 tokens, ajustés selon l’API. Le profil maximal utilise l’effort le plus élevé et la sortie maximale annoncés par chaque modèle. Les appels peuvent durer plus longtemps et coûter davantage. Les tokens de raisonnement peuvent consommer tout le budget ; aucun site complet n’est garanti. Aucun appel payant n’est lancé par l’actualisation.</p>
+          <p class="batch-opt-hint">Le profil Comparaison utilise la sortie maximale de chaque modèle et un effort très élevé, ou élevé selon les capacités API. Le profil Effort maximal utilise le niveau le plus élevé annoncé. Le profil Économe réduit le raisonnement et la sortie. Les réglages effectifs sont affichés ci-dessous ; les modèles peuvent avoir des limites différentes. Un plafond élevé autorise des appels plus longs et plus coûteux sans imposer de tout consommer. Aucun appel payant n’est lancé par l’actualisation.</p>
           ${settingsProfile==='manual'&&html`<label class="batch-opt"><span>Budget total demandé par appel</span><input class="form-input" type="number" min="1" value=${totalTokens} onInput=${e=>{const value=Number(e.target.value);if(Number.isSafeInteger(value)&&value>0)setTotalTokens(value);}}/></label>
             <label class="batch-opt"><span>Budget de raisonnement demandé (si l’API l’accepte)</span><input class="form-input" type="number" min="1" value=${reasoningTokens} onInput=${e=>{const value=Number(e.target.value);if(Number.isSafeInteger(value)&&value>0)setReasoningTokens(value);}}/></label>`}
-          ${progressiveActive && html`<p class="batch-opt-hint">Les réglages ci-dessous s’appliquent aux générations en un appel. Sur OpenRouter, les plafonds et le profil Génération de code annoncés dans le plan prennent priorité pour les étapes GTA VI ; un plafond individuel plus bas reste respecté.</p>`}
+          ${progressiveActive && html`<p class="batch-opt-hint">Les étapes GTA VI respectent le profil Comparaison, Effort maximal ou les réglages personnalisés ci-dessous. Le plafond réduit par étape s’applique uniquement au profil Économe. La construction par étapes change le protocole : utilisez le même mode pour tous les modèles comparés.</p>`}
           <${ModelSettingsPanel} reports=${previewReports} loading=${settingsLoading} error=${settingsError}
             onRefresh=${()=>refreshCapabilities().catch(()=>{})} onOverride=${overrideSettings} onReset=${()=>setSettingsOverrides({})}/>
           <label class="batch-opt">
@@ -908,7 +914,7 @@ export function BatchRunDialog({
         </div>
       </div>
 
-      <${BatchCosts} calls=${costCalls} />
+      <${BatchCosts} calls=${costCalls} startedAt=${journalStartedAtRef.current} />
       ${runIsMulti && html`<div class="batch-note">${spendProtection||laneMode==='sequential'?'Les modèles passent l’un après l’autre.':'Les modèles tournent en parallèle.'} Sélectionnez une ligne pour changer l’aperçu et le flux HTML affichés.</div>`}
 
       ${pauseState !== 'running' && html`
@@ -1071,7 +1077,7 @@ export function BatchRunDialog({
         ${summary?.stopped ? html`<div class="batch-note"><i class="fa-solid fa-hand"></i> ${summary.protectionStopped?'Protection des dépenses : lot arrêté après un échec. Les lignes « Non lancé » n’ont déclenché aucun appel.':'Exécution interrompue.'}</div>` : null}
       </div>
 
-      <${BatchCosts} calls=${costCalls} done=${true} />
+      <${BatchCosts} calls=${costCalls} done=${true} startedAt=${journalStartedAtRef.current} finishedAt=${batchFinishedAt} />
       <div class="batch-run-list batch-run-list-done">
         ${runList.map((p, idx) => {
           const it = items[idx] || { status: 'queued' };

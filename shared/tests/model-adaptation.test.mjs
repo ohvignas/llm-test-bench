@@ -2,6 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizeOpenRouterModel,resolveModelSettings,generationFeedback} from '../services/model-capabilities.js';
 const api=(extra={})=>normalizeOpenRouterModel({id:'vendor/model',context_length:1000000,top_provider:{max_completion_tokens:128000},architecture:{output_modalities:['text']},supported_parameters:['max_tokens','reasoning','reasoning_effort'],reasoning:{mandatory:true,supported_efforts:['max','high','low']},...extra},1000);
+test('comparison defaults to maximum advertised output and a high effort without forcing max',()=>{
+ const result=resolveModelSettings({model:api()});
+ assert.equal(result.profile,'benchmark');assert.equal(result.params.max_tokens,128000);
+ assert.equal(result.params.reasoning.effort,'high');
+ const model=api({reasoning:{mandatory:true,supported_efforts:['low','max','high','xhigh']}});
+ assert.equal(resolveModelSettings({model}).params.reasoning.effort,'xhigh');
+ assert.equal(resolveModelSettings({model,profile:'benchmark',reviewedMaxTokens:12000}).params.max_tokens,12000);
+ assert.throws(()=>resolveModelSettings({model:api({top_provider:{}})}),/limite/i);
+});
 test('API capabilities survive normalization, including mandatory reasoning and maximum output',()=>{
  const m=api();assert.equal(m.capabilities.maxOutputTokens,128000);assert.equal(m.capabilities.reasoning.mandatory,true);assert.deepEqual(m.capabilities.reasoning.supported_efforts,['max','high','low']);
 });

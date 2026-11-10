@@ -70,7 +70,7 @@ export function createBatchJournal({ models = [], startedAt = Date.now(), limit 
         const stats = event.stats, parts = [];
         if(stats.settings) {
           const settings=stats.settings,p=settings.params||{},signature=`settings:${logModelKey(context.model)}:${context.index}:${JSON.stringify([p.max_tokens??p.max_completion_tokens,p.reasoning?.effort||p.reasoning_effort,p.reasoning?.max_tokens])}`;
-          if(!seen.has(signature)) {seen.add(signature);append(context,'settings',`Réglages API · profil ${({maximum:'qualité maximale',code:'génération de code',manual:'personnalisé'})[settings.profile]||'personnalisé'} · sortie ${p.max_tokens??p.max_completion_tokens} tokens · ${p.reasoning?.effort||p.reasoning_effort?`effort ${p.reasoning?.effort||p.reasoning_effort}`:p.reasoning?.max_tokens?`raisonnement demandé : ${p.reasoning.max_tokens} tokens`:'contrôle du raisonnement non annoncé'}`,at);}
+          if(!seen.has(signature)) {seen.add(signature);append(context,'settings',`Réglages API · profil ${({benchmark:'comparaison — effort très élevé',maximum:'qualité maximale',code:'génération de code',manual:'personnalisé'})[settings.profile]||'personnalisé'} · sortie ${p.max_tokens??p.max_completion_tokens} tokens · ${p.reasoning?.effort||p.reasoning_effort?`effort ${p.reasoning?.effort||p.reasoning_effort}`:p.reasoning?.max_tokens?`raisonnement demandé : ${p.reasoning.max_tokens} tokens`:'contrôle du raisonnement non annoncé'}`,at);}
         }
         if(stats.feedback?.message)append(context,'diagnostic',stats.feedback.message,at,'warn');
         if(stats.settings&&!stats.finishReason&&stats.cost==null&&stats.completionTokens==null)return;

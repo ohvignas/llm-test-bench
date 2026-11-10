@@ -21,15 +21,16 @@ export function normalizeOpenRouterModel(model, fetchedAt=Date.now()) {
       defaultParameters:Object.fromEntries(Object.entries(model.default_parameters||{}).filter(([key,value])=>['temperature','top_p','top_k','frequency_penalty','presence_penalty','repetition_penalty'].includes(key)&&Number.isFinite(value))),
       reasoning}};
 }
-export function resolveModelSettings({model,profile='code',params={},budget={},reviewedMaxTokens}={}) {
+export function resolveModelSettings({model,profile='benchmark',params={},budget={},reviewedMaxTokens}={}) {
   const caps=model?.capabilities||model?.raw?.capabilities;
   if (!caps || caps.source!=='openrouter-api'||!Array.isArray(caps.supportedParameters)) throw invalid('Capacités API indisponibles : actualisez les modèles avant de lancer.');
-  if (!['maximum','code','manual'].includes(profile)) throw invalid('Profil de génération inconnu.');
+  if (!['benchmark','maximum','code','manual'].includes(profile)) throw invalid('Profil de génération inconnu.');
   if (caps.outputModalities&&!caps.outputModalities.includes('text')) throw invalid('Ce modèle ne produit pas de texte ; il ne peut pas générer une page HTML.');
   const supported=new Set(caps.supportedParameters),adjustments=[];
   const limit=positive(caps.maxOutputTokens);
-  if(profile==='maximum'&&!limit) throw invalid('La limite de sortie n’est pas communiquée par l’API : choisissez un budget manuel.');
-  const requested=profile==='maximum'?limit:Number(budget.totalTokens??params.max_tokens??32768);
+  const fullOutput = profile==='maximum'||profile==='benchmark';
+  if(fullOutput&&!limit) throw invalid('La limite de sortie n’est pas communiquée par l’API : choisissez un budget manuel.');
+  const requested=fullOutput?limit:Number(budget.totalTokens??params.max_tokens??32768);
   if(!positive(requested)) throw invalid('Le budget total doit être un entier positif.');
   const total=Math.min(requested,limit||requested,positive(caps.contextLength)||requested,positive(reviewedMaxTokens)||requested);
   if(total!==requested) adjustments.push(`Sortie plafonnée à ${total} tokens selon les limites API et le plafond affiché.`);
@@ -58,7 +59,7 @@ export function resolveModelSettings({model,profile='code',params={},budget={},r
     } else if(efforts.length) {
       const enabled=efforts.filter(e=>e!=='none');
       const chosen=profile==='manual'?(budget.reasoningEffort||(requestedReasoning?.enabled===false?'none':requestedReasoning?.effort)||reasoning.default_effort||enabled.at(-1))
-        :profile==='maximum'?enabled[0]:enabled.at(-1);
+        :profile==='maximum'?enabled[0]:profile==='benchmark'?(enabled.includes('xhigh')?'xhigh':enabled.includes('high')?'high':enabled[0]):enabled.at(-1);
       if(!efforts.includes(chosen))throw invalid(`Effort non accepté par l’API : ${chosen}. Valeurs : ${efforts.join(', ')}.`);
       if(supported.has('reasoning'))out.reasoning={effort:chosen};else out.reasoning_effort=chosen;
       if(requestedReasoning?.max_tokens!=null)adjustments.push('Budget fixe remplacé par l’effort annoncé par l’API.');
@@ -67,6 +68,7 @@ export function resolveModelSettings({model,profile='code',params={},budget={},r
     }
   } else if(requestedReasoning)adjustments.push('Raisonnement non configurable selon l’API ; paramètre retiré.');
   if(profile==='maximum'&&reasoning)adjustments.push('Effort maximal : le raisonnement peut consommer toute la sortie. Aucun résultat ni coût fixe garanti.');
+  if(profile==='benchmark')adjustments.push('Comparaison : sortie maximale annoncée par l’API ; effort très élevé, élevé ou le plus élevé disponible. Le plafond inclut le raisonnement.');
   // Preserve caller routing constraints while requiring support for every sent parameter.
   out.provider={...(params.provider||{}),require_parameters:true};
   return {profile,modelId:model.modelId||model.id,source:caps.source,fetchedAt:caps.fetchedAt,

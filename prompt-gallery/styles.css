@@ -3066,3 +3066,12 @@ button.create-run-label:hover { text-decoration: underline; }
 .batch-prompt-selection li {display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border-color);font-size:13px;}
 .batch-prompt-selection li>span:nth-child(2) {flex:1;min-width:0;overflow-wrap:anywhere;}
 .batch-selection-set {font-size:11px;color:var(--text-secondary);min-width:70px;}
+
+/* Generation timing is kept visible above costs and comparison previews. */
+.execution-summary { margin-bottom:10px; flex-shrink:0; }
+.execution-summary-totals { display:flex; gap:12px 28px; flex-wrap:wrap; margin-bottom:8px; }
+.execution-summary-totals strong { color:var(--text-primary); font-variant-numeric:tabular-nums; }
+.execution-summary ul { margin:6px 0; padding:0; list-style:none; }
+.execution-summary li { display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px 12px; padding:4px 0; }
+.execution-summary small { color:var(--text-secondary); font-size:11px; }
+.execution-summary-compact { padding:6px 10px; font-size:12px; flex-shrink:0; border-bottom:1px solid var(--border-color); overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
