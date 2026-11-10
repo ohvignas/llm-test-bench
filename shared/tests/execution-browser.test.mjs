@@ -84,6 +84,26 @@ test('a partial failure, its cost and successful peer stay available in the orig
   assert.equal(snapshot.costCalls.reduce((total,c)=>total+c.usd,0),3);
 });
 
+test('retry duration excludes older attempts and idle time while retaining their billed costs',async()=>{
+  const {executionBatchSnapshot}=await import('../../prompt-gallery/services/executions.js');
+  const {executionMetrics}=await import('../../prompt-gallery/services/executionMetrics.js');
+  const {liveComparisonCards}=await import('../../prompt-gallery/services/batchLiveComparison.js');
+  const context={groupId:'lot',promptId:'p',title:'Mon projet'};
+  const snapshot=executionBatchSnapshot([
+    {id:'old-a',model:'a',context,state:'error',started:100,updated:130,usage:{cost:2}},
+    {id:'old-b',model:'b',context,state:'cancelled',started:100,updated:140,usage:{cost:1}},
+    {id:'new-a',model:'a',context,state:'reasoning',started:3700,updated:3760,usage:{}},
+    {id:'new-b',model:'b',context,state:'writing',started:3701,updated:3760,usage:{}},
+  ],3770000);
+  assert.deepEqual(snapshot.currentCostCalls.map(c=>c.id),['new-a','new-b']);
+  assert.equal(executionMetrics(snapshot.currentCostCalls,{now:snapshot.now,done:snapshot.done}).elapsedMs,70000);
+  assert.equal(snapshot.costCalls.length,4);
+  assert.equal(snapshot.costCalls.reduce((sum,c)=>sum+(c.usd||0),0),3);
+  const cards=liveComparisonCards({...snapshot,calls:snapshot.costCalls,promptId:JSON.stringify(['lot','p'])});
+  assert.deepEqual(cards.map(c=>c.currentCalls.map(call=>call.id)),[['new-a'],['new-b']]);
+  assert.deepEqual(cards.map(c=>c.calls.length),[2,2]);
+});
+
 test('recovery only targets the latest failed model attempt and preserves successful peers',async()=>{
   const {recoveryCandidates,recoveryFallback}=await import('../../prompt-gallery/services/executionRecovery.js');
   const calls=[{id:'old',model:'a',state:'error',durable:true,started:1},{id:'new',model:'a',state:'reasoning',durable:true,started:2},

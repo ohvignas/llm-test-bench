@@ -9,7 +9,7 @@ export function BatchActivity({model, index, calls, liveCalls, entries, now, sta
     <div class="batch-activity-head"><strong>Réflexion et activité</strong><span>${statusLabel}</span></div>
     <div class="batch-activity-body">
       ${signal && html`<p class=${signal.stalled ? 'batch-activity-warning' : ''}>${signal.label}${signal.stalled ? ' · Silence du fournisseur ; aucune panne confirmée.' : ''}</p>`}
-      ${Number.isFinite(activity.signals) && html`<p>${activity.signals.toLocaleString('fr-FR')} signaux de raisonnement reçus. Ce compteur ne mesure pas les tokens.</p>`}
+      ${Number.isFinite(activity.signals) && html`<p>${activity.signals.toLocaleString('fr-FR')} fragments de raisonnement reçus dans le flux API. Un fragment n’est ni un token ni une étape de travail validée.</p>`}
       ${activity.text ? html`<strong class="batch-activity-summary-label">Résumé transmis par le fournisseur</strong>
         <div class="batch-activity-summary">${activity.text}</div>
         ${activity.truncated && html`<p>Extrait limité aux 8 000 premiers caractères.</p>`}`

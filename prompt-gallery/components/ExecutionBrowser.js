@@ -10,6 +10,7 @@ import {costTotals,formatUsd} from '../services/batchCosts.js';
 import {executionMetrics,formatDuration} from '../services/executionMetrics.js';
 import {recoveryCandidates,comparisonRetryCandidates,latestModelExecutions,recoveryFallback} from '../services/executionRecovery.js';
 import {ExecutionRecoveryDialog} from './ExecutionRecoveryDialog.js';
+import {ExecutionChat} from './ExecutionChat.js';
 import {executionActive, executionProjects, executionProjectKey, executionStatus, executionCost, executionDuration, executionBatchSnapshot} from '../services/executions.js';
 
 const when=seconds=>new Date(seconds*1000).toLocaleString('fr-FR');
@@ -23,6 +24,7 @@ export function ExecutionBrowser({view='runs', selectedProject='', onProjectChan
   const [displayMode,setDisplayMode]=useState('split'), [filter,setFilter]=useState('all');
   const [search,setSearch]=useState(''),[statusFilter,setStatusFilter]=useState('all');
   const [recovery,setRecovery]=useState(null);
+  const [chat,setChat]=useState(null);
   const recoveryRevision=useRef(0);
   useEffect(()=>{
     let live=true,timer;const controller=new AbortController();
@@ -104,8 +106,9 @@ export function ExecutionBrowser({view='runs', selectedProject='', onProjectChan
     if(call)prepareRecovery([call]);
   };
   const recoveryDialog=recovery&&html`<${ExecutionRecoveryDialog} state=${recovery} onClose=${()=>{recoveryRevision.current++;setRecovery(null);}} onStart=${startRecovery}/>`;
+  const chatDialog=chat&&html`<${ExecutionChat} call=${chat} prompts=${prompts} onClose=${()=>setChat(null)} onSent=${()=>{setChat(null);setRevision(n=>n+1);}}/>`;
   const history=calls.filter(c=>!executionProjectKey(c)&&!executionActive(c));
-  const totals=costTotals(snapshot.costCalls),timing=executionMetrics(snapshot.costCalls,{now:snapshot.now,done:snapshot.done});
+  const totals=costTotals(snapshot.costCalls),timing=executionMetrics(snapshot.currentCostCalls,{now:snapshot.now,done:snapshot.done});
   const costLabel=totals.confirmedUsd===null ? snapshot.done?'Non communiqué':'En attente' : formatUsd(totals.confirmedUsd);
   const matched=projects.filter(p=>p.title.toLocaleLowerCase('fr').includes(search.toLocaleLowerCase('fr'))
     &&(statusFilter!=='active'||p.calls.some(executionActive)))
@@ -133,6 +136,7 @@ export function ExecutionBrowser({view='runs', selectedProject='', onProjectChan
     ${active.filter(c=>!executionProjectKey(c)).map(c=>html`<p key=${c.id}>${c.model} · Appel sans titre conservé · ${executionStatus(c)}</p>`)}
     ${history.length>0&&html`<details class="bench-legacy"><summary>Historique de l’ancienne version · ${history.length} appel(s)</summary>${history.map(c=>html`<div key=${c.id}><span>${c.model}</span><span>${executionStatus(c)}</span><strong>${executionCost([c]).label}</strong></div>`)}</details>`}
     ${recoveryDialog}
+    ${chatDialog}
   </section>`;
   return html`<section class="bench-workspace" aria-label="Suivi du lot en direct">
     <aside class="bench-project-sidebar"><header><span class="bench-eyebrow">COMPARAISON</span><h2>Vos projets <span>${projects.length}</span></h2></header>${renderSearch()}
@@ -145,12 +149,13 @@ export function ExecutionBrowser({view='runs', selectedProject='', onProjectChan
       <header class="bench-page-header"><div><span class="bench-eyebrow">COMPARER LES MODÈLES</span><h1>${chosen?.title || 'Comparer en direct'}</h1><p>${chosen?`${new Set(chosen.calls.map(c=>c.model)).size} modèles · ${when(chosen.started)}`:'Vos modèles apparaissent ici dès le lancement.'}</p></div><div class="bench-header-actions"><${BenchBadge} tone=${active.length?'active':'neutral'} live=${active.length>0}>${active.length?'En direct':'Aucun appel actif'}</${BenchBadge}>${chosen&&html`<button class="btn bench-retry-comparison" disabled=${!comparisonRetryCandidates(chosen.calls).length} title=${chosen.calls.some(executionActive)?'Attendez la fin des appels de ce prompt.':'Préparer un nouvel essai pour chacun des modèles de ce prompt.'} onClick=${()=>prepareRecovery(comparisonRetryCandidates(chosen.calls),{restart:true})}><${BenchIcon} name="refresh" size=${15}/>Réessayer tout le comparatif</button>`}<button class="btn" onClick=${onBrowseSaved}>Dossier</button></div></header>
       <label class="bench-mobile-project-picker">Projet<select class="form-input" value=${chosen?.key || ''} onChange=${e=>select(e.target.value)}>${projects.map(p=>html`<option key=${p.key} value=${p.key}>${p.title}</option>`)}</select></label>
       ${error&&html`<p class="bench-inline-error" role="alert">${error}</p>`}
-      ${visibleCalls.length?html`<div class="bench-overview"><${BenchMetric} label="Durée du lot" value=${formatDuration(timing.elapsedMs)} icon="clock"/><${BenchMetric} label="Appels API" value=${totals.requestCount} note=${`${snapshot.items.filter(i=>!['generating','queued'].includes(i.status)).length} / ${snapshot.runList.length} terminés`} icon="activity"/><${BenchMetric} label="Coût confirmé du lot" value=${costLabel} note=${totals.missingCosts?`${totals.missingCosts} coût(s) ${snapshot.done?'non communiqué(s)':'en attente'}`:'Tous les coûts reçus'}/></div>
+      ${visibleCalls.length?html`<div class="bench-overview"><${BenchMetric} label="Durée des essais actuels" value=${formatDuration(timing.elapsedMs)} note="Anciennes tentatives exclues" icon="clock"/><${BenchMetric} label="Appels API · tous les essais" value=${totals.requestCount} note=${`${snapshot.items.filter(i=>!['generating','queued'].includes(i.status)).length} / ${snapshot.runList.length} essais actuels terminés`} icon="activity"/><${BenchMetric} label="Coût confirmé du lot" value=${costLabel} note=${totals.missingCosts?`${totals.missingCosts} coût(s) ${snapshot.done?'non communiqué(s)':'en attente'}`:'Tous les coûts reçus'}/></div>
         <div class="bench-view-toolbar"><div class="bench-segmented" aria-label="Affichage de la comparaison">${[['split','screen','Aperçu et code'],['preview','screen','Aperçu'],['code','code','Code'],['activity','activity','Activité'],['journal','journal','Journal']].map(([id,icon,label])=>html`<button class=${displayMode===id?'is-selected':''} aria-pressed=${displayMode===id} key=${id} onClick=${()=>setDisplayMode(id)}><${BenchIcon} name=${icon} size=${15}/>${label}</button>`)}</div><details class="bench-billing"><summary>Détail des coûts</summary><${BatchCosts} calls=${snapshot.costCalls} done=${snapshot.done} startedAt=${snapshot.startedAt}/></details></div>
-        ${displayMode==='journal'?html`<${BatchGenerationLog} entries=${snapshot.entries} models=${snapshot.models} calls=${snapshot.liveCalls} startedAt=${snapshot.startedAt} now=${snapshot.now} filter=${filter} onFilterChange=${setFilter} done=${snapshot.done} costCalls=${snapshot.costCalls}/>`:html`<${BatchLiveComparison} ...${snapshot} selectedPromptId=${chosen?.key||''} onPromptChange=${select} paused=${false} theme=${theme} onFullscreen=${setZoom} onStop=${stop} onRetry=${retryIndex} showLiveOutput=${true} hidePromptSelector=${true} displayMode=${displayMode}/>`}`
+        ${displayMode==='journal'?html`<${BatchGenerationLog} entries=${snapshot.entries} models=${snapshot.models} calls=${snapshot.liveCalls} startedAt=${snapshot.startedAt} now=${snapshot.now} filter=${filter} onFilterChange=${setFilter} done=${snapshot.done} costCalls=${snapshot.costCalls}/>`:html`<${BatchLiveComparison} ...${snapshot} selectedPromptId=${chosen?.key||''} onPromptChange=${select} paused=${false} theme=${theme} onFullscreen=${setZoom} onStop=${stop} onRetry=${retryIndex} onChat=${index=>setChat(calls.find(c=>c.id===snapshot.runList[index]?.executionId))} showLiveOutput=${true} hidePromptSelector=${true} displayMode=${displayMode}/>`}`
         :html`<div class="bench-empty"><${BenchIcon} name="screen" size=${36}/><h2>${loaded?'Prêt pour votre prochaine comparaison':'Chargement du lot…'}</h2><p>Lancez un lot. Chaque modèle sera visible ici, même pendant le raisonnement et avant la première page.</p></div>`}
     </main>
     ${zoom>=0&&snapshot.outputs[zoom]&&html`<${HtmlLightbox} html=${snapshot.outputs[zoom]} title=${snapshot.runList[zoom]?.title} onClose=${()=>setZoom(-1)}/>`}
     ${recoveryDialog}
+    ${chatDialog}
   </section>`;
 }

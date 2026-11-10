@@ -82,6 +82,8 @@ def initialize(app):
             connection.execute('ALTER TABLE browser_executions ADD COLUMN request_payload BLOB')
         if 'parent_id' not in columns:
             connection.execute('ALTER TABLE browser_executions ADD COLUMN parent_id TEXT')
+        if 'user_instruction' not in columns:
+            connection.execute('ALTER TABLE browser_executions ADD COLUMN user_instruction BLOB')
         connection.execute('CREATE UNIQUE INDEX IF NOT EXISTS one_execution_recovery ON browser_executions(parent_id) WHERE parent_id IS NOT NULL')
     database.chmod(0o600)
     @app.teardown_appcontext

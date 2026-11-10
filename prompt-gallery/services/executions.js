@@ -77,7 +77,9 @@ export function executionBatchSnapshot(calls, now = Date.now()) {
       }
     }
   }
-  return {models,runList,items,outputs,costCalls,liveCalls,entries,now,
+  const currentIds=new Set(runList.map(item=>item.executionId));
+  const currentCostCalls=costCalls.filter(call=>currentIds.has(call.id));
+  return {models,runList,items,outputs,costCalls,currentCostCalls,liveCalls,entries,now,
     startedAt:calls.length?Math.min(...calls.map(c=>c.started*1000)):now,
     done:!calls.some(executionActive)};
 }

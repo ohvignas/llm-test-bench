@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createReasoningSummary, REASONING_SUMMARY_LIMIT} from '../services/reasoning-summary.js';
+import {createReasoningSummary,providerSummaryParts, REASONING_SUMMARY_LIMIT} from '../services/reasoning-summary.js';
 import {batchActivity} from '../../prompt-gallery/services/batchActivity.js';
 import {logModelKey} from '../../prompt-gallery/services/batchGenerationLog.js';
 import {updateCostCall, finishCostCall} from '../../prompt-gallery/services/batchCosts.js';
@@ -27,6 +27,16 @@ test('a summary and counters remain attached to their exact call on completion o
   call=finishCostCall(call,new Error('Provider failure'));
   assert.equal(call.reasoningSummary.text,'Résumé public');
   assert.equal(call.reasoningSignals,10);assert.equal(call.usd,.2);assert.equal(call.status,'error');
+});
+
+test('modern Claude compatibility summaries are recognized without exposing unknown or encrypted reasoning',()=>{
+  const delta={reasoning_details:[{type:'reasoning.text',format:'anthropic-claude-v1',text:'Résumé public du fournisseur.'}]};
+  assert.equal(providerSummaryParts(delta,'anthropic/claude-opus-5.5')[0].summary,'Résumé public du fournisseur.');
+  assert.deepEqual(providerSummaryParts(delta,'other/model'),[]);
+  assert.deepEqual(providerSummaryParts({reasoning_details:[{...delta.reasoning_details[0],format:'unknown'}]},'anthropic/claude-opus-5.5'),[]);
+  assert.deepEqual(providerSummaryParts({reasoning_details:[{type:'reasoning.encrypted',data:'OPAQUE'}],reasoning:'UNKNOWN'},'anthropic/claude-opus-5.5'),[]);
+  assert.equal(providerSummaryParts({reasoning:'Résumé public.'},'anthropic/claude-fable-5.2')[0].summary,'Résumé public.');
+  assert.deepEqual(providerSummaryParts({reasoning:'PRIVATE'},'other/model'),[]);
 });
 
 test('the panel never borrows activity or summaries from another project of the same model', () => {

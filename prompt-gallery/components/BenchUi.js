@@ -14,6 +14,7 @@ const paths={
   stop:['M7 7h10v10H7z'],
   journal:['M6 3h12v18H6z','M9 7h6','M9 11h6','M9 15h4'],
   search:['m16 16 5 5'],
+  chat:['M21 11a8 8 0 0 1-8 8H7l-4 3v-6a8 8 0 1 1 18-5Z','M8 10h8','M8 14h5'],
 };
 export function BenchIcon({name,size=18}){return html`<svg width=${size} height=${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${name==='clock'&&html`<circle cx="12" cy="12" r="9"/>`}${name==='search'&&html`<circle cx="10" cy="10" r="6"/>`}${(paths[name]||paths.layers).map((d,i)=>html`<path key=${i} d=${d}/>` )}</svg>`;}
 export function BenchBadge({children,tone='neutral',live=false}){return html`<span class=${`bench-badge is-${tone}`}>${live&&html`<span class="bench-live-dot"/>`}${children}</span>`;}

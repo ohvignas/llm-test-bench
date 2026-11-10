@@ -30,12 +30,12 @@ function usePreviewDocument(output, active, identity) {
   return preview;
 }
 
-function LiveModelPane({card, liveCalls, entries, now, done, paused, theme, onFullscreen, onRetry, onStop, showLiveOutput, displayMode}) {
-  const {model, index, prompt, item, output, calls} = card;
+function LiveModelPane({card, liveCalls, entries, now, done, paused, theme, onFullscreen, onRetry, onChat, onStop, showLiveOutput, displayMode}) {
+  const {model, index, prompt, item, output, calls,currentCalls} = card;
   const active = !done && batchItemRunning(item);
   const live = active ? batchLiveStatus(liveCalls, model, now, calls.map(call => call.telemetryId).filter(Boolean)) : null;
   const status = paused && active ? 'En pause' : live?.label || LABELS[item.status] || 'En attente';
-  const costs = costTotals(calls), timing = executionMetrics(calls, {now, done});
+  const costs = costTotals(calls), timing = executionMetrics(currentCalls, {now, done});
   const label = model.label || model.modelId;
   const shortLabel=label.split(' / ').at(-1).replace(/^(Anthropic|OpenAI|Google):\s*/, '');
   const current=calls.toSorted((a,b)=>b.startedAt-a.startedAt)[0];
@@ -50,15 +50,16 @@ function LiveModelPane({card, liveCalls, entries, now, done, paused, theme, onFu
     <header class="bench-model-head">
       <div class="bench-model-identity"><span class="bench-model-avatar" aria-hidden="true">${shortLabel.slice(0,1)}</span><div><h2 title=${label}>${shortLabel}</h2><small>${model.providerId==='openrouter'?'via OpenRouter':model.providerId}</small></div>
         <${BenchBadge} tone=${tone} live=${active}>${status}</${BenchBadge}>
+        ${onChat&&item.executionId&&html`<button class="bench-icon-button" title="Chat : demander un ajustement" aria-label=${`Discuter avec ${shortLabel}`} onClick=${()=>onChat(index)}><${BenchIcon} name="chat" size=${16}/></button>`}
         ${onStop&&(active||item.status==='queued')&&html`<button class="bench-icon-button is-danger" title="Arrêter cet appel" aria-label="Arrêter cet appel" onClick=${()=>onStop(index)}><${BenchIcon} name="stop" size=${16}/></button>`}
       </div>
-      <div class="bench-model-metrics"><span><${BenchIcon} name="clock" size=${14}/>${formatDuration(timing.elapsedMs)}</span><span>${timing.requestCount} appel(s)</span><strong>${cost}</strong></div>
+      <div class="bench-model-metrics"><span title="Durée de l’essai affiché, sans les anciennes tentatives ni l’attente entre deux essais."><${BenchIcon} name="clock" size=${14}/>${formatDuration(timing.elapsedMs)}</span><span title="Nombre total d’appels, anciennes tentatives comprises.">${costs.requestCount} appel(s)</span><strong>${cost}</strong></div>
       ${item.stage && html`<small>Étape ${item.stage.index}/${item.stage.total} · ${item.stage.title}</small>`}
       ${item.message&&['error','no_progress','stopped'].includes(item.status)&&html`<p class=${item.status==='stopped'?'bench-inline-notice':'bench-inline-error'}>${item.status==='stopped'&&item.message.startsWith('Appel arrete depuis la CLI')?'Génération arrêtée à votre demande.':item.message}</p>`}
       ${onRetry&&!item.savedIds?.length&&['error','stopped','not-started'].includes(item.status)&&html`<button class="btn btn-sm bench-recover-model" onClick=${()=>onRetry(index)}><${BenchIcon} name="refresh" size=${14}/>${output.trim()?'Reprendre':'Réessayer'}</button>`}
     </header>
     ${displayMode==='activity' ? html`<${BatchActivity} model=${model} index=${index} calls=${calls} liveCalls=${liveCalls} entries=${entries} now=${now} statusLabel=${status}/>` : html`
-      <div class="bench-signal" title=${signal?.label || status}><span class=${`bench-live-dot ${active?'':'is-idle'}`}/><span>${signal?.label || status}</span><small>${(telemetry?.reasoningChunks ?? current?.reasoningSignals ?? 0).toLocaleString('fr-FR')} signaux</small></div>
+      <div class="bench-signal" title=${signal?.label || status}><span class=${`bench-live-dot ${active?'':'is-idle'}`}/><span>${signal?.label || status}</span><small title="Fragments du flux API contenant des données de raisonnement. Ce ne sont ni des tokens ni des étapes de travail validées.">${(telemetry?.reasoningChunks ?? current?.reasoningSignals ?? 0).toLocaleString('fr-FR')} fragments reçus</small></div>
       ${showLiveOutput ? html`
         ${displayMode!=='code'&&html`<div class="bench-preview-toolbar"><span><${BenchIcon} name="screen" size=${15}/>Aperçu ${active?'en direct':'du résultat'}</span><button class="bench-icon-button" title="Plein écran" aria-label="Plein écran" disabled=${!output&&!item.savedIds?.length} onClick=${()=>onFullscreen(index)}><${BenchIcon} name="expand" size=${15}/></button></div>
           ${srcdoc?html`<iframe class="live-model-preview" title=${`Aperçu en direct : ${label}`} sandbox="allow-scripts" srcdoc=${srcdoc}></iframe>`:html`<div class="live-model-empty"><${BenchIcon} name=${active?'activity':'screen'} size=${30}/><strong>${active?'Le modèle prépare sa réponse':item.status==='error'?'Aucun aperçu produit':item.status==='stopped'?'Génération interrompue':'En attente du code'}</strong><span>${active?'Le premier code apparaîtra ici dès sa réception.':item.status==='stopped'?'L’appel est arrêté. Aucun code n’a été reçu.':item.status==='error'?'Consultez l’activité ou le journal pour voir l’erreur.':'Le code conservé s’affichera ici.'}</span></div>`}`}
@@ -67,7 +68,7 @@ function LiveModelPane({card, liveCalls, entries, now, done, paused, theme, onFu
   </article>`;
 }
 
-export function BatchLiveComparison({models, runList, items, outputs, costCalls, liveCalls, entries = [], now, done, paused, theme, onFullscreen, onRetry, onStop, showLiveOutput, selectedPromptId, onPromptChange, displayMode, hidePromptSelector=false}) {
+export function BatchLiveComparison({models, runList, items, outputs, costCalls, liveCalls, entries = [], now, done, paused, theme, onFullscreen, onRetry, onChat, onStop, showLiveOutput, selectedPromptId, onPromptChange, displayMode, hidePromptSelector=false}) {
   const [localPromptId, setLocalPromptId] = useState('');
   const [localMode,setLocalMode]=useState('split');
   const promptId=selectedPromptId ?? localPromptId;
@@ -80,6 +81,6 @@ export function BatchLiveComparison({models, runList, items, outputs, costCalls,
       ${!hidePromptSelector&&html`<label>Prompt affiché <select class="form-input" value=${promptId} onChange=${event=>setPromptId(event.target.value)}>${selectedPromptId===undefined&&html`<option value="">Suivre le travail de chaque modèle</option>`}${prompts.map(p=>html`<option key=${p.id} value=${p.id}>${p.title}</option>`)}</select></label>`}
       ${!displayMode&&html`<div class="bench-segmented">${[['split','screen','Aperçu et code'],['activity','activity','Activité']].map(([id,icon,title])=>html`<button class=${localMode===id?'is-selected':''} aria-pressed=${localMode===id} onClick=${()=>setLocalMode(id)}><${BenchIcon} name=${icon} size=${15}/>${title}</button>`)}</div>`}
     </div>`}
-    <div class="live-comparison-grid" style=${{'--live-columns':Math.max(1,Math.min(cards.length,3))}}>${cards.map(card=>html`<${LiveModelPane} key=${card.laneIndex} card=${card} liveCalls=${liveCalls} entries=${entries} now=${now} done=${done} paused=${paused} theme=${theme} onFullscreen=${onFullscreen} onRetry=${onRetry} onStop=${onStop} showLiveOutput=${showLiveOutput} displayMode=${mode}/>` )}</div>
+    <div class="live-comparison-grid" style=${{'--live-columns':Math.max(1,Math.min(cards.length,3))}}>${cards.map(card=>html`<${LiveModelPane} key=${card.laneIndex} card=${card} liveCalls=${liveCalls} entries=${entries} now=${now} done=${done} paused=${paused} theme=${theme} onFullscreen=${onFullscreen} onRetry=${onRetry} onChat=${onChat} onStop=${onStop} showLiveOutput=${showLiveOutput} displayMode=${mode}/>` )}</div>
   </section>`;
 }

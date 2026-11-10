@@ -20,6 +20,7 @@ from .diagnostics import ACTIVE, redact
 from .proxy import relay
 from .spend_guard import active_worker, process_marker, fingerprint
 from .storage import db
+from .reasoning_summary import public_summary_parts
 
 executions = Blueprint('executions', __name__)
 POOL = ThreadPoolExecutor(max_workers=32, thread_name_prefix='generation')
@@ -148,7 +149,7 @@ def start_execution():
     return enqueue(call_id, payload, context, headers)
 
 
-def enqueue(call_id, payload, context, headers, seed='', parent_id=None, original_request=None):
+def enqueue(call_id, payload, context, headers, seed='', parent_id=None, original_request=None, user_instruction=None):
     digest = hashlib.sha256(json.dumps([payload, context, headers, seed, parent_id], sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     con = db()
     con.execute('BEGIN IMMEDIATE')
@@ -160,11 +161,12 @@ def enqueue(call_id, payload, context, headers, seed='', parent_id=None, origina
         return jsonify({'id': call_id}), 200
     now = time.time()
     encrypted = current_app.extensions['vault'].encrypt(json.dumps(original_request or payload, ensure_ascii=False).encode())
+    instruction = current_app.extensions['vault'].encrypt(user_instruction.encode()) if user_instruction else None
     try:
         con.execute('''INSERT INTO browser_executions
-            (id,request_hash,model,created,updated,worker,state,context,output,request_payload,parent_id)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)''', (call_id, digest, redact(payload['model'], 240), now, now,
-            f'pending:{os.getpid()}:{process_marker(os.getpid())}', 'queued', json.dumps(context), seed, encrypted, parent_id))
+            (id,request_hash,model,created,updated,worker,state,context,output,request_payload,parent_id,user_instruction)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''', (call_id, digest, redact(payload['model'], 240), now, now,
+            f'pending:{os.getpid()}:{process_marker(os.getpid())}', 'queued', json.dumps(context), seed, encrypted, parent_id, instruction))
     except sqlite3.IntegrityError:
         con.rollback()
         return jsonify({'error':'Une reprise existe déjà pour cet appel. Retrouvez-la dans Comparer.', 'requestSent':False}), 409
@@ -248,6 +250,53 @@ def recover_execution(call_id):
     return enqueue(new_id, payload, info['context'], {'X-Bench-Retry':new_id}, seed=seed, parent_id=call_id, original_request=original)
 
 
+@executions.get('/api/executions/<call_id>/conversation')
+def conversation(call_id):
+    row = db().execute('SELECT * FROM browser_executions WHERE id=?', (identifier(call_id),)).fetchone()
+    if row is None:
+        abort(404, description='Exécution introuvable.')
+    info = record(row)
+    turns, seen = [], set()
+    while row is not None and row['id'] not in seen and len(turns) < 30:
+        seen.add(row['id'])
+        turn = record(row)
+        message = current_app.extensions['vault'].decrypt(row['user_instruction']).decode() if row['user_instruction'] else ''
+        turns.append({'id':row['id'],'message':redact(message,12000),'state':turn['state'],
+                      'output_chars':turn['output_chars'],'cost':turn['usage'].get('cost')})
+        row = db().execute('SELECT * FROM browser_executions WHERE id=?', (row['parent_id'],)).fetchone() if row['parent_id'] else None
+    return jsonify({'id':call_id,'title':info['context'].get('title','Création'),
+                    'model_label':info['context'].get('modelLabel',info['model']),
+                    'turns':list(reversed(turns)),'truncated':row is not None})
+
+
+@executions.post('/api/executions/<call_id>/adjust')
+def adjust_execution(call_id):
+    body = json_object()
+    if body.get('confirmed') is not True:
+        abort(400, description='Envoyez votre message pour confirmer ce nouvel appel payant.')
+    message = body.get('message')
+    if not isinstance(message,str) or not message.strip() or len(message)>12000:
+        abort(400, description='Votre message doit contenir entre 1 et 12 000 caractères.')
+    message = message.strip()
+    new_id = identifier(body.get('id'))
+    existing = db().execute('SELECT parent_id,user_instruction FROM browser_executions WHERE id=?',(new_id,)).fetchone()
+    if existing:
+        if (existing['parent_id']==call_id and existing['user_instruction']
+                and current_app.extensions['vault'].decrypt(existing['user_instruction']).decode()==message):
+            return jsonify({'id':new_id}),200
+        abort(409, description='Identifiant déjà utilisé pour un autre message.')
+    row, info, original = recovery_source(call_id, body.get('fallback'), restart=True)
+    if not row['output'].strip():
+        abort(409, description='Aucun code à ajuster. Utilisez Réessayer pour créer un premier résultat.')
+    payload = {**original,'stream':True,'messages':[*original['messages'],
+        {'role':'assistant','content':row['output']},
+        {'role':'user','content':(message+'\n\nReturn the complete updated HTML document, applying the requested change to the existing result. '
+                                 'Keep unrelated functionality. Return no Markdown fences or explanations.')}]}
+    if len(json.dumps(payload,ensure_ascii=False).encode())>current_app.config['MAX_CONTENT_LENGTH']:
+        abort(413, description='Conversation trop volumineuse pour un nouvel appel. Exportez le résultat avant de repartir dans un nouveau projet.')
+    return enqueue(new_id,payload,info['context'],{'X-Bench-Retry':new_id},parent_id=call_id,user_instruction=message)
+
+
 def run_execution(app, call_id, payload, headers):
     # The HTTP boundary already authenticated the launch. Reuse the exact
     # existing proxy, reservation, parameter and spend checks inside the worker.
@@ -291,9 +340,8 @@ def run_execution(app, call_id, payload, headers):
                     delta = choice.get('delta') or {}
                     if isinstance(delta.get('content'), str):
                         output += delta['content']
-                    for part in delta.get('reasoning_details') or []:
-                        if isinstance(part, dict) and part.get('type') == 'reasoning.summary' and isinstance(part.get('summary'), str):
-                            summary = redact(summary + part['summary'], 8000)
+                    for part in public_summary_parts(delta, payload['model']):
+                        summary = (summary + part)[:8000]
                 if len(output) > MAX_OUTPUT:
                     raise ValueError('Résultat supérieur à la limite de conservation de 8 Mio.')
             for chunk in response.response:
@@ -302,7 +350,7 @@ def run_execution(app, call_id, payload, headers):
                     line, buffer = buffer.split(b'\n', 1)
                     consume(line)
                 if time.time() - last_flush >= 1:
-                    update(call_id, output=output, summary=summary)
+                    update(call_id, output=output, summary=redact(summary,8000))
                     last_flush = time.time()
             if buffer.strip():
                 consume(buffer)
@@ -312,11 +360,11 @@ def run_execution(app, call_id, payload, headers):
                 state = 'error'
             if state == 'error' and not failure:
                 failure = {'message': 'Budget de sortie épuisé.' if activity and activity['finish_reason'] == 'length' else 'Appel terminé sans résultat complet.'}
-            update(call_id, state=state, output=output, summary=summary, error=json.dumps(failure or {}))
+            update(call_id, state=state, output=output, summary=redact(summary,8000), error=json.dumps(failure or {}))
         except Exception as error:
             # Avoid retaining arbitrary exception text containing request data.
             message = error.description if isinstance(error, HTTPException) else 'Le suivi serveur a été interrompu. Le code déjà reçu est conservé.'
-            update(call_id, state='error', output=output[:MAX_OUTPUT], summary=summary,
+            update(call_id, state='error', output=output[:MAX_OUTPUT], summary=redact(summary,8000),
                    error=json.dumps({'message':redact(message), 'status':getattr(error, 'code', 502)}))
         finally:
             if response is not None:

@@ -14,7 +14,7 @@
 // preserve that behaviour while we work through the wider settings migration.
 import { normalizeOpenRouterModel, generationFeedback } from './model-capabilities.js';
 import { withHttpDetails } from './provider-errors.js';
-import { createReasoningSummary } from './reasoning-summary.js';
+import { createReasoningSummary,providerSummaryParts } from './reasoning-summary.js';
 import { durableGeneration } from './durable-generation.js';
 import './settings-sync.js';
 import { applyParams, withUsageReporting, createRunStats } from './gen-params.js';
@@ -522,7 +522,7 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
         telemetry?.activity?.('reasoning');
         stats.markReasoning();
       }
-      if (reasoningSummary.add(choice?.delta?.reasoning_details) && Date.now() - lastSummaryAt >= 300) {
+      if (reasoningSummary.add(providerSummaryParts(choice?.delta,modelId)) && Date.now() - lastSummaryAt >= 300) {
         lastSummaryAt = Date.now();
         onStats?.({reasoningSummary:reasoningSummary.snapshot(), reasoningSignals});
       }
@@ -568,7 +568,7 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
   // Non-streaming response
   const data = await res.json();
   const content = data.choices?.[0]?.message?.content || '';
-  reasoningSummary.add(data.choices?.[0]?.message?.reasoning_details);
+  reasoningSummary.add(providerSummaryParts(data.choices?.[0]?.message,modelId));
   if (data.choices?.[0]?.message?.reasoning) stats.markReasoning();
   stats.setFinishReason(data.choices?.[0]?.finish_reason);
   stats.setUsage(data.usage);

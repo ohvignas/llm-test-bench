@@ -121,6 +121,67 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(result['output'],'<html>ok</html>');self.assertEqual(result['state'],'ok')
         self.assertEqual(result['summary'],'Synthese publique');self.assertNotIn('PRIVATE',json.dumps(result))
 
+    def test_modern_claude_summary_compatibility_keeps_only_documented_summary_formats(self):
+        from server.reasoning_summary import public_summary_parts
+        delta={'reasoning_details':[{'type':'reasoning.text','format':'anthropic-claude-v1','text':'Résumé public.'}]}
+        self.assertEqual(public_summary_parts(delta,'anthropic/claude-opus-5.5'),['Résumé public.'])
+        self.assertEqual(public_summary_parts(delta,'other/model'),[])
+        self.assertEqual(public_summary_parts({'reasoning_details':[{'type':'reasoning.encrypted','data':'OPAQUE'}], 'reasoning':'UNKNOWN'},'anthropic/claude-fable-5.2'),[])
+
+    def test_chat_adjustment_preserves_code_and_settings_and_launches_once(self):
+        source=self.stopped_source('<html>initial</html>')
+        path='/api/executions/'+source['id']+'/adjust'
+        body={'id':'a'*32,'confirmed':True,'message':'Ajoute un bouton bleu.'}
+        with patch('server.executions.POOL.submit') as submit:
+            response=self.client.post(path,headers=self.headers,json=body)
+            self.assertEqual(response.status_code,202)
+            args=submit.call_args.args
+            payload=args[3]
+            self.assertEqual(payload['messages'][-2],{'role':'assistant','content':'<html>initial</html>'})
+            self.assertIn(body['message'],payload['messages'][-1]['content'])
+            self.assertEqual(payload['max_tokens'],128000);self.assertEqual(payload['reasoning'],{'effort':'max'})
+            self.assertTrue(payload['stream'])
+            self.assertEqual(self.client.post(path,headers=self.headers,json=body).status_code,200)
+            self.assertEqual(submit.call_count,1)
+            self.assertEqual(self.client.post(path,headers=self.headers,json={**body,'message':'Une autre demande'}).status_code,409)
+        self.assertEqual(self.client.get('/api/executions/'+source['id']).json['output'],'<html>initial</html>')
+        self.assertEqual(self.client.get('/api/executions/'+body['id']).json['output'],'')
+        with self.app.app_context():
+            stored=db().execute('SELECT user_instruction FROM browser_executions WHERE id=?',(body['id'],)).fetchone()[0]
+            self.assertNotIn(body['message'].encode(),stored)
+        history=self.client.get('/api/executions/'+body['id']+'/conversation').json
+        self.assertEqual(history['turns'][-1]['message'],body['message'])
+        self.assertNotIn('prompt 0',json.dumps(history))
+
+    def test_chat_validation_is_free_and_requires_auth_csrf_and_a_finished_output(self):
+        source=self.stopped_source('')
+        path='/api/executions/'+source['id']+'/adjust'
+        body={'id':'b'*32,'confirmed':True,'message':'Change la couleur.'}
+        with patch('server.proxy.requests.request') as api,patch('server.executions.POOL.submit') as submit:
+            self.assertEqual(self.client.post(path,headers=self.headers,json=body).status_code,409)
+            self.assertEqual(self.client.post(path,headers=self.headers,json={**body,'message':''}).status_code,400)
+            self.assertEqual(self.client.post(path,headers=self.headers,json={**body,'message':'a'*12001}).status_code,400)
+            self.assertEqual(self.client.post(path,headers=self.headers,json={**body,'confirmed':False}).status_code,400)
+            self.assertEqual(self.client.post(path,json=body).status_code,403)
+            self.assertEqual(self.app.test_client().get('/api/executions/'+source['id']+'/conversation').status_code,401)
+            api.assert_not_called();submit.assert_not_called()
+
+    def test_chat_keeps_previous_turns_in_the_next_adjustment(self):
+        source=self.stopped_source('<html>initial</html>')
+        with patch('server.executions.POOL.submit'):
+            first={'id':'a'*32,'confirmed':True,'message':'Ajoute un bouton bleu.'}
+            self.assertEqual(self.client.post('/api/executions/'+source['id']+'/adjust',headers=self.headers,json=first).status_code,202)
+        with self.app.app_context():
+            db().execute("UPDATE browser_executions SET state='ok',output='<html>bleu</html>' WHERE id=?",(first['id'],));db().commit()
+        with patch('server.executions.POOL.submit') as submit:
+            second={'id':'b'*32,'confirmed':True,'message':'Rends-le plus grand.'}
+            self.assertEqual(self.client.post('/api/executions/'+first['id']+'/adjust',headers=self.headers,json=second).status_code,202)
+            messages=submit.call_args.args[3]['messages']
+            self.assertEqual(messages[-2]['content'],'<html>bleu</html>')
+            self.assertTrue(any(first['message'] in m['content'] for m in messages))
+        history=self.client.get('/api/executions/'+second['id']+'/conversation').json
+        self.assertEqual([t['message'] for t in history['turns'] if t['message']],[first['message'],second['message']])
+
     def test_stopping_one_running_call_preserves_its_partial_and_the_peer(self):
         entered=threading.Barrier(3);release=threading.Event()
         def upstream(*args,**kwargs):
