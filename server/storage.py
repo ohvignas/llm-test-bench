@@ -63,6 +63,12 @@ def initialize(app):
                 output_chars INTEGER NOT NULL DEFAULT 0, reasoning_events INTEGER NOT NULL DEFAULT 0,
                 finish_reason TEXT, usage TEXT NOT NULL DEFAULT '{}', settings TEXT NOT NULL DEFAULT '{}',
                 cancel_requested INTEGER NOT NULL DEFAULT 0);
+            CREATE TABLE IF NOT EXISTS browser_executions (
+                id TEXT PRIMARY KEY, request_hash TEXT NOT NULL, model TEXT NOT NULL,
+                created REAL NOT NULL, updated REAL NOT NULL, worker TEXT NOT NULL,
+                state TEXT NOT NULL, context TEXT NOT NULL, activity_id TEXT,
+                output TEXT NOT NULL DEFAULT '', summary TEXT NOT NULL DEFAULT '',
+                error TEXT NOT NULL DEFAULT '{}', cancel_requested INTEGER NOT NULL DEFAULT 0);
             CREATE TABLE IF NOT EXISTS model_policies (
                 model TEXT PRIMARY KEY, effort TEXT, max_tokens INTEGER);
             CREATE TABLE IF NOT EXISTS login_attempts (

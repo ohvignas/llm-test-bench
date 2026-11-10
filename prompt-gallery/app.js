@@ -1308,7 +1308,12 @@ function App() {
       await openrouter.generateHtml(generationPrompt, target.providerId, target.modelId, (partial) => {
         finalHtml = stripCodeFences(partial);
         onChunk?.(finalHtml);
-      }, onStats, target.params, { signal: batchAbortRef.current.signal, generationOptions: target.generationOptions });
+      }, onStats, target.params, { signal: batchAbortRef.current.signal, generationOptions: {
+        ...target.generationOptions,
+        executionContext:{promptId:promptItem?.id || '',title:promptItem?.title || 'Création personnalisée',
+          groupId:mdl?.batchGroupId || mdl?.batchRunId || batchIdRef.current,
+          runId:mdl?.batchRunId || batchIdRef.current,modelLabel:mdl?.label || mdl?.modelId},
+      } });
       return finalHtml;
     },
     runSandbox: (h) => runHtmlSandbox(h),
@@ -1555,6 +1560,8 @@ function App() {
           generations=${generations}
           loadHtml=${loadHtml}
           compareIds=${compareIds}
+          executionProject=${decodeRouteParam(route.param)}
+          onExecutionProjectChange=${key=>navigate(key ? 'compare/'+encodeURIComponent(key) : 'compare')}
           onCompareIdsChange=${setCompareIds}
           onOpen=${(id) => navigate(generationRoute(id))}
         />`;
@@ -1722,7 +1729,7 @@ function App() {
           resumeSource=${batchResumeSource}
           onRunningChange=${setBatchRunning}
           presentation=${batchPresentation === 'modal' ? 'modal' : batchPresentation === 'live' && route.name === 'compare' ? 'compare' : 'minimized'}
-          onOpenComparison=${() => { setBatchPresentation('live'); navigate('compare'); }}
+          onOpenComparison=${() => { setBatchPresentation(document.documentElement.dataset.secureVault==='on' ? 'minimized' : 'live'); navigate('compare'); }}
           onMinimize=${() => setBatchPresentation('minimized')}
           onRestore=${() => setBatchPresentation('modal')}
           prompts=${libraryPrompts}

@@ -112,8 +112,8 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
   for (let i = 0; i < prompts.length; i++) {
     await pauseGate({ phase: 'before-prompt', index: i, prompt: prompts[i] });
     if (stop()) { summary.stopped = true; emit({ type: 'item', index: i, status: 'stopped' }); break; }
-    const deps = withPromptCosts(providedDeps, event => emit({...event,index:i}));
     const p = prompts[i];
+    const deps = withPromptCosts(providedDeps, event => emit({...event,index:i}), p);
     emit({ type: 'item', index: i, status: 'start' });
 
     // Skip prompts that already have a variant for this model (resume support).
@@ -249,6 +249,7 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
         emit({ type: 'item', index: i, status: 'generating', attempt });
         genHtml = await deps.generate(p.prompt, {
           model,
+          promptItem: p,
           onChunk: (partial) => emit({ type: 'chunk', index: i, html: partial }),
           onStats: stats => emit({ type: 'stats', index: i, stats }),
         });

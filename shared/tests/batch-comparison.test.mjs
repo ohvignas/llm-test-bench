@@ -38,6 +38,10 @@ test('default comparison runs the full prompts on three models at their own maxi
   assert.deepEqual(calls.slice(0,3).map(c=>c.model.modelId), models.map(m=>m.modelId));
   for (const call of calls) {
     assert.ok(prompts.some(p=>p.prompt===call.prompt));
+    const prompt=prompts.find(p=>p.prompt===call.prompt);
+    assert.equal(call.model.generationOptions.executionContext.promptId,prompt.id);
+    assert.equal(call.model.generationOptions.executionContext.title,prompt.title);
+    assert.equal(call.model.generationOptions.executionContext.groupId,'comparison');
     assert.equal(call.settings.profile,'maximum');
     assert.equal(call.settings.params.reasoning.effort,call.model.expectedEffort);
     assert.equal(call.settings.params.max_tokens,call.model.api.capabilities.maxOutputTokens);

@@ -141,4 +141,6 @@ def create_app(config=None):
     app.register_blueprint(auth)
     app.register_blueprint(data)
     app.register_blueprint(proxy)
+    from .executions import executions
+    app.register_blueprint(executions)
     return app

@@ -15,6 +15,7 @@
 import { normalizeOpenRouterModel, generationFeedback } from './model-capabilities.js';
 import { withHttpDetails } from './provider-errors.js';
 import { createReasoningSummary } from './reasoning-summary.js';
+import { durableGeneration } from './durable-generation.js';
 import './settings-sync.js';
 import { applyParams, withUsageReporting, createRunStats } from './gen-params.js';
 import { withTelemetry, messagesText } from './generation-telemetry.js';
@@ -448,7 +449,7 @@ function requireCompletionContent(content, stats, settings) {
 
 // ── Generic streaming chat completion ──
 
-async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onChunk, params, onStats, telemetry, signal, settings, automatic, explicitRetry }) {
+async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onChunk, params, onStats, telemetry, signal, settings, automatic, explicitRetry, executionContext }) {
   signal?.throwIfAborted();
   const apiKey = await getApiKeyForRequest();
   if (!apiKey) throw Object.assign(new Error('OpenRouter API key not set'), {requestSent:false});
@@ -468,7 +469,10 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
   if (onStats || telemetry) body = withUsageReporting(body, 'openrouter');
 
   telemetry?.mark('dispatched');
-  const res = await providerFetch(`${API_BASE}/chat/completions`, {
+  const res = SERVER_VAULT && onChunk && executionContext
+    ? await durableGeneration({body, context:executionContext, automatic, explicitRetry, signal,
+      onId:id => onStats?.({executionId:id})})
+    : await providerFetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
     signal,
     headers: {
@@ -509,11 +513,12 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
         const failure=new Error(typeof error === 'string' ? error : error.message || 'Le fournisseur a interrompu la génération.');
         if(Number.isInteger(Number(error.code))&&Number(error.code)>=400)failure.status=Number(error.code);
         if(error.code==='content_filter'||error.code==='content_policy_violation')failure.code='CONTENT_FILTERED';
+        if(error.requestSent === false)failure.requestSent=false;
         throw failure;
       }
       const choice = parsed.choices?.[0];
-      if (choice?.delta?.reasoning || choice?.delta?.reasoning_content || choice?.delta?.reasoning_details?.length) {
-        reasoningSignals++;
+      if (parsed.bench_reasoning_events || choice?.delta?.reasoning || choice?.delta?.reasoning_content || choice?.delta?.reasoning_details?.length) {
+        reasoningSignals = parsed.bench_reasoning_events || reasoningSignals + 1;
         telemetry?.activity?.('reasoning');
         stats.markReasoning();
       }

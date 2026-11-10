@@ -3,6 +3,7 @@ import { useLazyHtml } from './useLazyHtml.js';
 import { withPreviewStorage } from '../../shared/services/preview-storage.js';
 import { useMemo, useState } from 'preact/hooks';
 import { ExecutionSummary } from './ExecutionSummary.js';
+import { ExecutionBrowser } from './ExecutionBrowser.js';
 import { RatingWidget } from './RatingWidget.js';
 import { ratingOf } from '../services/rating.js';
 import {
@@ -41,7 +42,7 @@ function ComparePane({ generation, loadHtml }) {
   ></iframe>`;
 }
 
-export function CompareView({ generations, compareIds, onCompareIdsChange, onOpen, loadHtml }) {
+export function CompareView({ generations, compareIds, onCompareIdsChange, onOpen, loadHtml, executionProject, onExecutionProjectChange }) {
   const [selecting, setSelecting] = useState(true);
   const [search, setSearch] = useState('');
   const [filterModel, setFilterModel] = useState('');
@@ -100,9 +101,11 @@ export function CompareView({ generations, compareIds, onCompareIdsChange, onOpe
     setSelecting(true);
   };
 
+  if (executionProject) return html`<${ExecutionBrowser} view="compare" selectedProject=${executionProject} onProjectChange=${onExecutionProjectChange} />`;
   if (selecting || compareIds.length < 2) {
     return html`
       <div class="compare-view">
+        <${ExecutionBrowser} view="compare" onProjectChange=${onExecutionProjectChange} />
         <div class="compare-controls">
           <div class="filter-bar">
             <div class="filter-search-wrapper">

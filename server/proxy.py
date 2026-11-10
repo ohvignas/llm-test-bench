@@ -2,12 +2,12 @@
 import json
 import re
 
-from flask import Blueprint, Response, abort, jsonify, request, stream_with_context
+from flask import Blueprint, Response, abort, g, jsonify, request, stream_with_context
 import requests
 from werkzeug.exceptions import HTTPException
 
 from .auth import json_object
-from .storage import api_key
+from .storage import api_key, db
 from .spend_guard import reserve, finish, clear_failed, reset_revision
 from .activity import Activity
 from .model_policy import policies
@@ -51,6 +51,12 @@ def relay():
     if chat and identity is None:
         return unsent_error(409, 'Appel bloqué : ce prompt et ce modèle sont déjà en cours ou ont échoué. Aucun nouvel appel envoyé. Modifiez le prompt, ou autorisez volontairement les relances dans les options du lot.')
     activity = Activity(payload, automatic) if chat else None
+    if activity:
+        g.bench_activity_id = activity.id
+        execution_id = request.environ.get('bench.execution_id')
+        if execution_id:
+            db().execute('UPDATE browser_executions SET activity_id=? WHERE id=?', (activity.id, execution_id))
+            db().commit()
     stream = bool(chat and payload.get('stream'))
     headers = {'Accept': 'text/event-stream' if stream else 'application/json',
                'Content-Type': 'application/json'}

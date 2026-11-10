@@ -12,6 +12,7 @@ export function createCostCall(role, details = {}) {
 export function updateCostCall(call, stats) {
   const next = {...call};
   if (typeof stats?.telemetryId === 'string') next.telemetryId = stats.telemetryId;
+  if (typeof stats?.executionId === 'string') next.executionId = stats.executionId;
   if (stats?.reasoningSummary?.source === 'provider-summary') next.reasoningSummary = stats.reasoningSummary;
   if (Number.isSafeInteger(stats?.reasoningSignals) && stats.reasoningSignals >= 0) next.reasoningSignals = stats.reasoningSignals;
   if (Number.isFinite(stats?.cost) && stats.cost >= 0) next.usd = stats.cost;
@@ -43,7 +44,7 @@ export function costTotals(calls = []) {
 export function formatUsd(value) {
   return Number.isFinite(value) ? `${value.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:12})} $US` : 'Coût en attente';
 }
-export function withPromptCosts(deps, emit) {
+export function withPromptCosts(deps, emit, promptItem) {
   const calls = new Map();
   const wrapped = {...deps};
   for (const role of ['generate','heal','audit','repair']) {
@@ -54,7 +55,11 @@ export function withPromptCosts(deps, emit) {
       let call = createCostCall(role, options.stage ? {stage:options.stage} : {});
       const publish = () => { calls.set(call.id,{...call}); emit({type:'cost',call:{...call}}); };
       publish();
-      args[position] = {...options,onStats:stats => {
+      const mdl = options.model;
+      const context = promptItem && mdl ? {promptItem,model:{...mdl,generationOptions:{...mdl.generationOptions,
+        executionContext:{promptId:promptItem.id || '',title:promptItem.title || 'Création personnalisée',
+          groupId:mdl.batchGroupId || mdl.batchRunId || '',runId:mdl.batchRunId || '',modelLabel:mdl.label || mdl.modelId}}}} : {};
+      args[position] = {...options,...context,onStats:stats => {
         call = updateCostCall(call, stats);
         publish();
         options.onStats?.(stats);

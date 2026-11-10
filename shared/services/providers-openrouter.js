@@ -101,6 +101,7 @@ export async function streamChat({ provider, modelId, systemPrompt, userPrompt, 
     signal,
     automatic:generationOptions?.automatic,
     explicitRetry:generationOptions?.explicitRetry,
+    executionContext:generationOptions?.executionContext,
   });
     generationOptions?.validateResult?.(result);
     return result;
