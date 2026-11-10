@@ -147,15 +147,6 @@
       "description": "Visualiser les trajectoires de particules influencées par des masses et un champ gravitationnel.",
       "notes": "À surveiller : Stabilité de l’intégration, trajectoires et gestion des particules absorbées."
     },
-    "threejs-gta-6-game": {
-      "title": "GTA VI — jeu urbain en monde ouvert",
-      "description": "Créer un prototype de jeu urbain avec déplacements, véhicules et activités interactives.",
-      "notes": "À surveiller : Transitions entre véhicules, collisions, circulation et missions réellement jouables.",
-      "aliases": [
-        "GTA VI",
-        "Grand Theft Auto"
-      ]
-    },
     "p5js-flow-field-painter": {
       "title": "Peinture par champ de flux",
       "description": "Dessiner des motifs organiques avec des particules guidées par un champ de forces.",
@@ -575,15 +566,6 @@
       "title": "Simulation de puits gravitationnels — version avancée",
       "description": "Visualiser les trajectoires de particules influencées par des masses et un champ gravitationnel. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
       "notes": "À surveiller : Stabilité de l’intégration, trajectoires et gestion des particules absorbées. Vérifier également chaque exigence numérotée de la consigne originale."
-    },
-    "adv-threejs-gta-6-game": {
-      "title": "GTA VI — jeu urbain en monde ouvert, version avancée",
-      "description": "Créer un prototype de jeu urbain avec déplacements, véhicules et activités interactives. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
-      "notes": "À surveiller : Transitions entre véhicules, collisions, circulation et missions réellement jouables. Vérifier également chaque exigence numérotée de la consigne originale.",
-      "aliases": [
-        "GTA VI",
-        "Grand Theft Auto"
-      ]
     },
     "adv-p5js-audio-visualizer": {
       "title": "Visualiseur audio interactif — version avancée",

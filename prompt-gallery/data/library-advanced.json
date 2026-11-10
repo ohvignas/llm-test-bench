@@ -158,17 +158,6 @@
       "createdAt": "2026-09-15T00:00:00Z"
     },
     {
-      "id": "adv-threejs-gta-6-game",
-      "set": "advanced",
-      "basedOn": "threejs-gta-6-game",
-      "title": "GTA 6 Game (Advanced)",
-      "category": "threejs",
-      "tags": ["game", "open-world", "driving", "action", "advanced"],
-      "prompt": "Build a polished single-page Three.js open-world crime-action game inspired by GTA 6, set in an original neon coastal city. Use original procedural low-poly geometry only: no copyrighted logos, named characters, map data, audio, or ripped assets. The core game must include: a third-person character (WASD, sprint, jump, mouse camera, raycast shooting, health, enter/exit vehicles with E); arcade driving with collisions, durability, and a chase camera; a compact city with roads, varied buildings, beach, ocean, palms, neon areas, ramps, and landmarks; ambient traffic on roads and wandering pedestrians; a 0-to-5-star wanted system with pursuing police and a visible evade cooldown; a HUD with health, durability, cash, stars, mission text, prompts, and a rotating minimap; a sunset-to-night lighting cycle; title, controls, pause, game-over, and mission-complete screens. This is the advanced brief: on top of all of that, every numbered requirement must work.\n\nRequirements:\n1. Five chained story missions with a mission select at the safehouse, failure conditions, and checkpoints.\n2. At least 3 vehicle classes with different handling: sports car, motorbike, and boat (boats only on water).\n3. A weapon wheel with melee, pistol, and SMG, each with ammo, reload, and pickups, plus an aim-assist toggle.\n4. Police escalation per star: 1-2 patrol cars, 3 roadblocks, 4 a helicopter with a searchlight, 5 heavy units.\n5. Traffic lights at intersections that NPC traffic obeys; pedestrians flee from gunfire and crashes.\n6. In-vehicle radio with 2 stations of music synthesised with Web Audio, and engine sound that follows RPM.\n7. Save and load to localStorage: cash, completed missions, owned vehicles, and player position.\n8. Settings menu: mouse sensitivity, invert Y, and a graphics preset (shadows, draw distance, NPC cap) that applies live.\n9. Fixed-timestep physics independent of frame rate, with object pooling for transient effects and capped NPC counts.\n10. An F3 debug overlay with FPS, active NPCs, pooled objects, and draw calls.\n\nDeliver one standalone HTML file with embedded CSS and JavaScript (Three.js may load from a CDN). No placeholder buttons, TODOs, or decorative systems: every displayed control and feature must work.",
-      "notes": "Watch for: a static city with no working mission chain; entering vehicles or boats breaking player or camera state; boats driving on land; frame-rate-dependent driving; traffic ignoring lights; police escalation that stops at one car; wanted stars that never decay; a save that doesn't restore missions; settings that don't apply; the minimap in the wrong orientation; unbounded NPCs or effects tanking performance.",
-      "createdAt": "2026-09-15T00:00:00Z"
-    },
-    {
       "id": "adv-p5js-audio-visualizer",
       "set": "advanced",
       "basedOn": "p5js-audio-visualizer",

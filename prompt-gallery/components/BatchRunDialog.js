@@ -843,7 +843,7 @@ export function BatchRunDialog({
           </label>
           ${mode === 'quick' && html`<label class="batch-opt">
             <input type="checkbox" checked=${progressive} onChange=${e => setProgressive(e.target.checked)} />
-            <span>Construire les prompts GTA VI par étapes, avec un appel par étape</span>
+            <span>Construire le prompt GTA VI par étapes, avec un appel par étape</span>
           </label>
           <p class="batch-opt-hint">La première étape vise une version jouable ; les suivantes l’enrichissent. Chaque étape terminée est enregistrée. Au premier échec, la construction s’arrête et les versions déjà enregistrées restent disponibles. Le résultat final n’est pas garanti. Décochez pour envoyer le prompt d’origine en un appel.</p>`}
           ${progressiveActive && html`<section class="batch-prompt-selection" aria-label="Appels prévus pour la construction par étapes">

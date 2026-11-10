@@ -10,11 +10,18 @@ const lib=await import('../../prompt-gallery/services/library.js');
 
 test('all shipped prompts have French display information and 24 website tasks load separately',async()=>{
   const seeds=await lib.loadSeeds();
-  assert.equal(seeds.length,165);
+  assert.equal(seeds.length,163);
   const web=seeds.filter(p=>lib.promptSetOf(p)==='web');
   assert.equal(web.length,24);
   assert.equal(new Set(seeds.map(p=>p.id)).size,seeds.length);
   for(const p of seeds){assert.ok(p.title?.trim(),p.id);assert.ok(p.description?.trim(),p.id);}
+  const gta=seeds.filter(p=>/gta/i.test(p.title));
+  assert.equal(gta.length,1,'Only one GTA brief is offered across all categories and sets');
+  assert.equal(gta[0].category,'games-graphics');
+  assert.equal(gta[0].id,'games-gta-vi');
+  assert.equal(lib.promptSetOf(gta[0]),'core');
+  assert.match(gta[0].prompt,/Sans Three\.js/);
+  assert.match(gta[0].prompt,/JavaScript déjà compilé et exécutable/);
   assert.equal(seeds.find(p=>p.id==='flag-airport-operations').title,'Simulateur des opérations aéroportuaires');
   for(const p of web){assert.match(p.prompt,/document HTML/i);assert.match(p.notes,/Vérifier/);}
 });

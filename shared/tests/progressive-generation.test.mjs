@@ -2,22 +2,28 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {runBatch} from '../../prompt-gallery/services/batchRunner.js';
-import {progressivePlan, progressiveModel, runProgressiveGeneration} from '../../prompt-gallery/services/progressiveGeneration.js';
+import {progressivePlan, progressiveModel, progressivePrompt, runProgressiveGeneration} from '../../prompt-gallery/services/progressiveGeneration.js';
 import {costTotals} from '../../prompt-gallery/services/batchCosts.js';
 
-const seed=JSON.parse(await readFile(new URL('../../prompt-gallery/data/library-advanced.json',import.meta.url),'utf8'));
-const advanced=seed.prompts.find(prompt=>prompt.id==='adv-threejs-gta-6-game');
+const seed=JSON.parse(await readFile(new URL('../../prompt-gallery/data/library.json',import.meta.url),'utf8'));
+const advanced=seed.prompts.find(prompt=>prompt.id==='games-gta-vi');
 const ordinary={id:'ordinary',title:'Page simple',prompt:'Créer une page simple.',tags:[]};
 const model={providerId:'test',modelId:'fixture',generationOptions:{profile:'maximum',budget:{totalTokens:128000},reviewedMaxTokens:128000}};
 const documentFor=stage=>`<!doctype html><html><body>Version ${stage}</body></html>`;
 const healthy=()=>({errors:[],warnings:[],timedOut:false});
 const callsFrom=events=>[...new Map(events.filter(event=>event.type==='cost').map(event=>[event.call.id,event.call])).values()];
 
-test('the shipped advanced GTA brief has six stages and edits keep their own instructions',()=>{
+test('the single native JavaScript GTA brief has six compatible stages and edits keep their own instructions',()=>{
  assert.ok(advanced,'The test must exercise the actual shipped prompt');
  assert.equal(progressivePlan(advanced).length,6);
  assert.deepEqual(progressivePlan({...advanced,prompt:advanced.prompt+'\nPersonnalisation utilisateur.'}),[]);
  assert.deepEqual(progressivePlan(ordinary),[]);
+ for(const stage of progressivePlan(advanced)) {
+  const request=progressivePrompt(stage);
+  assert.match(request,/Sans Three\.js/);
+  assert.match(request,/JavaScript déjà compilé/);
+  assert.doesNotMatch(request,/cdn\.jsdelivr|THREE\./);
+ }
 });
 
 test('stages honor comparison and manual settings; only economy keeps the small stage cap',()=>{
