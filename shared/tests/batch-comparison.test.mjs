@@ -8,7 +8,7 @@ import {normalizeOpenRouterModel, resolveModelSettings} from '../services/model-
 const prompts = ['website', 'game'].map(id => ({id, title:id, prompt:`Full original ${id} specification`, tags:[]}));
 const html = '<!doctype html><html><body>Original model output</body></html>';
 
-test('default comparison runs the full prompts on three models at their own maximum despite learned and saved low settings', async () => {
+test('explicit single-call comparison runs the full prompts on three models at their own maximum despite learned and saved low settings', async () => {
   const models = ['max', 'xhigh', 'high'].map((effort, i) => {
     const api = normalizeOpenRouterModel({id:`fixture/${i}`, context_length:200000,
       top_provider:{max_completion_tokens:64000 + i * 16000},
@@ -16,7 +16,7 @@ test('default comparison runs the full prompts on three models at their own maxi
       reasoning:{mandatory:true, supported_efforts:['low', effort]},
       bench_policy:{recovery_level:2, effort:'low', max_tokens:2048},
     });
-    const generationOptions = batchGenerationOptions({mode:DEFAULT_BATCH_MODE,
+    const generationOptions = batchGenerationOptions({mode:'comparison',
       profile:'code', override:{profile:'manual', totalTokens:2048, reasoningEffort:'low'},
       budget:{totalTokens:2048, reasoningTokens:1024}});
     return {providerId:'openrouter', modelId:api.id, api, expectedEffort:effort, generationOptions};
@@ -25,7 +25,7 @@ test('default comparison runs the full prompts on three models at their own maxi
   const {lanes} = planBatchLanes({prompts, models, runId:'comparison'});
   await runLanes({lanes, mode:'parallel', runOne:lane => runBatch({
     prompts:lane.prompts, model:lane.model,
-    options:{mode:DEFAULT_BATCH_MODE, progressive:true, heal:true, apiRetries:3, stopOnFailure:false},
+    options:{mode:'comparison', progressive:true, heal:true, apiRetries:3, stopOnFailure:false},
     deps:{generate:async (prompt, {model}) => {
       const settings = resolveModelSettings({model:model.api, ...model.generationOptions});
       calls.push({prompt, model, settings});

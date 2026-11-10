@@ -17,6 +17,8 @@ import { DEFAULT_BATCH_MODE, batchGenerationOptions } from '../services/batchMod
 import {resolveModelSettings} from '../../shared/services/model-capabilities.js';
 import {clearFailedGenerationBlocks} from '../../shared/services/generation-spend-guard.js';
 import {ModelSettingsPanel} from './ModelSettingsPanel.js';
+import {AgentSettings} from './AgentSettings.js';
+import {readAgentLimits} from '../services/agentSettings.js';
 import { batchPromptChoices, setVisibleSelection } from '../services/batchPromptSearch.js';
 import { runBatch } from '../services/batchRunner.js';
 import {retryProposal, manualRetryModel, applyRetrySummaries, createRetryQueue} from '../services/manualRetry.js';
@@ -149,6 +151,7 @@ export function BatchRunDialog({
 
   // Options
   const [mode, setMode] = useState(resumeSource ? 'automatic' : DEFAULT_BATCH_MODE);
+  const [agentLimits,setAgentLimits]=useState(readAgentLimits);
   const [progressive, setProgressive] = useState(true);
   const [healAttempts, setHealAttempts] = useState(1);
   const [maxRepairRounds, setMaxRepairRounds] = useState(1);
@@ -428,6 +431,7 @@ export function BatchRunDialog({
       const options=batchGenerationOptions({mode,profile:settingsProfile,override:settingsOverrides[batchModelKey(report.model)],budget:{totalTokens,reasoningTokens}});
       const shown=previewReports.find(r=>batchModelKey(r.model)===batchModelKey(report.model))?.settings;
       return {...report.model,generationOptions:{...options,
+        ...(mode==='agent'?{agentLimits}:{}),
         reviewedMaxTokens:shown?.params.max_tokens??shown?.params.max_completion_tokens??report.settings.params.max_tokens??report.settings.params.max_completion_tokens}};
     });
     const plan = planBatchLanes({ prompts: list, models: configured, runId });
@@ -548,7 +552,7 @@ export function BatchRunDialog({
       }
     }
   }, [canRun, hasDirectory, selectedPrompts, runModels, laneMode, mode, progressive, healAttempts, maxRepairRounds, saveBothOnHeal,
-      skipExisting, delaySec, apiRetries, spendProtection, totalTokens, reasoningTokens, settingsProfile, settingsOverrides, apiCatalogue, allModels, showLiveOutput, runId, deps, refreshCapabilities, handleEvent, waitAtPauseBoundary, addToast, resumeFrom]);
+      skipExisting, delaySec, apiRetries, spendProtection, agentLimits, totalTokens, reasoningTokens, settingsProfile, settingsOverrides, apiCatalogue, allModels, showLiveOutput, runId, deps, refreshCapabilities, handleEvent, waitAtPauseBoundary, addToast, resumeFrom]);
 
   const pause = useCallback(() => {
     if (pauseRequestedRef.current || stopRef.current) return;
@@ -919,6 +923,12 @@ export function BatchRunDialog({
       <div class="batch-section">
         <div class="batch-section-head"><span><i class="fa-solid fa-wand-magic-sparkles"></i> Mode de génération</span></div>
         <div class="batch-options">
+          ${!resumeFrom&&html`<label class="batch-opt batch-mode-opt">
+            <input type="radio" name="batch-mode" value="agent" checked=${mode==='agent'} onChange=${()=>setMode('agent')}/>
+            <span><strong>Agent Mastra — créer, construire et corriger</strong><small>Un agent indépendant par prompt et modèle, avec les mêmes outils et limites pour comparer les résultats.</small></span>
+          </label>`}
+          ${mode==='agent'&&html`<${AgentSettings} value=${agentLimits} onChange=${setAgentLimits}/><p class="batch-opt-hint">Maximum du lot : ${selectedCount*runModels.length*agentLimits.maxSteps} appels et ${(selectedCount*runModels.length*agentLimits.budgetUsd).toLocaleString('fr-FR')} $US. Ce sont des plafonds ; le total facturé est celui communiqué par OpenRouter. Les réglages effectifs de chaque modèle figurent ci-dessous.</p>`}
+          ${mode==='agent'&&runModels.some(m=>!isOpenRouterModel(m))&&html`<p class="bench-inline-error">L’agent Mastra utilise OpenRouter dans cette version Docker. Retirez les fournisseurs locaux de ce lot ou choisissez un mode de génération classique.</p>`}
           ${!resumeFrom && html`<label class="batch-opt batch-mode-opt">
             <input type="radio" name="batch-mode" value="comparison" checked=${mode === 'comparison'} onChange=${() => setMode('comparison')} />
             <span><strong>Comparaison — capacité maximale</strong><small>Prompt complet identique, sortie maximale et effort le plus élevé accepté par chaque modèle. Un seul appel par prompt et modèle.</small></span>
@@ -1041,8 +1051,8 @@ export function BatchRunDialog({
 
     <div class="modal-footer">
       <button class="btn" onClick=${onClose}>Annuler</button>
-      <button class="btn btn-primary btn-generate" onClick=${start} disabled=${!canRun || !hasDirectory || selectedCount === 0 || settingsLoading || previewReports.some(r=>r.error)}>
-        <i class="fa-solid fa-play"></i> ${resumeFrom ? 'Reprendre' : 'Lancer'} ${selectedCount} prompt${selectedCount === 1 ? '' : 's'}${isMulti ? ` × ${runModels.length} modèles` : ''}${mode==='automatic'?` · jusqu’à ${selectedCount*runModels.length*3} appels`:plannedCalls !== null ? ` · ${plannedCalls} appel${plannedCalls === 1 ? '' : 's'} prévu${plannedCalls === 1 ? '' : 's'}` : ''}
+      <button class="btn btn-primary btn-generate" onClick=${start} disabled=${!canRun || !hasDirectory || selectedCount === 0 || settingsLoading || previewReports.some(r=>r.error)||(mode==='agent'&&runModels.some(m=>!isOpenRouterModel(m)))}>
+        <i class="fa-solid fa-play"></i> ${resumeFrom ? 'Reprendre' : 'Lancer'} ${selectedCount} prompt${selectedCount === 1 ? '' : 's'}${isMulti ? ` × ${runModels.length} modèles` : ''}${mode==='agent'?` · agents Mastra`:mode==='automatic'?` · jusqu’à ${selectedCount*runModels.length*3} appels`:plannedCalls !== null ? ` · ${plannedCalls} appel${plannedCalls === 1 ? '' : 's'} prévu${plannedCalls === 1 ? '' : 's'}` : ''}
       </button>
     </div>
   `;

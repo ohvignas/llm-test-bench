@@ -16,3 +16,4 @@ data/
 secrets/
 *.sqlite*
 *.db
+node_modules/

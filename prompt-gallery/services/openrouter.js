@@ -10,6 +10,8 @@ import { PROMPT_GALLERY_CHAT_AGENT_BUDGETS } from './codingAgent.js';
 export { getApiKey, saveApiKey, hasApiKey };
 
 import {SYSTEM_PROMPT} from './htmlSystemPrompt.js';
+import {readAgentLimits} from './agentSettings.js';
+import {secureMode} from '../../shared/services/secure-session.js';
 
 /**
  * Generate HTML through the unified provider system.
@@ -23,16 +25,19 @@ import {SYSTEM_PROMPT} from './htmlSystemPrompt.js';
  *   so this is how a run that will not finish gets ended.
  */
 export async function generateHtml(prompt, providerId, modelId, onChunk, onStats, params, { signal, generationOptions } = {}) {
+  const mastra=secureMode()&&(providerId==='openrouter'||getProvider(providerId)?.type==='openrouter')&&generationOptions?.engine!=='completion';
+  const context={promptId:'custom-'+crypto.randomUUID(),title:'Création personnalisée',modelLabel:modelId,...generationOptions?.executionContext};
+  if(mastra)Object.assign(context,{engine:'mastra',agentLimits:generationOptions?.agentLimits||readAgentLimits()});
   return streamHtmlDocument(streamChat, {
     providerId,
     modelId,
-    systemPrompt: SYSTEM_PROMPT,
+    systemPrompt: mastra?'Build the requested project with the Mastra development tools. Save source files, inspect build errors and produce a complete working web artifact.':SYSTEM_PROMPT,
     userPrompt: prompt,
     appTitle: 'Prompt Gallery',
     onChunk,
     onStats,
     params,
-    generationOptions:{...generationOptions,validateResult:requireHtmlDocument},
+    generationOptions:{...generationOptions,executionContext:context,validateResult:requireHtmlDocument},
     signal,
     agentBudgets: PROMPT_GALLERY_CHAT_AGENT_BUDGETS,
   });

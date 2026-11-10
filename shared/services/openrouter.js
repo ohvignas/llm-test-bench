@@ -457,7 +457,7 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
 
   const stats = createRunStats(undefined, telemetry);
   const reasoningSummary = createReasoningSummary();
-  let lastSummaryAt = 0, reasoningSignals = 0;
+  let lastSummaryAt = 0, reasoningSignals = 0, agentSteps;
   let body = applyParams({
     model: modelId,
     messages: [
@@ -508,6 +508,7 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
       // A provider can report an error after HTTP 200 and after partial output.
       // Surface it instead of leaving the batch looking successful or idle.
       if (parsed.usage) stats.setUsage(parsed.usage);
+      if(parsed.bench_agent_steps){agentSteps=parsed.bench_agent_steps;onStats?.({agentSteps,agentEvents:parsed.bench_agent_events||[]});}
       const error = parsed.error || parsed.choices?.[0]?.error;
       if (error) {
         const failure=new Error(typeof error === 'string' ? error : error.message || 'Le fournisseur a interrompu la génération.');
@@ -528,6 +529,7 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
       }
       if (choice?.finish_reason) stats.setFinishReason(choice.finish_reason);
       const delta = choice?.delta?.content;
+      if(parsed.bench_output_reset)full='';
       if (delta) {
         stats.markFirstToken();
         full += delta;
@@ -557,7 +559,7 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
       }
     } finally {
       try { await reader.cancel(); } catch { /* already closed */ }
-      resultStats = {...stats.finish(),responseChars:full.length,reasoningSignals,
+      resultStats = {...stats.finish(),responseChars:full.length,reasoningSignals,...(agentSteps?{agentSteps}:{}),
         ...(reasoningSummary.snapshot() ? {reasoningSummary:reasoningSummary.snapshot()} : {})};
       onStats?.(resultStats);
     }

@@ -18,7 +18,7 @@ STATIC_EXTENSIONS = {'.html', '.htm', '.js', '.mjs', '.css', '.json', '.svg', '.
                      '.jpeg', '.webp', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.otf', '.txt',
                      '.csv', '.xml', '.wasm', '.mp3', '.wav', '.mp4', '.webm', '.glb', '.gltf',
                      '.obj', '.mtl', '.pdf', '.md', '.ipynb', '.map', '.avif'}
-STATIC_EXCLUDED = {'server', 'work', 'data', 'secrets', 'outputs', 'docs', 'node_modules',
+STATIC_EXCLUDED = {'agent-runtime','server', 'work', 'data', 'secrets', 'outputs', 'docs', 'node_modules',
                    'tests', 'scripts', '_suite', 'specs'}
 
 
@@ -30,6 +30,8 @@ def create_app(config=None):
                       SITE_ROOT=Path(__file__).resolve().parent.parent,
                       AUTH_COOKIE_NAME='llm_bench_session', SESSION_SECONDS=7 * 24 * 60 * 60,
                       MAX_CONTENT_LENGTH=32 * 1024 * 1024, MAX_FORM_MEMORY_SIZE=1024,
+                      MASTRA_URL=os.environ.get('MASTRA_URL','').rstrip('/'),
+                      AGENT_CONTROL_DIR=os.environ.get('AGENT_CONTROL_DIR','/agent-control'),
                       MAX_FORM_PARTS=10, DEBUG=False)
     if config:
         app.config.update(config)
@@ -37,12 +39,18 @@ def create_app(config=None):
     if origin.scheme not in ('http', 'https') or not origin.hostname or origin.path or origin.query or origin.fragment:
         raise ValueError('PUBLIC_ORIGIN doit être une origine HTTP(S), sans chemin.')
     trusted_hosts = {'127.0.0.1', 'localhost', origin.hostname}
+    if app.config['MASTRA_URL']:trusted_hosts.add('bench')
     app.config['TRUSTED_HOSTS'] = sorted(trusted_hosts)
     initialize(app)
+    from .agents import agents, initialize_agent_control, internal_agent_request
+    initialize_agent_control(app)
     (Path(app.config['DATA_DIR']) / 'files').mkdir(exist_ok=True, mode=0o700)
 
     @app.before_request
     def security_boundary():
+        # Only this exact provider endpoint accepts a scoped, ephemeral agent
+        # token. No browser session, file API or other route inherits the bypass.
+        if internal_agent_request():return
         # Explicit check also supports Flask versions predating TRUSTED_HOSTS.
         if urlsplit('//' + request.host).hostname not in trusted_hosts:
             abort(400, description='Hôte non autorisé.')
@@ -143,4 +151,5 @@ def create_app(config=None):
     app.register_blueprint(proxy)
     from .executions import executions
     app.register_blueprint(executions)
+    app.register_blueprint(agents)
     return app

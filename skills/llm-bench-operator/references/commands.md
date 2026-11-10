@@ -49,3 +49,7 @@ Correction d’un résultat :
 Le modèle d’origine est repris sauf si `--model` est fourni. La sortie originale est conservée. Le nouveau plan doit être exécuté avec `run JOB --execute`.
 
 Les manifestations et checkpoints sont dans `/data/cli-jobs/JOB/`, hors de l’API fichiers. Les résultats sont copiés dans `/data/files/prompt-gallery/` avec des métadonnées de lot et de coûts. Ils sont visibles dans la galerie après actualisation. `job.items[].result` contient `DOSSIER/VARIANTE`. La clé reste chiffrée dans le stockage serveur ; aucune commande ne l’affiche.
+
+## Agents Mastra de l’interface
+
+`status --json` indique aussi les agents encore actifs entre deux appels au modèle. `agent-show IDENTIFIANT_EXECUTION --json` expose leurs outils, limites et factures par étape. `agent-stop IDENTIFIANT_EXECUTION --json` arrête seulement cet agent et son fournisseur. Utiliser l’identifiant d’exécution de `active_agents`, différent des identifiants d’activité des appels API. Les sources chiffrées sont exportables dans l’interface via Télécharger les sources. Les commandes CLI historiques `plan/run` restent le protocole à appel direct, distinct du mode Mastra. Ne pas inventer une commande de lancement Mastra CLI.

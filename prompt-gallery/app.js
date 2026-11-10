@@ -766,7 +766,7 @@ function App() {
           (stats) => {
             generationCall = updateCostCall(generationCall, stats);
             setResponseMetrics(current => current.call?.id === generationCall.id
-              ? { ...current, stats, call:generationCall } : current);
+              ? { ...current, stats:{...current.stats,...stats,agentEvents:[...(current.stats?.agentEvents||[]),...(stats.agentEvents||[])].slice(-30)}, call:generationCall } : current);
           },
           undefined,
           { signal: abort.signal },
@@ -1598,6 +1598,7 @@ function App() {
               responseTiming=${responseMetrics.timing}
               responseCosts=${responseMetrics.call ? [responseMetrics.call] : responseMetrics.billing?.calls || []}
               isGenerating=${isGenerating}
+              agentEnabled=${backend!=='agent'&&(selectedProviderId==='openrouter'||modelProviders.getProvider(selectedProviderId)?.type==='openrouter')}
               theme=${theme}
               onMorph=${crossAppHandoffsEnabled(undefined, 'code-morph-lab-v3') ? handleMorphCurrent : null}
               onSavePromptToLibrary=${() => handleOpenPromptForm({ prompt })}

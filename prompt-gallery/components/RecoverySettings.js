@@ -4,6 +4,7 @@ import {reviewRecovery} from '../services/executionRecovery.js';
 export function RecoverySettings({plan,strategy,busy,onChange}){
   const review=reviewRecovery(plan,strategy),adaptation=plan.adaptation;
   return html`<div class="bench-recovery-settings">
+    ${plan.engine==='mastra'&&html`<strong>Agent Mastra · ${plan.agent_limits.maxSteps} appels maximum · budget ${plan.agent_limits.budgetUsd.toLocaleString('fr-FR')} $US</strong>`}
     ${adaptation&&html`<p class="bench-recovery-risk">${adaptation.reason}</p>`}
     ${adaptation?.available&&html`<label class="bench-recovery-strategy">Réglages de reprise
       <select class="form-input" value=${review.strategy} disabled=${busy} onChange=${event=>onChange?.(event.currentTarget.value)}>

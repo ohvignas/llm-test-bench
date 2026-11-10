@@ -8,6 +8,7 @@ import {
 } from '../services/batchMetrics.js';
 import { consoleCounts, entryLine, formatConsoleForCopy } from '../services/previewConsole.js';
 import { BatchCosts } from './BatchCosts.js';
+import {AgentSettings} from './AgentSettings.js';
 
 export function PromptEditor({
   prompt,
@@ -18,6 +19,7 @@ export function PromptEditor({
   responseTiming,
   responseCosts = [],
   isGenerating,
+  agentEnabled=false,
   theme,
   onMorph,
   onSavePromptToLibrary,
@@ -210,6 +212,8 @@ export function PromptEditor({
           placeholder="Saisissez votre prompt ici (Markdown accepté)…"
         ></textarea>
       </div>
+      ${agentEnabled&&html`<${AgentSettings} disabled=${isGenerating}/>`}
+      ${agentEnabled&&responseStats?.agentEvents?.length>0&&html`<details class="bench-agent-settings" open><summary>Activité de l’agent</summary><div class="batch-activity-summary">${responseStats.agentEvents.slice(-8).map(e=>html`<p>${e.message}</p>`)}</div></details>`}
       <!-- Response Section -->
       <div class="response-section">
         ${responseCosts.length > 0 && html`<${BatchCosts} calls=${responseCosts} done=${!isGenerating} />`}

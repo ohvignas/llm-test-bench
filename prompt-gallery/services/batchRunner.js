@@ -73,6 +73,7 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
     throw new Error('La reprise doit cibler un seul résultat en mode Automatique ou Vérifié.');
   }
   const mode = opts.mode || (opts.heal ? 'runtime-heal' : 'quick');
+  if(mode==='agent'){opts.apiRetries=0;opts.heal=false;opts.progressive=false;}
   if (mode === 'comparison') {
     opts.apiRetries = 0;
     model = {...model, generationOptions: {

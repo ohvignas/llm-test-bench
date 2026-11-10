@@ -10,11 +10,33 @@ Tout le monde peut installer sa propre copie avec ses identifiants et sa clé. *
 
 ## Ce que tu peux faire
 
-- Générer une page HTML/CSS/JavaScript avec le modèle de ton choix.
+- Créer des sites et jeux HTML/JavaScript/TypeScript avec un agent Mastra doté d’outils, de compilation et de test Chromium.
 - Lancer le même prompt sur plusieurs modèles simultanément et comparer leurs rendus.
 - Sauvegarder les variantes, noter les résultats et retrouver les exécutions et leurs métriques disponibles.
 - Utiliser les autres outils amont : SVG, p5.js, jeux, notebooks, visualisations et outils de code.
 - Retrouver tes projets et ta clé après un redémarrage, sans la ressaisir.
+
+## Génération avec Mastra
+
+Mastra orchestre les étapes du modèle : `write_file`, `read_file`, `list_files`, `execute_command`, `build_project` et `test_project`. L’agent écrit des fichiers, consulte les erreurs du compilateur et peut ouvrir la construction dans Chromium pour détecter les erreurs de démarrage. Les événements et chaque facture du fournisseur sont visibles dans le journal et dans **Comparer**. La compilation et le test de démarrage ne certifient pas toutes les interactions ni la qualité du résultat.
+
+Les valeurs initiales sont **8 appels et 10 $US maximum par prompt et modèle**, modifiables avant lancement dans Créer ou Lots. Elles incluent les corrections de l’agent. Le serveur vérifie une réservation conservatrice avant chaque étape et additionne uniquement les coûts effectivement communiqués par OpenRouter. Une facture manquante bloque la poursuite ; elle ne vaut jamais zéro. Un plafond de sortie incompatible avec le budget est refusé avant le prochain appel. Aucune augmentation du budget, baisse silencieuse des paramètres, relance SDK ou bascule vers un autre modèle n’est automatique.
+
+Les projets disposent de Vite, TypeScript, React, Three.js et Babylon.js préinstallés. Les commandes et Chromium tournent **hors ligne dans un conteneur par agent**, sans volume hôte, sans clé et sans socket Docker. Ils ne peuvent pas télécharger de nouveaux paquets. Les pages compilées peuvent employer le réseau dans l’aperçu du navigateur ; les tests hors ligne signalent les ressources externes inaccessibles.
+
+Le **service de contrôle Mastra est un composant de confiance avec accès au socket Docker**. Il ne publie aucun port hôte et ses routes exigent un secret de contrôle distinct de la clé OpenRouter. Les commandes générées n’y sont jamais exécutées : elles passent exclusivement par le conteneur de leur session. Les requêtes au modèle passent par le serveur Python avec un jeton éphémère, un modèle fixé et les paramètres affichés. La clé OpenRouter reste dans le coffre Python. Ce dispositif est destiné à une installation personnelle administrée par son propriétaire.
+
+Les fichiers texte sont sauvegardés chiffrés dans SQLite (100 fichiers, 1 Mio par fichier, 8 Mio au total). **Télécharger les sources** exporte un ZIP ; **Reprendre** et le chat réutilisent ces sources, même si aucune page n’a encore compilé. Les binaires et `node_modules` ne sont pas des points de reprise. Le dernier aperçu construit reste conservé après une erreur. La reprise du mode agent reconstruit le projet ; la reprise du mode à appel unique garde son comportement de continuation HTML.
+
+La commande d’installation Compose construit les trois images nécessaires et lance automatiquement les services. Le socket standard est `/var/run/docker.sock`, y compris dans Docker Desktop. Si votre moteur utilise un autre socket, définir `DOCKER_SOCKET_PATH` dans `.env`. Aucun accès à Docker n’est donné aux projets générés.
+
+Diagnostic local sans navigateur :
+
+```sh
+./benchctl status --json
+./benchctl agent-show IDENTIFIANT_EXECUTION --json
+./benchctl agent-stop IDENTIFIANT_EXECUTION --json
+```
 
 ## Prérequis
 
@@ -23,7 +45,7 @@ Tout le monde peut installer sa propre copie avec ses identifiants et sa clé. *
 - Un navigateur récent ; Chrome ou Edge sont recommandés pour la sélection de dossiers et la capture vidéo.
 - Une connexion Internet pour la première construction et les appels aux modèles distants. Aucun GPU local n'est nécessaire pour appeler OpenRouter.
 
-Docker installe Python, les dépendances et SQLite : aucun Python, Node.js ou serveur de base de données n'est nécessaire sur ton ordinateur. Le code du projet est sous MIT ; Docker Desktop possède ses propres conditions de licence. Les appels aux modèles peuvent être payants selon les tarifs OpenRouter et le modèle choisi.
+Docker installe Python, Node.js, Mastra, Chromium, les dépendances et SQLite : aucun Python, Node.js ou serveur de base de données n'est nécessaire sur ton ordinateur. Le code du projet est sous MIT ; Docker Desktop possède ses propres conditions de licence. Les appels aux modèles peuvent être payants selon les tarifs OpenRouter et le modèle choisi.
 
 ## Installation
 
@@ -58,7 +80,7 @@ Les boutons **Reprendre** (code partiel) et **Réessayer** (aucun code) sont dis
 
 Les nouvelles consignes et leurs paramètres sont conservés **chiffrés côté serveur**, pour retrouver le contexte initial après rechargement sans exposer la clé API. Les anciens appels sans consigne conservée peuvent retrouver leur prompt dans la bibliothèque actuelle ; la fenêtre indique cette différence et bloque le lancement si aucune consigne n’est retrouvée. Une reprise ne contourne pas un filtrage du fournisseur.
 
-Le bouton de discussion à côté du nom de chaque modèle dans **Comparer** ouvre **Chat · ajustements**. Le code courant et les messages précédents accompagnent votre demande : **Envoyer l’ajustement · appel payant** lance une nouvelle version avec le même modèle et les réglages affichés avant envoi. Les anciennes versions restent conservées ; les messages sont chiffrés dans SQLite. Ouvrir ou fermer le chat ne lance aucun appel. Pendant une génération, la conversation reste consultable et l’envoi attend la fin de cet appel. Sans code reçu, utiliser **Réessayer** pour obtenir un premier résultat.
+Le bouton de discussion à côté du nom de chaque modèle dans **Comparer** ouvre **Chat · ajustements**. Le code courant et les messages précédents accompagnent votre demande : **Envoyer l’ajustement · payant** lance une nouvelle version avec le même modèle et les réglages affichés avant envoi. Les anciennes versions restent conservées ; les messages sont chiffrés dans SQLite. Ouvrir ou fermer le chat ne lance aucun appel. Pendant une génération, la conversation reste consultable et l’envoi attend la fin de cet appel. Sans code reçu, utiliser **Réessayer** pour obtenir un premier résultat.
 
 Après un **épuisement de la sortie**, la reprise et le chat préparent des **réglages adaptés** à partir du catalogue public OpenRouter. Si `max` ou `xhigh` a échoué et que le modèle accepte `high`, l’effort proposé devient `high` ; un autre échec peut proposer le niveau inférieur accepté. Un budget de réflexion fixe peut être réduit lorsque l’API le permet. Le plafond total est conservé dans les limites API et le raisonnement obligatoire reste activé. Le changement est affiché avant confirmation ; **Réglages d’origine** reste un choix explicite. Aucun nouvel appel n’est automatique, aucun coût réussi n’est garanti, et les reprises de code partiel conservent exactement le préfixe déjà reçu. Si les capacités ont changé depuis la proposition ou ne sont plus vérifiables, l’envoi adapté est refusé avant tout appel de génération. Les blocages de filtrage restent appliqués.
 
@@ -78,7 +100,7 @@ Le **Journal de génération** s’ouvre par défaut pendant un lot. Il affiche 
 
 Le journal indique le temps écoulé depuis le dernier signal réseau. Après 60 secondes de silence, il signale une attente prolongée, sans conclure à une panne ni relancer automatiquement l’appel. Il ne reproduit ni les prompts complets, ni les réponses, ni le raisonnement interne, ni les en-têtes de connexion. Les messages d’erreur passent par un masquage des formats usuels de clés et jetons. Les 400 dernières entrées restent disponibles après le lot dans cette fenêtre ; **Exporter le journal** télécharge la sélection en JSON. Ce journal local ne reconstitue pas rétroactivement les appels lancés depuis une ancienne interface.
 
-Le mode **Comparaison — capacité maximale** est sélectionné par défaut dans **Lots**, pour tous les prompts. Il envoie le même prompt complet à chaque modèle en un seul appel, avec la sortie maximale et le plus haut effort annoncé par OpenRouter (`max`, sinon `xhigh`, puis les autres niveaux acceptés). Les anciens réglages économes et les politiques de réduction apprises après un échec ne s’appliquent pas à cette comparaison. Les paramètres réellement envoyés restent visibles dans chaque fiche et dans le journal. Les fournisseurs locaux gardent leurs réglages natifs. Un modèle sans réglage d’effort annoncé conserve le contrôle disponible indiqué dans sa fiche.
+Le mode **Agent Mastra — créer, construire et corriger** est sélectionné par défaut dans **Lots** et pour les créations OpenRouter. Chaque couple prompt/modèle possède ses propres fichiers, outils et conteneur. Le mode **Comparaison — capacité maximale** reste disponible explicitement : Il envoie le même prompt complet à chaque modèle en un seul appel, avec la sortie maximale et le plus haut effort annoncé par OpenRouter (`max`, sinon `xhigh`, puis les autres niveaux acceptés). Les anciens réglages économes et les politiques de réduction apprises après un échec ne s’appliquent pas à cette comparaison. Les paramètres réellement envoyés restent visibles dans chaque fiche et dans le journal. Les fournisseurs locaux gardent leurs réglages natifs. Un modèle sans réglage d’effort annoncé conserve le contrôle disponible indiqué dans sa fiche.
 
 La comparaison conserve la réponse initiale : aucune construction par étapes, correction ou relance automatique. Un maximum autorisé ne force pas le modèle à produire tous ces tokens et ne garantit ni la qualité ni la réussite. Par défaut, tous les prompts et modèles démarrent en parallèle, sans attendre la fin d’un autre projet. Les limites du fournisseur et, dans la version Docker authentifiée, la limite de 32 appels serveur simultanés peuvent mettre des requêtes en attente. Ce choix de concurrence ne réduit pas leur effort. Les coûts, signaux de progression et résultats restent associés à chaque couple prompt/modèle, même si un modèle traite plusieurs projets à la fois.
 

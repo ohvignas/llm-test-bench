@@ -11,7 +11,8 @@ export async function durableGeneration({body, context, automatic, explicitRetry
   if (!response.ok) return response;
   onId?.(id);
   const encoder = new TextEncoder();
-  let stopped = false, offset = 0, reasoning = 0, summary = '';
+  let stopped = false, offset = 0, revision = 0, reasoning = 0, summary = '';
+  const agentEvents=new Set();
   const stop = async () => {
     if (stopped) return;
     stopped = true;
@@ -28,7 +29,7 @@ export async function durableGeneration({body, context, automatic, explicitRetry
         while (!stopped) {
           let result;
           try {
-            const poll = await fetcher(`/api/executions/${id}?offset=${offset}`, {cache:'no-store'});
+            const poll = await fetcher(`/api/executions/${id}?offset=${offset}&revision=${revision}`, {cache:'no-store'});
             if (!poll.ok) throw new Error(`Lecture du suivi impossible (${poll.status}).`);
             result = await poll.json();
             failures = 0;
@@ -41,6 +42,7 @@ export async function durableGeneration({body, context, automatic, explicitRetry
           const delta = {};
           if (result.delta) delta.content = result.delta;
           offset = result.output_chars;
+          revision = result.output_revision || 0;
           if (result.summary && result.summary !== summary) {
             delta.reasoning_details = [{type:'reasoning.summary', summary:result.summary.startsWith(summary) ? result.summary.slice(summary.length) : result.summary}];
             summary = result.summary;
@@ -48,7 +50,10 @@ export async function durableGeneration({body, context, automatic, explicitRetry
           const progress = result.reasoning_events > reasoning;
           reasoning = result.reasoning_events;
           const active = ['queued','running','connecting','waiting','reasoning','writing'].includes(result.state);
+          const events=(result.agent?.events||[]).filter(event=>{const key=event.id||`${event.at}:${event.message}`;if(agentEvents.has(key))return false;agentEvents.add(key);return true;});
           emit({choices:[{delta, finish_reason:active ? null : result.finish_reason}],
+            ...(result.output_reset?{bench_output_reset:true}:{}),
+            ...(result.agent?{bench_agent_events:events,bench_agent_steps:result.agent.steps}:{}),
             ...(progress ? {bench_reasoning_events:reasoning} : {}),
             ...(Object.keys(result.usage || {}).length ? {usage:result.usage} : {})});
           if (!active) {

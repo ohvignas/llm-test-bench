@@ -11,6 +11,7 @@ export function createCostCall(role, details = {}) {
 /** Provider-reported USD only. Token counts/pricing are never used to estimate. */
 export function updateCostCall(call, stats) {
   const next = {...call};
+  if(Array.isArray(stats?.agentSteps))next.agentSteps=stats.agentSteps;
   if (typeof stats?.telemetryId === 'string') next.telemetryId = stats.telemetryId;
   if (typeof stats?.executionId === 'string') next.executionId = stats.executionId;
   if (stats?.reasoningSummary?.source === 'provider-summary') next.reasoningSummary = stats.reasoningSummary;
@@ -34,7 +35,9 @@ export function finishCostCall(call, error = null) {
 }
 
 export function costTotals(calls = []) {
-  const unique = [...new Map(calls.map(call => [call.id, call])).values()];
+  const expanded=calls.flatMap(call=>Array.isArray(call.agentSteps)?call.agentSteps.map(step=>({...call,agentSteps:undefined,id:step.id,usd:step.usage?.cost??null,
+    startedAt:step.started*1000,...(['connecting','waiting','reasoning','writing'].includes(step.state)?{status:'pending',finishedAt:undefined}:{status:step.state==='ok'?'done':'error',finishedAt:step.updated*1000})})): [call]);
+  const unique = [...new Map(expanded.map(call => [call.id, call])).values()];
   const requested = unique.filter(call => call.requestSent !== false);
   const known = requested.filter(call => Number.isFinite(call.usd) && call.usd >= 0);
   return {currency:'USD', confirmedUsd:known.length ? known.reduce((sum, call) => sum + call.usd, 0) : null,

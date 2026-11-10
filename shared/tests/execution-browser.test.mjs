@@ -30,7 +30,7 @@ test('durable transport submits once and reads output with unicode-safe server o
   const response=await durableGeneration({body:{},context:{},fetcher,interval:1});
   const text=await response.text();
   assert.match(text,/✅/);assert.match(text,/\[DONE\]/);assert.match(text,/"cost":0.1/);
-  assert.ok(calls[2].url.endsWith('?offset=1'));
+  assert.ok(calls[2].url.endsWith('?offset=1&revision=0'));
   assert.equal(calls.filter(c=>c.options?.method==='POST').length,1);
 });
 test('explicit Stop cancels the server call but merely disconnecting the reader does not',async()=>{

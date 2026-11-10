@@ -20,7 +20,7 @@ export function ExecutionChat({call,prompts,onClose,onSent}){
         const data=await response.json();if(!response.ok)throw new Error(data.error||'Conversation indisponible.');
         if(live){setHistory(data);setError('');}
         const current=data.turns.at(-1);
-        if(live&&!executionActive(current)&&current.output_chars>0){
+        if(live&&!executionActive(current)&&(current.output_chars>0||current.has_sources)){
           const prepared=await secureFetch(`/api/executions/${call.id}/recovery-plan`,{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify({restart:true,fallback:recoveryFallback(call,prompts)})});
           const proposal=await prepared.json();if(!prepared.ok)throw new Error(proposal.error||'Réglages indisponibles.');
           if(live){setPlan(proposal);setStrategy(proposal.adaptation?.available?'adapted':'original');}
@@ -31,7 +31,7 @@ export function ExecutionChat({call,prompts,onClose,onSent}){
     poll();return()=>{live=false;controller.abort();clearTimeout(timer);};
   },[call.id]);
   const current=history?.turns?.at(-1),active=current&&executionActive(current);
-  const hasResult=current&&!active&&current.output_chars>0;
+  const hasResult=current&&!active&&(current.output_chars>0||current.has_sources);
   const canSend=hasResult&&!!plan;
   async function send(event){
     event.preventDefault();if(busy||!canSend||!message.trim())return;
@@ -60,10 +60,10 @@ export function ExecutionChat({call,prompts,onClose,onSent}){
       <label for="chat-message">Demander un ajustement</label>
       <textarea id="chat-message" rows="3" maxlength="12000" placeholder="Ex. : ajoute un menu, corrige les contrôles et conserve le reste du jeu…" value=${message} disabled=${busy||!hasResult} onInput=${event=>setMessage(event.currentTarget.value)}/>
       ${plan&&html`<${RecoverySettings} plan=${plan} strategy=${strategy} busy=${busy} onChange=${setStrategy}/>`}
-      <p>${active?'Cet appel est encore en cours. Vous pourrez ajuster le résultat une fois terminé.':!hasResult?'Aucun code disponible à ajuster pour cet appel.':!plan?'Vérification des réglages avant l’envoi… Aucun appel de génération lancé.':'Le code actuel et la conversation sont joints automatiquement. Envoyer déclenche un appel payant au même modèle, avec les réglages affichés. Les versions précédentes restent conservées.'}</p>
+      <p>${active?'Cet appel est encore en cours. Vous pourrez ajuster le résultat une fois terminé.':!hasResult?'Aucun code disponible à ajuster pour cet appel.':!plan?'Vérification des réglages avant l’envoi… Aucun appel de génération lancé.':plan.engine==='mastra'?'Les fichiers conservés et votre demande sont confiés à un nouvel agent payant du même modèle, dans les limites affichées. Les versions précédentes restent conservées.':'Le code actuel et la conversation sont joints automatiquement. Envoyer déclenche un appel payant au même modèle, avec les réglages affichés. Les versions précédentes restent conservées.'}</p>
       ${error&&html`<p class="bench-inline-error" role="alert">${error}</p>`}
     </form>
     </div>
-    <footer class="bench-chat-actions"><button class="btn" type="button" disabled=${busy} onClick=${onClose}>Fermer</button><button class="btn btn-primary" form="chat-adjustment-form" type="submit" disabled=${busy||!canSend||!message.trim()}>${busy?'Envoi…':'Envoyer l’ajustement · appel payant'}</button></footer>
+    <footer class="bench-chat-actions"><button class="btn" type="button" disabled=${busy} onClick=${onClose}>Fermer</button><button class="btn btn-primary" form="chat-adjustment-form" type="submit" disabled=${busy||!canSend||!message.trim()}>${busy?'Envoi…':'Envoyer l’ajustement · payant'}</button></footer>
   </dialog>`;
 }

@@ -15,6 +15,7 @@ export function executionProjects(calls) {
   return [...groups.values()].sort((a,b)=>b.started-a.started);
 }
 export function executionStatus(call) {
+  if(call.agent&&executionActive(call))return call.agent.events?.at(-1)?.message?.slice(0,140)||'Agent Mastra en cours';
   if (call.finish_reason === 'length') return call.output_chars ? 'Sortie incomplète — limite atteinte' : 'Échec — budget épuisé sans code';
   return {queued:'En attente de démarrage',running:'Connexion au fournisseur',connecting:'Connexion au fournisseur',
     waiting:'Réponse attendue',reasoning:'Raisonnement en cours',writing:'Code en cours',ok:'Terminé',
@@ -66,28 +67,34 @@ export function executionBatchSnapshot(calls, now = Date.now()) {
         : latest.state==='ok'?'saved':['cancelled','interrupted'].includes(latest.state)?'stopped':'error',
         message:latest.error?.message || (latest.finish_reason==='length'?executionStatus(latest):''),
         incomplete:latest.finish_reason==='length'&&!!(latest.output_chars||latest.output?.length),
+        hasSources:!!latest.agent?.has_sources,
         executionId:latest.id});
       outputs.push(latest.output || '');
       for (const call of attempts) {
         const running=executionActive(call), modelKey=JSON.stringify(['openrouter',call.model]);
-        costCalls.push({id:call.id, index, telemetryId:call.id, modelKey, modelLabel:model.label,
-          promptTitle:title, role:'generate', startedAt:call.started*1000,
-          ...(running?{}:{finishedAt:call.updated*1000}),
-          status:call.error?.requestSent===false?'blocked':running?'pending':call.state==='ok'?'done':call.state==='error'?'error':'cancelled',
-          ...(call.error?.requestSent===false?{requestSent:false}:{}), usd:call.usage?.cost ?? null,
+        const steps=call.agent?(call.agent.steps.length?call.agent.steps:[{id:call.id,started:call.started,updated:call.updated,state:call.state,usage:{},unsent:true}]):[call];
+        for(const step of steps){
+        const stepRunning=call.agent?executionActive(step):running;
+        costCalls.push({id:step.id,executionId:call.id, index, telemetryId:call.id, modelKey, modelLabel:model.label,
+          promptTitle:title, role:'generate', startedAt:step.started*1000,
+          ...(stepRunning?{}:{finishedAt:step.updated*1000}),
+          status:step.unsent||call.error?.requestSent===false?'blocked':stepRunning?'pending':step.state==='ok'?'done':step.state==='error'?'error':'cancelled',
+          ...(step.unsent||call.error?.requestSent===false?{requestSent:false}:{}), usd:step.usage?.cost ?? null,
           reasoningSignals:call.reasoning_events || 0,
           ...(call.summary?{reasoningSummary:{source:'provider-summary',text:call.summary}}:{})});
+        }
         if(running) liveCalls.push({...model,id:call.id,app:'prompt-gallery',startedAt:call.started*1000,
           lastReceivedAt:call.updated*1000,outputChars:call.output_chars || 0,reasoningChunks:call.reasoning_events || 0,
           phase:call.state==='reasoning'?'firstThought':call.state==='writing'?'firstToken':call.state==='queued'?'queued':'sessionReady'});
         entries.push({id:call.id,at:call.updated*1000,modelKey,modelLabel:model.label,promptTitle:title,promptIndex:index,
           level:call.state==='error'?'error':'info',message:call.error?.message ||
             `${executionStatus(call)} · ${call.output_chars || 0} caractères reçus · ${call.reasoning_events || 0} signaux de raisonnement`});
+        for(const [eventIndex,event] of (call.agent?.events||[]).entries())entries.push({id:call.id+':'+eventIndex,at:event.at,modelKey,modelLabel:model.label,promptTitle:title,promptIndex:index,level:'info',message:event.message});
       }
     }
   }
   const currentIds=new Set(runList.map(item=>item.executionId));
-  const currentCostCalls=costCalls.filter(call=>currentIds.has(call.id));
+  const currentCostCalls=costCalls.filter(call=>currentIds.has(call.executionId||call.id));
   return {models,runList,items,outputs,costCalls,currentCostCalls,liveCalls,entries,now,
     startedAt:calls.length?Math.min(...calls.map(c=>c.started*1000)):now,
     done:!calls.some(executionActive)};

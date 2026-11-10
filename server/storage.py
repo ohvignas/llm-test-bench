@@ -71,6 +71,12 @@ def initialize(app):
                 error TEXT NOT NULL DEFAULT '{}', cancel_requested INTEGER NOT NULL DEFAULT 0);
             CREATE TABLE IF NOT EXISTS model_policies (
                 model TEXT PRIMARY KEY, effort TEXT, max_tokens INTEGER);
+            CREATE TABLE IF NOT EXISTS agent_runs (
+                execution_id TEXT PRIMARY KEY, limits TEXT NOT NULL,
+                events TEXT NOT NULL DEFAULT '[]', sources BLOB);
+            CREATE TABLE IF NOT EXISTS agent_steps (
+                execution_id TEXT NOT NULL, step INTEGER NOT NULL, activity_id TEXT NOT NULL UNIQUE,
+                PRIMARY KEY (execution_id,step));
             CREATE TABLE IF NOT EXISTS login_attempts (
                 address TEXT NOT NULL, attempted_at INTEGER NOT NULL);
             CREATE INDEX IF NOT EXISTS login_attempt_time ON login_attempts(attempted_at);
@@ -84,6 +90,8 @@ def initialize(app):
             connection.execute('ALTER TABLE browser_executions ADD COLUMN parent_id TEXT')
         if 'user_instruction' not in columns:
             connection.execute('ALTER TABLE browser_executions ADD COLUMN user_instruction BLOB')
+        if 'output_revision' not in columns:
+            connection.execute('ALTER TABLE browser_executions ADD COLUMN output_revision INTEGER NOT NULL DEFAULT 0')
         connection.execute('CREATE UNIQUE INDEX IF NOT EXISTS one_execution_recovery ON browser_executions(parent_id) WHERE parent_id IS NOT NULL')
     database.chmod(0o600)
     @app.teardown_appcontext

@@ -37,7 +37,9 @@ class Activity:
                     'reasoning_tokens': number(reasoning.get('max_tokens')) if isinstance(reasoning, dict) else None,
                     'automatic': bool(automatic)}
         connection = db()
-        connection.execute('DELETE FROM generation_activity WHERE started < ? AND state NOT IN (?,?,?,?)',
+        connection.execute('''DELETE FROM generation_activity WHERE started < ? AND state NOT IN (?,?,?,?)
+            AND id NOT IN (SELECT activity_id FROM agent_steps)
+            AND id NOT IN (SELECT activity_id FROM browser_executions WHERE activity_id IS NOT NULL)''',
                            (self.started - 30*86400, 'connecting', 'waiting', 'reasoning', 'writing'))
         connection.execute('INSERT INTO generation_activity (id,model,worker,started,updated,state,settings) VALUES (?,?,?,?,?,?,?)',
                            (self.id, safe_label(payload.get('model')), f'pending:{os.getpid()}:{process_marker(os.getpid())}',

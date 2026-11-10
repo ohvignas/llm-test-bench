@@ -4,9 +4,11 @@
 
 Give several AI models the same prompt, run generations in parallel, preview their websites side by side, and keep results and available timing/token/cost metrics. Bring your own OpenRouter API key.
 
-Batches default to **Comparaison — capacité maximale**: one call per prompt/model, the same full prompt, maximum advertised output and the highest supported reasoning effort (`max`, then `xhigh`, then the remaining accepted levels). Saved economy overrides and learned low-effort recovery policies do not affect this comparison. There are no automatic retries, repairs or staged prompt substitutions. Effective parameters remain visible before launch and in the journal. Other providers retain native settings; models without an advertised effort selector retain the available controls shown in their settings.
+New OpenRouter generations and batches default to **Agent Mastra**. Each prompt/model pair has its own offline Docker workspace and tools for source files, commands, Vite builds and Chromium startup tests. The default limits are **8 model calls and USD 10 per prompt/model**, editable before launch. Each step is separately billed and persisted; missing invoices prevent another automatic step. The server reserves conservatively using catalogue prices, preserves reviewed reasoning/output settings and disables hidden SDK retries. These are ceilings, not a success guarantee.
 
-Parallel execution starts one prompt per model; each model completes its prompts sequentially. Concurrency does not lower the requested reasoning effort. Maximum settings allow more reasoning and output but do not guarantee a better or successful result.
+The trusted Mastra controller has Docker socket access and no published host port. Generated commands run only in separate containers without networking, host mounts, credentials or the Docker socket. The OpenRouter key remains in the Python vault; scoped ephemeral provider tokens fix the model and parameters. Text source checkpoints are encrypted in SQLite and can be resumed, adjusted in chat, or exported as ZIP. The build environment includes Vite, TypeScript, React, Three.js and Babylon.js; additional packages cannot be downloaded inside the offline sandbox. Startup checks do not certify every interaction or visual quality.
+
+The explicit **Comparaison — capacité maximale** mode retains the original single-call benchmark with full prompts and maximal settings. Parallel mode can start all prompt/model pairs together; a failure does not cancel other pairs. Browser reloads leave server-owned agents running and visible in Runs and Compare.
 
 **Automatique — reprises adaptatives** remains an explicit option. It uses maximum advertised output but adapts reasoning to previous failures, including starting at low effort when the history indicates exhaustion. Models with a fixed reasoning budget use up to 16,384 tokens, capped at one third of output.
 
@@ -23,7 +25,7 @@ This MIT-licensed fork of [Techdread/llm-test-bench](https://github.com/Techdrea
 - A current browser; Chrome or Edge is recommended for folder access and screen recording.
 - Internet access for initial downloads and remote model calls. OpenRouter inference does not require a local GPU.
 
-Docker handles Python, dependencies and SQLite; you do not need host Python, Node.js or a separate database server. No credentials belong in an environment file. The code is MIT-licensed; Docker Desktop has its own licensing terms. OpenRouter model calls may cost money.
+Docker handles Python, Node.js, Mastra, Chromium, dependencies and SQLite; you do not need host Python, Node.js or a separate database server. No credentials belong in an environment file. The code is MIT-licensed; Docker Desktop has its own licensing terms. OpenRouter model calls may cost money.
 
 ## Quick start
 

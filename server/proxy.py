@@ -53,7 +53,7 @@ def relay():
     activity = Activity(payload, automatic) if chat else None
     if activity:
         g.bench_activity_id = activity.id
-        execution_id = request.environ.get('bench.execution_id')
+        execution_id = request.environ.get('bench.execution_id') or request.environ.get('bench.agent_execution_id')
         if execution_id:
             db().execute('UPDATE browser_executions SET activity_id=? WHERE id=?', (activity.id, execution_id))
             db().commit()

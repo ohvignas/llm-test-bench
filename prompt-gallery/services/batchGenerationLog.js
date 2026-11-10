@@ -70,6 +70,8 @@ export function createBatchJournal({ models = [], startedAt = Date.now(), limit 
         }
       } else if (type === 'stats' && event.stats) {
         const stats = event.stats, parts = [];
+        if(stats.agentEvents)for(const item of stats.agentEvents)append(context,'outil',item.message,item.at||at);
+        if(Object.keys(stats).every(key=>['agentEvents','agentSteps'].includes(key)))return;
         if (Object.keys(stats).every(key => ['telemetryId','executionId','reasoningSummary','reasoningSignals'].includes(key))) return;
         if(stats.settings) {
           const settings=stats.settings,p=settings.params||{},signature=`settings:${logModelKey(context.model)}:${context.index}:${JSON.stringify([p.max_tokens??p.max_completion_tokens,p.reasoning?.effort||p.reasoning_effort,p.reasoning?.max_tokens])}`;

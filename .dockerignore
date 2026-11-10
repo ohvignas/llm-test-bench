@@ -1,4 +1,6 @@
 .git
+**/node_modules
+agent-runtime
 .venv
 __pycache__
 **/__pycache__

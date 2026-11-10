@@ -127,10 +127,10 @@ test('comparison sends maximum effort to the completion endpoint even after a le
  apiModel.bench_policy={recovery_level:2,effort:'low',max_tokens:2048};
  try {
   await raw.fetchModels({refresh:true,strict:true});
-  const options=batchGenerationOptions({mode:DEFAULT_BATCH_MODE,profile:'code',override:{profile:'manual',reasoningEffort:'low',totalTokens:2048}});
+  const options=batchGenerationOptions({mode:'comparison',profile:'code',override:{profile:'manual',reasoningEffort:'low',totalTokens:2048}});
   const before=requests.length;
   const result=await runBatch({prompts:[{id:'compare-fixture',prompt:'Identical full comparison prompt',tags:[]}],
-   model:{providerId:'openrouter',modelId:'vendor/model',generationOptions:options},options:{mode:DEFAULT_BATCH_MODE},deps:{
+   model:{providerId:'openrouter',modelId:'vendor/model',generationOptions:options},options:{mode:'comparison'},deps:{
     generate:async(userPrompt,{model,onStats})=>adapter.streamChat({modelId:model.modelId,appTitle:'Prompt Gallery',userPrompt,generationOptions:model.generationOptions,onStats}),
     save:async()=>({id:'comparison-result'}),
    }});

@@ -22,6 +22,7 @@ from .spend_guard import active_worker, process_marker, fingerprint
 from .storage import db
 from .reasoning_summary import public_summary_parts
 from .recovery_policy import recovery_adaptation, reviewed_recovery
+from .agents import agent_limits,agent_record,run_agent_execution,stop_agent
 
 executions = Blueprint('executions', __name__)
 POOL = ThreadPoolExecutor(max_workers=32, thread_name_prefix='generation')
@@ -38,9 +39,12 @@ def identifier(value):
 def context_of(value):
     if not isinstance(value, dict):
         abort(400, description='Contexte de génération invalide.')
-    return {key: redact(value[key], limit) for key, limit in
+    result = {key: redact(value[key], limit) for key, limit in
             [('promptId', 160), ('title', 240), ('groupId', 160), ('runId', 160), ('modelLabel', 240)]
             if isinstance(value.get(key), str)}
+    if value.get('engine')=='mastra':
+        result.update(engine='mastra',agentLimits=agent_limits(value.get('agentLimits')))
+    return result
 
 
 def update(call_id, **fields):
@@ -63,12 +67,27 @@ def record(row, include_output=False):
                   activity_id=row['activity_id'], output_chars=len(row['output']),
                   parent_id=row.get('parent_id'), request_saved=bool(row.get('request_payload')),
                   has_output=bool(row['output']), summary=row['summary'],
+                  output_revision=row.get('output_revision',0),
                   reasoning_events=activity['reasoning_events'] if activity else 0,
                   finish_reason=activity['finish_reason'] if activity else None,
                   settings=json.loads(activity['settings']) if activity else {},
                   usage=json.loads(activity['usage']) if activity else {}, error=json.loads(row['error']),
                   duration_seconds=max(0, (time.time() if state in LIVE else updated)-started),
                   last_signal_seconds=max(0, time.time()-updated))
+    agent=agent_record(row['id'])
+    if agent:
+        # Intermediate tool-call completions belong to the agent, not to the
+        # final document. Keep each provider charge separate and aggregate usage.
+        result['agent']=agent
+        result['started'],result['updated']=row['created'],max([row['updated'],*[s['updated'] for s in agent['steps']]])
+        result['last_signal_seconds']=max(0,time.time()-result['updated'])
+        result['state']=state
+        result['finish_reason']='stop' if result['state']=='ok' else (agent['steps'][-1]['finish_reason'] if agent['steps'] and result['state'] not in LIVE and agent['steps'][-1]['finish_reason'] in ('length','content_filter') else None)
+        result['settings']=json.loads(activity['settings']) if activity else {}
+        result['usage']={key:sum(s['usage'].get(key,0) for s in agent['steps']) for key in ('prompt_tokens','completion_tokens','total_tokens','reasoning_tokens')}
+        result['reasoning_events']=sum(s['reasoning_events'] for s in agent['steps'])
+        if agent['confirmed_usd'] is not None:result['usage']['cost']=agent['confirmed_usd']
+        result['duration_seconds']=max(0,(time.time() if result['state'] in LIVE else row['updated'])-row['created'])
     if result['finish_reason']=='length':
         partial=bool(row['output'])
         result['error']['kind']='output_truncated' if partial else 'reasoning_exhausted'
@@ -94,6 +113,7 @@ def list_executions():
     result = [record(row) for row in rows]
     legacy = db().execute('''SELECT * FROM generation_activity WHERE id NOT IN
         (SELECT activity_id FROM browser_executions WHERE activity_id IS NOT NULL)
+        AND id NOT IN (SELECT activity_id FROM agent_steps)
         ORDER BY started DESC LIMIT ?''', (limit,)).fetchall()
     for row in legacy:
         state = row['state']
@@ -120,11 +140,13 @@ def get_execution(call_id):
     if 'offset' in request.args:
         try:
             offset = int(request.args['offset'])
-            if offset < 0 or offset > len(result['output']):
+            reset=result['output_revision']!=int(request.args.get('revision',0))
+            if offset < 0 or not reset and offset > len(result['output']):
                 raise ValueError()
         except ValueError:
             abort(400, description='Position de lecture invalide.')
-        result['delta'] = result.pop('output')[offset:]
+        result['delta'] = result.pop('output')[0 if reset else offset:]
+        if reset:result['output_reset']=True
     return jsonify(result)
 
 
@@ -138,6 +160,7 @@ def stop_execution(call_id):
         if row['activity_id']:
             db().execute('UPDATE generation_activity SET cancel_requested=1 WHERE id=?', (row['activity_id'],))
             db().commit()
+        if json.loads(row['context']).get('engine')=='mastra':stop_agent(call_id)
     return jsonify({'ok': True})
 
 
@@ -159,6 +182,8 @@ def start_execution():
 
 
 def enqueue(call_id, payload, context, headers, seed='', parent_id=None, original_request=None, user_instruction=None):
+    if context.get('engine')=='mastra' and not current_app.config['MASTRA_URL']:
+        abort(503,description='Le service Mastra n’est pas configuré. Aucun appel envoyé.')
     digest = hashlib.sha256(json.dumps([payload, context, headers, seed, parent_id], sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     con = db()
     con.execute('BEGIN IMMEDIATE')
@@ -181,7 +206,7 @@ def enqueue(call_id, payload, context, headers, seed='', parent_id=None, origina
         return jsonify({'error':'Une reprise existe déjà pour cet appel. Retrouvez-la dans Comparer.', 'requestSent':False}), 409
     con.commit()
     app = current_app._get_current_object()
-    POOL.submit(run_execution, app, call_id, payload, headers)
+    POOL.submit(run_agent_execution if context.get('engine')=='mastra' else run_execution, app, call_id, payload, headers)
     return jsonify({'id': call_id}), 202
 
 
@@ -213,7 +238,11 @@ def recovery_plan(call_id):
     body = json_object()
     restart = body.get('restart') is True
     row, info, payload = recovery_source(call_id, body.get('fallback'), restart=restart)
-    return jsonify({'source_id':call_id, 'mode':'restart' if restart else 'continue' if row['output'] else 'retry',
+    has_sources=bool(info.get('agent',{}).get('has_sources'))
+    return jsonify({'source_id':call_id, 'mode':'restart' if restart else 'continue' if row['output'] or has_sources else 'retry',
+                    'has_sources':has_sources,
+                    'engine':'mastra' if info.get('agent') else 'completion',
+                    'agent_limits':info.get('agent',{}).get('limits'),
                     'title':info['context'].get('title', 'Création'), 'model':row['model'],
                     'model_label':info['context'].get('modelLabel',row['model']),
                     'output_chars':len(row['output']), 'request_saved':bool(row['request_payload']),
@@ -242,7 +271,9 @@ def recover_execution(call_id):
     original = reviewed_recovery(original,info,body)
     payload = {**original, 'stream':True}
     seed = '' if restart else row['output']
-    if seed:
+    if info.get('agent') and not restart:
+        payload['messages']=[*original['messages'],{'role':'user','content':'Continue the existing saved project using the source files and tools. Correct observed errors and build the complete updated project.'}]
+    elif seed:
         continuation = {'role':'system','content':('RECOVERY MODE: this request continues an interrupted HTML answer. '
             'Exception to the initial full-document formatting rule: return ONLY the suffix missing after the '
             'provided assistant prefix. Do not start a new document, repeat existing code or add Markdown fences. '
@@ -260,7 +291,9 @@ def recover_execution(call_id):
     if guard and guard['state'].startswith('pending:') and not active_worker(guard['state']):
         db().execute("UPDATE generation_guard SET state='failed' WHERE fingerprint=?", (identity,))
         db().commit()
-    return enqueue(new_id, payload, info['context'], {'X-Bench-Retry':new_id}, seed=seed, parent_id=call_id, original_request=original)
+    context={**info['context']}
+    if restart and info.get('agent'):context['agentRestart']=True
+    return enqueue(new_id, payload, context, {'X-Bench-Retry':new_id}, seed=seed, parent_id=call_id, original_request=original)
 
 
 @executions.get('/api/executions/<call_id>/conversation')
@@ -275,7 +308,8 @@ def conversation(call_id):
         turn = record(row)
         message = current_app.extensions['vault'].decrypt(row['user_instruction']).decode() if row['user_instruction'] else ''
         turns.append({'id':row['id'],'message':redact(message,12000),'state':turn['state'],'finish_reason':turn['finish_reason'],
-                      'output_chars':turn['output_chars'],'cost':turn['usage'].get('cost')})
+                      'output_chars':turn['output_chars'],'has_sources':bool(turn.get('agent',{}).get('has_sources')),
+                      'cost':turn['usage'].get('cost')})
         row = db().execute('SELECT * FROM browser_executions WHERE id=?', (row['parent_id'],)).fetchone() if row['parent_id'] else None
     return jsonify({'id':call_id,'title':info['context'].get('title','Création'),
                     'model_label':info['context'].get('modelLabel',info['model']),
@@ -299,7 +333,7 @@ def adjust_execution(call_id):
             return jsonify({'id':new_id}),200
         abort(409, description='Identifiant déjà utilisé pour un autre message.')
     row, info, original = recovery_source(call_id, body.get('fallback'), restart=True)
-    if not row['output'].strip():
+    if not row['output'].strip() and not info.get('agent',{}).get('has_sources'):
         abort(409, description='Aucun code à ajuster. Utilisez Réessayer pour créer un premier résultat.')
     original = reviewed_recovery(original,info,body)
     payload = {**original,'stream':True,'messages':[*original['messages'],
