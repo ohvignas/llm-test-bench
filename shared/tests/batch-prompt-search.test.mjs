@@ -11,14 +11,25 @@ const selectedIds=new Set(prompts.map(p=>p.id));
 
 test('search finds French accents, original names and aliases without case sensitivity',()=>{
  assert.deepEqual(batchPromptChoices({prompts,setId:'flagship',query:'AEROPORT',selectedIds}).visible.map(p=>p.id),['airport']);
- assert.deepEqual(batchPromptChoices({prompts,setId:'core',query:'gta 6 game',selectedIds}).visible.map(p=>p.id),['gta']);
+ assert.deepEqual(batchPromptChoices({prompts,setId:'core',query:'gta 6 game',selectedIds}).visible.map(p=>p.id),['gta','advanced-gta']);
  assert.deepEqual(batchPromptChoices({prompts,setId:'core',query:'Grand Theft Auto',selectedIds}).visible.map(p=>p.id),['gta']);
 });
-test('a search in the wrong series points to the other series instead of losing the prompt',()=>{
+test('a search from any series directly finds prompts across the complete library',()=>{
  const result=batchPromptChoices({prompts,setId:'flagship',query:'gta',selectedIds});
- assert.equal(result.visible.length,0);
+ assert.deepEqual(result.visible.map(p=>p.id),['gta','advanced-gta']);
+ assert.equal(result.effectiveSet,'all');
  assert.deepEqual(result.matchingSets,{core:1,advanced:1});
  assert.equal(result.selected.length,4,'Changing category must keep the complete explicit selection');
+});
+test('all prompts are available by default, including personal and unfamiliar imported sets',()=>{
+ const complete=[...prompts,{id:'personal',title:'Mon prompt'},{id:'imported',set:'my-import',title:'Mon import'}];
+ for(const setId of [undefined,'all']) {
+   const result=batchPromptChoices({prompts:complete,setId});
+   assert.deepEqual(result.visible,complete);
+   assert.equal(result.selected.length,0,'Listing everything must never select or launch everything');
+ }
+ const result=batchPromptChoices({prompts:complete,setId:'advanced',query:'mon'});
+ assert.deepEqual(result.visible.map(p=>p.id),['gta','personal','imported']);
 });
 test('the launch contains explicit choices from Base and Advanced even after category or search changes',()=>{
  const chosen=new Set(['gta','advanced-gta']);

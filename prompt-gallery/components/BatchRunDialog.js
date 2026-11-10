@@ -23,7 +23,7 @@ import { prepareGenerationResume } from '../services/resumeGeneration.js';
 import { progressivePlan } from '../services/progressiveGeneration.js';
 import { getInFlight, subscribeInFlight } from '../../shared/services/generation-telemetry.js';
 import { batchLiveStatus, batchItemRunning } from '../services/batchLiveProgress.js';
-import { PROMPT_SETS, promptSetOf } from '../services/library.js';
+import { PROMPT_SETS, promptSetOf, promptSetLabel } from '../services/library.js';
 import {
   addBatchModel,
   batchModelKey,
@@ -79,7 +79,7 @@ const STATUS_META = {
 };
 
 export function BatchRunDialog({
-  prompts,               // filtered library prompts available to run
+  prompts,               // Complete merged library, shared with the Prompts page.
   model,                 // { providerId, modelId, label }
   allModels,             // for the in-dialog model picker
   modelsLoading,
@@ -130,18 +130,18 @@ export function BatchRunDialog({
   const [selectedIds, setSelectedIds] = useState(() => new Set());
 
   // Categories filter the library; the launch selection is shared across them.
-  const [promptSet, setPromptSet] = useState('core');
+  const [promptSet, setPromptSet] = useState('all');
   const [promptSearch, setPromptSearch] = useState('');
   const availableSets = useMemo(
-    () => PROMPT_SETS
+    () => [{id:'all', label:'Tous les prompts', icon:'fa-list', count:prompts.length,
+      hint:'Toute la bibliothèque, y compris vos prompts ajoutés et importés'}, ...PROMPT_SETS
       .map(s => ({ ...s, count: prompts.filter(p => promptSetOf(p) === s.id).length }))
-      .filter(s => s.id === 'core' || s.count > 0),
+      .filter(s => s.id === 'core' || s.count > 0)],
     [prompts],
   );
-  const setPrompts = useMemo(() => prompts.filter(p => promptSetOf(p) === promptSet), [prompts, promptSet]);
-  const activeSetMeta = availableSets.find(s => s.id === promptSet);
   const promptChoices = useMemo(() => batchPromptChoices({prompts,setId:promptSet,query:promptSearch,selectedIds}),
     [prompts,promptSet,promptSearch,selectedIds]);
+  const activeSetMeta = availableSets.find(s => s.id === promptChoices.effectiveSet);
   const visiblePrompts = promptChoices.visible;
   const selectedPrompts = useMemo(() => resumeFrom ? [resumeFrom.prompt] : promptChoices.selected, [resumeFrom, promptChoices]);
 
@@ -855,35 +855,35 @@ export function BatchRunDialog({
               <button
                 key=${s.id}
                 type="button"
-                class=${`library-cat-chip ${promptSet === s.id ? 'active' : ''}`}
-                aria-pressed=${promptSet === s.id}
+                class=${`library-cat-chip ${promptChoices.effectiveSet === s.id ? 'active' : ''}`}
+                aria-pressed=${promptChoices.effectiveSet === s.id}
                 title=${s.hint}
-                onClick=${() => setPromptSet(s.id)}
-              ><i class=${`fa-solid ${s.icon}`}></i>${s.label}<span class="batch-set-count">${promptChoices.selectedBySet[s.id]||0}/${s.count}</span></button>
+                onClick=${() => {setPromptSet(s.id);setPromptSearch('');}}
+              ><i class=${`fa-solid ${s.icon}`}></i>${s.label}<span class="batch-set-count">${s.id === 'all' ? selectedCount : promptChoices.selectedBySet[s.id]||0}/${s.count}</span></button>
             `)}
             ${activeSetMeta?.hint && html`<span class="batch-set-hint">${activeSetMeta.hint}. Vous pouvez réunir plusieurs catégories dans le même lot.</span>`}
           </div>
         `}
         <div class="batch-prompt-search">
-          <label for="batch-prompt-search">Rechercher un prompt</label>
+          <label for="batch-prompt-search">Rechercher dans tous les prompts</label>
           <div class="batch-prompt-search-input">
             <input id="batch-prompt-search" class="form-input" type="search" value=${promptSearch} maxLength="200"
               placeholder="Titre, nom d’origine, description ou étiquette…" onInput=${e => setPromptSearch(e.target.value)} />
             ${promptSearch && html`<button class="btn btn-sm" onClick=${() => setPromptSearch('')}>Effacer la recherche</button>`}
           </div>
-          ${promptSearch.trim() && html`<div class="batch-search-summary" role="status">${visiblePrompts.length} résultat(s) dans ${activeSetMeta?.label || 'cette série'}, sur ${setPrompts.length} prompts. La recherche ne modifie pas la sélection du lot.</div>`}
+          <div class="batch-search-summary" role="status">${promptSearch.trim()
+            ? `${visiblePrompts.length} résultat(s) dans toute la bibliothèque (${prompts.length} prompts).`
+            : `${visiblePrompts.length} prompt(s) affiché(s) sur ${prompts.length} dans la bibliothèque${promptChoices.effectiveSet === 'all' ? '.' : ` · filtre : ${activeSetMeta?.label || promptSet}.`}`}
+            La sélection du lot est conservée quand vous changez de filtre.</div>
         </div>
         <div class="batch-prompt-list">
           ${visiblePrompts.length === 0
-            ? html`<div class="batch-empty">${promptSearch.trim() ? 'Aucun résultat dans cette série.' : 'Aucun prompt à exécuter dans cette série.'}
-                ${promptSearch.trim() && availableSets.filter(s => s.id !== promptSet && promptChoices.matchingSets[s.id]).map(s => html`
-                  <button key=${s.id} class="btn btn-sm" onClick=${() => setPromptSet(s.id)}>Voir ${promptChoices.matchingSets[s.id]} résultat(s) dans ${s.label}</button>
-                `)}
-              </div>`
+            ? html`<div class="batch-empty">${promptSearch.trim() ? 'Aucun résultat dans la bibliothèque.' : 'Aucun prompt à exécuter dans cette série.'}</div>`
             : visiblePrompts.map(p => html`
               <label class="batch-prompt-row" key=${p.id}>
-                <input type="checkbox" checked=${selectedIds.has(p.id)} onChange=${() => toggleOne(p.id)} />
+                <input type="checkbox" aria-label=${p.title} checked=${selectedIds.has(p.id)} onChange=${() => toggleOne(p.id)} />
                 <span class="batch-prompt-title" title=${p.title}>${p.title}</span>
+                ${promptChoices.effectiveSet === 'all' && html`<span class="batch-prompt-badge">${promptSetLabel(promptSetOf(p))}</span>`}
                 ${!isMulti && runModels[0] && (() => { try { return deps.hasExistingForModel?.(p, runModels[0]); } catch (e) { return false; } })()
                   ? html`<span class="batch-prompt-badge" title="Dispose déjà d’une génération pour ce modèle">déjà exécuté</span>`
                   : null}
@@ -899,9 +899,9 @@ export function BatchRunDialog({
         <div class="batch-section-head"><strong>Sélection du lot : ${selectedCount} prompt(s)</strong>
           <button class="btn btn-xs" disabled=${!selectedCount} onClick=${()=>setSelectedIds(new Set())}>Vider la sélection</button></div>
         ${selectedCount?html`<p>Tous les prompts ci-dessous seront exécutés, quelle que soit la catégorie ou la recherche affichée.</p>
-          <ul>${selectedPrompts.map(p=>html`<li key=${p.id}><span class="batch-selection-set">${PROMPT_SETS.find(set=>set.id===promptSetOf(p))?.label||'Base'}</span><span>${p.title}</span>
+          <ul>${selectedPrompts.map(p=>html`<li key=${p.id}><span class="batch-selection-set">${promptSetLabel(promptSetOf(p))}</span><span>${p.title}</span>
             <button class="btn btn-xs" aria-label=${`Retirer ${p.title} de la sélection`} onClick=${()=>toggleOne(p.id)}>Retirer</button></li>`)}</ul>`
-          :html`<p>Cochez les prompts à tester. Vous pouvez en choisir dans Base, Avancés, Sites web et Simulations complexes.</p>`}
+          :html`<p>Cochez les prompts à tester dans la bibliothèque complète ou recherchez-les par titre et description. Vous pouvez mélanger toutes les séries.</p>`}
       </section>
 
       `}

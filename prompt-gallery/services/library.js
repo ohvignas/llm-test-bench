@@ -51,9 +51,9 @@ function normalizeText(text) {
 
 // ── Seeds ──────────────────────────────────────────────────────────
 
-// Prompt sets keep harder briefs apart from the originals: the Batch dialog
-// runs one set at a time and every batch generation records which set it came
-// from. A prompt without `set` is core — that covers the user's own prompts.
+// Prompt sets help browse the library; batches can combine any of them.
+// Every generation records its original set. Prompts without `set` are core,
+// including the user's own prompts.
 export const PROMPT_SETS = [
   { id: 'web', label: 'Sites web', icon: 'fa-globe', hint: '24 sites et outils interactifs, avec consignes en français et critères de vérification' },
   { id: 'core', label: 'Base', icon: 'fa-layer-group', hint: 'Les prompts d’origine' },

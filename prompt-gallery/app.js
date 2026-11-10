@@ -1398,11 +1398,11 @@ function App() {
         return;
       }
     } catch (e) { /* fall through — save will surface any real problem */ }
-    await refreshGenerations();
+    await Promise.all([refreshGenerations(), refreshLibrary()]);
     batchIdRef.current = `batch-${Date.now().toString(36)}`;
     setBatchPresentation('modal');
     setShowBatchDialog(true);
-  }, [showBatchDialog, rootHandle, handlePickDirectory, refreshGenerations, addToast]);
+  }, [showBatchDialog, rootHandle, handlePickDirectory, refreshGenerations, refreshLibrary, addToast]);
 
   const handleResumeGeneration = useCallback(async id => {
     if (batchRunning) { addToast('Un lot est encore en cours. Attendez sa fin avant de préparer une reprise.', 'info'); return; }
