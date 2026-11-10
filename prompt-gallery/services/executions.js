@@ -34,6 +34,14 @@ export function executionDuration(seconds) {
   return value<60 ? `${value} s` : `${Math.floor(value/60)} min ${value%60} s`;
 }
 
+export function executionComparisonScope(snapshot,projectKey) {
+  const indices=new Set(snapshot.runList.flatMap((prompt,index)=>prompt.id===projectKey?[index]:[]));
+  const items=snapshot.items.filter((_,index)=>indices.has(index));
+  return {calls:snapshot.costCalls.filter(call=>indices.has(call.index)),
+    currentCalls:snapshot.currentCostCalls.filter(call=>indices.has(call.index)),items,
+    done:!items.some(item=>['queued','generating'].includes(item.status))};
+}
+
 // Adapt persisted calls to the existing batch presentation. Empty outputs are
 // real items too: reasoning, queued and failed calls must never disappear.
 export function executionBatchSnapshot(calls, now = Date.now()) {

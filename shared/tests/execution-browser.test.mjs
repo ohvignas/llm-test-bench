@@ -104,6 +104,23 @@ test('retry duration excludes older attempts and idle time while retaining their
   assert.deepEqual(cards.map(c=>c.calls.length),[2,2]);
 });
 
+test('a single project retry does not inherit time or costs from the other projects in its batch',async()=>{
+  const {executionBatchSnapshot,executionComparisonScope}=await import('../../prompt-gallery/services/executions.js');
+  const {executionMetrics}=await import('../../prompt-gallery/services/executionMetrics.js');
+  const context={groupId:'lot',promptId:'p',title:'Projet relancé'};
+  const snapshot=executionBatchSnapshot([
+    {id:'unrelated',model:'a',context:{...context,promptId:'other'},state:'ok',started:100,updated:150,usage:{cost:9}},
+    {id:'old',model:'a',context,state:'error',started:200,updated:250,usage:{cost:2}},
+    {id:'new',model:'a',context,state:'reasoning',started:3700,updated:3760,usage:{}},
+  ],3770000);
+  const scope=executionComparisonScope(snapshot,JSON.stringify(['lot','p']));
+  assert.deepEqual(scope.calls.map(c=>c.id),['new','old']);
+  assert.deepEqual(scope.currentCalls.map(c=>c.id),['new']);
+  assert.equal(scope.done,false);
+  assert.equal(executionMetrics(scope.currentCalls,{now:snapshot.now,done:scope.done}).elapsedMs,70000);
+  assert.equal(scope.calls.reduce((sum,c)=>sum+(c.usd||0),0),2);
+});
+
 test('recovery only targets the latest failed model attempt and preserves successful peers',async()=>{
   const {recoveryCandidates,recoveryFallback}=await import('../../prompt-gallery/services/executionRecovery.js');
   const calls=[{id:'old',model:'a',state:'error',durable:true,started:1},{id:'new',model:'a',state:'reasoning',durable:true,started:2},
