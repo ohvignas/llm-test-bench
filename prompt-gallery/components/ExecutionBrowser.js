@@ -5,6 +5,9 @@ import {BatchLiveComparison} from './BatchLiveComparison.js';
 import {BatchGenerationLog} from './BatchGenerationLog.js';
 import {BatchCosts} from './BatchCosts.js';
 import {HtmlLightbox} from './BatchReview.js';
+import {BenchBadge, BenchIcon, BenchMetric} from './BenchUi.js';
+import {costTotals,formatUsd} from '../services/batchCosts.js';
+import {executionMetrics,formatDuration} from '../services/executionMetrics.js';
 import {executionActive, executionProjects, executionProjectKey, executionStatus, executionCost, executionDuration, executionBatchSnapshot} from '../services/executions.js';
 
 const when=seconds=>new Date(seconds*1000).toLocaleString('fr-FR');
@@ -15,7 +18,8 @@ const groupOf=call=>call.context?.groupId || call.context?.runId || 'individuel'
 export function ExecutionBrowser({view='runs', selectedProject='', onProjectChange, onBrowseSaved, theme='dark'}) {
   const [calls,setCalls]=useState([]), [loaded,setLoaded]=useState(false), [error,setError]=useState('');
   const [revision,setRevision]=useState(0), [pages,setPages]=useState({}), [zoom,setZoom]=useState(-1);
-  const [journal,setJournal]=useState(false), [filter,setFilter]=useState('all');
+  const [displayMode,setDisplayMode]=useState('split'), [filter,setFilter]=useState('all');
+  const [search,setSearch]=useState(''),[statusFilter,setStatusFilter]=useState('all');
   useEffect(()=>{
     let live=true,timer;const controller=new AbortController();
     async function poll(){
@@ -64,34 +68,48 @@ export function ExecutionBrowser({view='runs', selectedProject='', onProjectChan
     }catch(e){setError(e.message);}
   }
   const history=calls.filter(c=>!executionProjectKey(c)&&!executionActive(c));
-  if(view==='runs')return html`<div class="runs-view">
-    <div class="runs-toolbar"><div class="runs-intro"><i class="fa-solid fa-layer-group"></i><strong>Exécutions</strong><span>${active.length} appel(s) en cours · ${projects.length} projet(s)</span></div>
-      <div class="runs-actions"><button class="btn btn-sm" onClick=${()=>setRevision(n=>n+1)}>Actualiser</button><button class="btn btn-sm" onClick=${onBrowseSaved}>Résultats enregistrés dans le dossier</button></div></div>
-    ${error && html`<p class="live-model-error" role="alert">${error}</p>`}
-    <div class="runs-list">${projects.map(project=>{
-      const running=project.calls.filter(executionActive), failed=project.calls.filter(c=>c.state==='error');
-      return html`<div class="runs-row execution-project-row" key=${project.key}>
-        <button class="runs-row-open" onClick=${()=>select(project.key)}>
-          <i class=${`fa-solid ${running.length?'fa-bolt':failed.length?'fa-triangle-exclamation':'fa-layer-group'} runs-row-icon`}></i>
-          <span class="runs-row-model">${project.title}<small>${new Set(project.calls.map(c=>c.model)).size} modèle(s) · ${running.length} en cours · ${failed.length} échec(s)</small></span>
-          <span class="runs-row-when">${when(project.started)}</span><span class="runs-row-meta">${executionCost(project.calls).label} <i class="fa-solid fa-chevron-right"></i></span>
-        </button>
-      </div>`;
-    })}
-    ${active.filter(c=>!executionProjectKey(c)).map(c=>html`<div class="runs-row" key=${c.id}><span class="runs-row-open"><strong>${c.model}</strong> · Appel ancien — titre non conservé · ${executionStatus(c)} · ${executionDuration(c.duration_seconds)}</span></div>`)}
-    ${!projects.length && !active.length && html`<div class="runs-empty"><p>${loaded?'Aucun projet en cours. Les projets apparaissent ici dès le lancement du lot, avant la première page.':'Chargement des exécutions…'}</p></div>`}</div>
-    ${history.length>0 && html`<details class="execution-legacy-history"><summary>Historique antérieur · ${history.length} appel(s)</summary>${history.map(c=>html`<div class="runs-row" key=${c.id}><div class="runs-row-open"><span class="runs-row-model">${c.model}<small>Titre et code non conservés par l’ancienne version · ${when(c.started)}</small></span><span>${executionStatus(c)} · ${executionCost([c]).label}</span></div></div>`)}</details>`}
-  </div>`;
-  return html`<section class="batch-live-workspace" aria-label="Suivi du lot en direct">
-    <header class="batch-live-header"><div><h2>Comparer en direct</h2><p>${active.length} appel(s) en cours · ${projects.length} projet(s) · ${snapshot.items.filter(i=>i.status!=='generating'&&i.status!=='queued').length} / ${snapshot.runList.length} terminé(s) dans ce lot</p></div>
-      <div class="batch-window-actions"><button class="btn" onClick=${()=>setJournal(v=>!v)}>${journal?'Aperçu et code':'Journal et détails du lot'}</button><button class="btn" onClick=${onBrowseSaved}>Résultats du dossier</button></div></header>
-    ${error && html`<p class="live-model-error" role="alert">${error}</p>`}
-    ${projects.length>0 && html`<nav class="execution-project-tabs" aria-label="Projets du lot">${groupProjects.map(p=>html`<button class=${`btn ${chosen?.key===p.key?'btn-primary':''}`} aria-pressed=${chosen?.key===p.key} key=${p.key} onClick=${()=>select(p.key)}>${p.title}<small>${p.calls.filter(executionActive).length} en cours · ${executionCost(p.calls).label}</small></button>`)}
-      ${projects.length>groupProjects.length && html`<label>Autres lots <select class="form-input" value=${chosen?.key} onChange=${e=>select(e.target.value)}>${projects.map(p=>html`<option value=${p.key} key=${p.key}>${p.title} · ${when(p.started)}</option>`)}</select></label>`}</nav>`}
-    ${visibleCalls.length ? html`<${BatchCosts} calls=${snapshot.costCalls} done=${snapshot.done} startedAt=${snapshot.startedAt}/>
-      ${journal?html`<${BatchGenerationLog} entries=${snapshot.entries} models=${snapshot.models} calls=${snapshot.liveCalls} startedAt=${snapshot.startedAt} now=${snapshot.now} filter=${filter} onFilterChange=${setFilter} done=${snapshot.done} costCalls=${snapshot.costCalls}/>`
-        :html`<${BatchLiveComparison} ...${snapshot} selectedPromptId=${chosen?.key || ''} onPromptChange=${select} paused=${false} theme=${theme} onFullscreen=${setZoom} onStop=${stop} showLiveOutput=${true}/>`}`
-      :html`<div class="runs-empty"><i class="fa-solid fa-table-columns"></i><p>${loaded?'Aucune génération en cours. Dès le lancement d’un lot, les modèles apparaîtront ici, même avec zéro caractère reçu.':'Chargement du lot…'}</p></div>`}
-    ${zoom>=0 && snapshot.outputs[zoom] && html`<${HtmlLightbox} html=${snapshot.outputs[zoom]} title=${snapshot.runList[zoom]?.title} onClose=${()=>setZoom(-1)}/>`}
+  const totals=costTotals(snapshot.costCalls),timing=executionMetrics(snapshot.costCalls,{now:snapshot.now,done:snapshot.done});
+  const costLabel=totals.confirmedUsd===null ? snapshot.done?'Non communiqué':'En attente' : formatUsd(totals.confirmedUsd);
+  const matched=projects.filter(p=>p.title.toLocaleLowerCase('fr').includes(search.toLocaleLowerCase('fr'))
+    &&(statusFilter!=='active'||p.calls.some(executionActive)))
+    .sort((a,b)=>Number(b.calls.some(executionActive))-Number(a.calls.some(executionActive)));
+  const stateOf=p=>p.calls.some(executionActive)?{label:'En cours',tone:'active'}:p.calls.some(c=>c.state==='error')?{label:'Échec',tone:'danger'}:p.calls.some(c=>['cancelled','interrupted'].includes(c.state))?{label:'Interrompu',tone:'neutral'}:{label:'Terminé',tone:'success'};
+  const renderSearch=()=>html`<label class="bench-search"><${BenchIcon} name="search" size=${17}/><input type="search" aria-label="Rechercher un projet" placeholder="Rechercher un projet…" value=${search} onInput=${e=>setSearch(e.target.value)}/></label>`;
+  if(view==='runs')return html`<section class="bench-runs" aria-label="Exécutions des projets">
+    <header class="bench-page-header"><div><span class="bench-eyebrow">VOTRE ESPACE DE TEST</span><h1>Exécutions</h1><p>Chaque projet, ses modèles et sa progression. Dès le lancement.</p></div><div class="bench-header-actions"><button class="btn" onClick=${()=>setRevision(n=>n+1)}><${BenchIcon} name="refresh" size=${16}/>Actualiser</button><button class="btn" onClick=${onBrowseSaved}>Ouvrir le dossier</button></div></header>
+    <div class="bench-runs-metrics"><${BenchMetric} label="Appels en cours" value=${active.length} note="Connexions actuellement observées" icon="activity"/><${BenchMetric} label="Projets suivis" value=${projects.length} note="Tous les modèles regroupés par projet" icon="layers"/><${BenchMetric} label="Coûts confirmés" value=${executionCost(projects.flatMap(p=>p.calls)).label} note="Montants communiqués par le fournisseur"/></div>
+    <div class="bench-list-toolbar">${renderSearch()}<div class="bench-segmented" aria-label="Filtrer les projets"><button class=${statusFilter==='all'?'is-selected':''} aria-pressed=${statusFilter==='all'} onClick=${()=>setStatusFilter('all')}>Tous les projets</button><button class=${statusFilter==='active'?'is-selected':''} aria-pressed=${statusFilter==='active'} onClick=${()=>setStatusFilter('active')}>En cours <span>${projects.filter(p=>p.calls.some(executionActive)).length}</span></button></div></div>
+    ${error&&html`<p class="bench-inline-error" role="alert">${error}</p>`}
+    <div class="bench-project-grid">${matched.map(project=>{
+      const state=stateOf(project),models=[...new Map(project.calls.map(c=>[c.model,c])).values()];
+      return html`<article class="bench-project-card" key=${project.key}>
+        <div class="bench-project-top"><span class="bench-project-icon"><${BenchIcon} name="layers" size=${20}/></span><${BenchBadge} tone=${state.tone} live=${state.tone==='active'}>${state.label}</${BenchBadge}></div>
+        <h2>${project.title}</h2><time>${when(project.started)}</time>
+        <ul class="bench-project-models">${models.map(c=>html`<li key=${c.model}><span>${(c.context?.modelLabel||c.model).split(' / ').at(-1).replace(/^(Anthropic|OpenAI|Google):\s*/,'')}</span><small>${executionStatus(c)}</small></li>`)}</ul>
+        <div class="bench-project-bottom"><span>${models.length} modèle(s)</span><strong>${executionCost(project.calls).label}</strong></div>
+        <button class="btn bench-open-project" onClick=${()=>select(project.key)}>Ouvrir la comparaison<${BenchIcon} name="arrow" size=${16}/></button>
+      </article>`;
+    })}</div>
+    ${!matched.length&&html`<div class="bench-empty"><${BenchIcon} name="layers" size=${32}/><h2>${loaded?'Aucun projet à afficher':'Chargement des projets…'}</h2><p>${search?'Essayez un autre nom de projet.':'Les projets apparaissent dès le lancement, avant le premier code.'}</p></div>`}
+    ${active.filter(c=>!executionProjectKey(c)).map(c=>html`<p key=${c.id}>${c.model} · Appel sans titre conservé · ${executionStatus(c)}</p>`)}
+    ${history.length>0&&html`<details class="bench-legacy"><summary>Historique de l’ancienne version · ${history.length} appel(s)</summary>${history.map(c=>html`<div key=${c.id}><span>${c.model}</span><span>${executionStatus(c)}</span><strong>${executionCost([c]).label}</strong></div>`)}</details>`}
+  </section>`;
+  return html`<section class="bench-workspace" aria-label="Suivi du lot en direct">
+    <aside class="bench-project-sidebar"><header><span class="bench-eyebrow">COMPARAISON</span><h2>Vos projets <span>${projects.length}</span></h2></header>${renderSearch()}
+      <nav aria-label="Projets du lot">${matched.map(p=>{
+        const state=stateOf(p);return html`<button class=${`bench-project-nav ${chosen?.key===p.key?'is-selected':''}`} aria-current=${chosen?.key===p.key?'page':undefined} key=${p.key} onClick=${()=>select(p.key)}><span class="bench-nav-title">${p.title}</span><span class="bench-nav-meta"><${BenchBadge} tone=${state.tone} live=${state.tone==='active'}>${state.label}</${BenchBadge}><small>${new Set(p.calls.map(c=>c.model)).size} modèles</small></span></button>`;
+      })}${!matched.length&&html`<p class="bench-sidebar-empty">${loaded?'Aucun projet':'Chargement…'}</p>`}</nav>
+      <footer><${BenchIcon} name="activity" size=${16}/><span>${active.length} appel(s) en cours</span><a href="#/runs">Exécutions<${BenchIcon} name="arrow" size=${14}/></a></footer>
+    </aside>
+    <main class="bench-stage">
+      <header class="bench-page-header"><div><span class="bench-eyebrow">COMPARER LES MODÈLES</span><h1>${chosen?.title || 'Comparer en direct'}</h1><p>${chosen?`${new Set(chosen.calls.map(c=>c.model)).size} modèles · ${when(chosen.started)}`:'Vos modèles apparaissent ici dès le lancement.'}</p></div><div class="bench-header-actions"><${BenchBadge} tone=${active.length?'active':'neutral'} live=${active.length>0}>${active.length?'En direct':'Aucun appel actif'}</${BenchBadge}><button class="btn" onClick=${onBrowseSaved}>Dossier</button></div></header>
+      <label class="bench-mobile-project-picker">Projet<select class="form-input" value=${chosen?.key || ''} onChange=${e=>select(e.target.value)}>${projects.map(p=>html`<option key=${p.key} value=${p.key}>${p.title}</option>`)}</select></label>
+      ${error&&html`<p class="bench-inline-error" role="alert">${error}</p>`}
+      ${visibleCalls.length?html`<div class="bench-overview"><${BenchMetric} label="Durée du lot" value=${formatDuration(timing.elapsedMs)} icon="clock"/><${BenchMetric} label="Appels API" value=${totals.requestCount} note=${`${snapshot.items.filter(i=>!['generating','queued'].includes(i.status)).length} / ${snapshot.runList.length} terminés`} icon="activity"/><${BenchMetric} label="Coût confirmé du lot" value=${costLabel} note=${totals.missingCosts?`${totals.missingCosts} coût(s) ${snapshot.done?'non communiqué(s)':'en attente'}`:'Tous les coûts reçus'}/></div>
+        <div class="bench-view-toolbar"><div class="bench-segmented" aria-label="Affichage de la comparaison">${[['split','screen','Aperçu et code'],['preview','screen','Aperçu'],['code','code','Code'],['activity','activity','Activité'],['journal','journal','Journal']].map(([id,icon,label])=>html`<button class=${displayMode===id?'is-selected':''} aria-pressed=${displayMode===id} key=${id} onClick=${()=>setDisplayMode(id)}><${BenchIcon} name=${icon} size=${15}/>${label}</button>`)}</div><details class="bench-billing"><summary>Détail des coûts</summary><${BatchCosts} calls=${snapshot.costCalls} done=${snapshot.done} startedAt=${snapshot.startedAt}/></details></div>
+        ${displayMode==='journal'?html`<${BatchGenerationLog} entries=${snapshot.entries} models=${snapshot.models} calls=${snapshot.liveCalls} startedAt=${snapshot.startedAt} now=${snapshot.now} filter=${filter} onFilterChange=${setFilter} done=${snapshot.done} costCalls=${snapshot.costCalls}/>`:html`<${BatchLiveComparison} ...${snapshot} selectedPromptId=${chosen?.key||''} onPromptChange=${select} paused=${false} theme=${theme} onFullscreen=${setZoom} onStop=${stop} showLiveOutput=${true} hidePromptSelector=${true} displayMode=${displayMode}/>`}`
+        :html`<div class="bench-empty"><${BenchIcon} name="screen" size=${36}/><h2>${loaded?'Prêt pour votre prochaine comparaison':'Chargement du lot…'}</h2><p>Lancez un lot. Chaque modèle sera visible ici, même pendant le raisonnement et avant la première page.</p></div>`}
+    </main>
+    ${zoom>=0&&snapshot.outputs[zoom]&&html`<${HtmlLightbox} html=${snapshot.outputs[zoom]} title=${snapshot.runList[zoom]?.title} onClose=${()=>setZoom(-1)}/>`}
   </section>`;
 }
