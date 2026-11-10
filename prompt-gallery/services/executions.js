@@ -65,6 +65,7 @@ export function executionBatchSnapshot(calls, now = Date.now()) {
       items.push({status:active ? latest.state==='queued'?'queued':'generating'
         : latest.state==='ok'?'saved':['cancelled','interrupted'].includes(latest.state)?'stopped':'error',
         message:latest.error?.message || (latest.finish_reason==='length'?executionStatus(latest):''),
+        incomplete:latest.finish_reason==='length'&&!!(latest.output_chars||latest.output?.length),
         executionId:latest.id});
       outputs.push(latest.output || '');
       for (const call of attempts) {

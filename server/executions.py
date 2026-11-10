@@ -21,6 +21,7 @@ from .proxy import relay
 from .spend_guard import active_worker, process_marker, fingerprint
 from .storage import db
 from .reasoning_summary import public_summary_parts
+from .recovery_policy import recovery_adaptation, reviewed_recovery
 
 executions = Blueprint('executions', __name__)
 POOL = ThreadPoolExecutor(max_workers=32, thread_name_prefix='generation')
@@ -68,6 +69,14 @@ def record(row, include_output=False):
                   usage=json.loads(activity['usage']) if activity else {}, error=json.loads(row['error']),
                   duration_seconds=max(0, (time.time() if state in LIVE else updated)-started),
                   last_signal_seconds=max(0, time.time()-updated))
+    if result['finish_reason']=='length':
+        partial=bool(row['output'])
+        result['error']['kind']='output_truncated' if partial else 'reasoning_exhausted'
+        if result['error'].get('message') in (None,'Budget de sortie épuisé.'):
+            tokens=result['usage'].get('reasoning_tokens')
+            result['error']['message']=(f"Sortie incomplète : {len(row['output'])} caractères conservés. Reprenez le code ou ajustez-le dans le chat."
+                if partial else 'Budget de sortie épuisé sans code'+(f' ({tokens} tokens de raisonnement).' if tokens else '.')+
+                ' Une reprise avec le même effort peut reproduire cet échec. Préparez une reprise adaptée.')
     if include_output:
         result['output'] = row['output']
     return result
@@ -210,6 +219,9 @@ def recovery_plan(call_id):
                     'output_chars':len(row['output']), 'request_saved':bool(row['request_payload']),
                     'max_tokens':payload.get('max_tokens') or payload.get('max_completion_tokens'),
                     'reasoning_effort':(payload.get('reasoning') or {}).get('effort') or payload.get('reasoning_effort'),
+                    'reasoning_tokens':(payload.get('reasoning') or {}).get('max_tokens'),
+                    'previous_finish_reason':info['finish_reason'],
+                    'adaptation':recovery_adaptation(payload,info),
                     'previous_cost':info['usage'].get('cost')})
 
 
@@ -227,6 +239,7 @@ def recover_execution(call_id):
         abort(409, description='Identifiant déjà utilisé.')
     restart = body.get('restart') is True
     row, info, original = recovery_source(call_id, body.get('fallback'), restart=restart)
+    original = reviewed_recovery(original,info,body)
     payload = {**original, 'stream':True}
     seed = '' if restart else row['output']
     if seed:
@@ -261,7 +274,7 @@ def conversation(call_id):
         seen.add(row['id'])
         turn = record(row)
         message = current_app.extensions['vault'].decrypt(row['user_instruction']).decode() if row['user_instruction'] else ''
-        turns.append({'id':row['id'],'message':redact(message,12000),'state':turn['state'],
+        turns.append({'id':row['id'],'message':redact(message,12000),'state':turn['state'],'finish_reason':turn['finish_reason'],
                       'output_chars':turn['output_chars'],'cost':turn['usage'].get('cost')})
         row = db().execute('SELECT * FROM browser_executions WHERE id=?', (row['parent_id'],)).fetchone() if row['parent_id'] else None
     return jsonify({'id':call_id,'title':info['context'].get('title','Création'),
@@ -288,6 +301,7 @@ def adjust_execution(call_id):
     row, info, original = recovery_source(call_id, body.get('fallback'), restart=True)
     if not row['output'].strip():
         abort(409, description='Aucun code à ajuster. Utilisez Réessayer pour créer un premier résultat.')
+    original = reviewed_recovery(original,info,body)
     payload = {**original,'stream':True,'messages':[*original['messages'],
         {'role':'assistant','content':row['output']},
         {'role':'user','content':(message+'\n\nReturn the complete updated HTML document, applying the requested change to the existing result. '

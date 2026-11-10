@@ -3,6 +3,7 @@ import tempfile
 import threading
 import time
 import unittest
+import requests
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -246,6 +247,70 @@ class ExecutionTests(unittest.TestCase):
         self.assertNotIn('messages',json.dumps(public));self.assertTrue(public['request_saved'])
         self.assertEqual(self.client.post('/api/executions/'+source['id']+'/recover',headers=self.headers,json={'id':'a'*32}).status_code,400)
         self.assertEqual(self.client.post('/api/executions/'+source['id']+'/recovery-plan',json={}).status_code,403)
+
+    def exhausted_source(self,output=''):
+        source=self.stopped_source(output)
+        with self.app.app_context():
+            activity=Activity(source['request']);activity.reason='length'
+            activity.usage={'reasoning_tokens':128000,'cost':2.5};activity.finish('error')
+            db().execute("UPDATE browser_executions SET state='error',activity_id=? WHERE id=?",(activity.id,source['id']));db().commit()
+        return source
+
+    def recovery_catalogue(self,model):
+        return Mock(status_code=200,json=lambda:{'data':[{'id':model,
+            'supported_parameters':['max_tokens','reasoning'],
+            'top_provider':{'max_completion_tokens':128000},
+            'reasoning':{'mandatory':True,'supported_efforts':['low','medium','high','max']}}]})
+
+    def test_exhausted_recovery_plan_is_free_and_confirmed_adaptation_keeps_code_and_output_ceiling(self):
+        source=self.exhausted_source('<html>partial')
+        path='/api/executions/'+source['id']
+        with patch('server.recovery_policy.requests.get',return_value=self.recovery_catalogue(source['request']['model'])),patch('server.proxy.requests.request') as api,patch('server.executions.POOL.submit') as submit:
+            plan=self.client.post(path+'/recovery-plan',headers=self.headers,json={}).json
+            self.assertTrue(plan['adaptation']['available'])
+            params=plan['adaptation']['parameters']
+            self.assertEqual(params,{'max_tokens':128000,'reasoning':{'effort':'high'}})
+            submit.assert_not_called();api.assert_not_called()
+            response=self.client.post(path+'/recover',headers=self.headers,json={'id':'a'*32,'confirmed':True,'strategy':'adapted','expected_parameters':params})
+            self.assertEqual(response.status_code,202)
+            payload=submit.call_args.args[3]
+            self.assertEqual(payload['reasoning'],{'effort':'high'});self.assertEqual(payload['max_tokens'],128000)
+            self.assertEqual(payload['messages'][-2]['content'],'<html>partial')
+            self.assertEqual(self.client.get(path).json['output'],'<html>partial')
+            self.assertEqual(self.client.get('/api/executions/'+'a'*32).json['output'],'<html>partial')
+
+    def test_unreviewed_adapted_parameters_never_launch_a_provider_call(self):
+        source=self.exhausted_source()
+        with patch('server.recovery_policy.requests.get',return_value=self.recovery_catalogue(source['request']['model'])),patch('server.executions.POOL.submit') as submit:
+            response=self.client.post('/api/executions/'+source['id']+'/recover',headers=self.headers,json={'id':'a'*32,'confirmed':True,'strategy':'adapted','expected_parameters':{'max_tokens':128000,'reasoning':{'effort':'medium'}}})
+            self.assertEqual(response.status_code,409);submit.assert_not_called()
+
+    def test_unavailable_catalogue_cannot_silently_fall_back_to_the_failed_settings(self):
+        source=self.exhausted_source()
+        with patch('server.recovery_policy.requests.get',side_effect=requests.ConnectionError()),patch('server.executions.POOL.submit') as submit:
+            path='/api/executions/'+source['id']
+            plan=self.client.post(path+'/recovery-plan',headers=self.headers,json={})
+            self.assertEqual(plan.status_code,200);self.assertFalse(plan.json['adaptation']['available'])
+            response=self.client.post(path+'/recover',headers=self.headers,json={'id':'a'*32,'confirmed':True,'strategy':'adapted','expected_parameters':{}})
+            self.assertEqual(response.status_code,409);submit.assert_not_called()
+        error=self.client.get('/api/executions/'+source['id']).json['error']
+        self.assertEqual(error['kind'],'reasoning_exhausted');self.assertIn('128000 tokens',error['message'])
+
+    def test_original_effort_remains_available_as_an_explicit_recovery_choice(self):
+        source=self.exhausted_source()
+        with patch('server.recovery_policy.requests.get') as catalogue,patch('server.executions.POOL.submit') as submit:
+            response=self.client.post('/api/executions/'+source['id']+'/recover',headers=self.headers,json={'id':'a'*32,'confirmed':True,'strategy':'original'})
+            self.assertEqual(response.status_code,202)
+            self.assertEqual(submit.call_args.args[3]['reasoning'],{'effort':'max'});catalogue.assert_not_called()
+
+    def test_chat_can_apply_the_reviewed_adaptation_without_changing_its_original_version(self):
+        source=self.exhausted_source('<html>existing</html>')
+        params={'max_tokens':128000,'reasoning':{'effort':'high'}}
+        with patch('server.recovery_policy.requests.get',return_value=self.recovery_catalogue(source['request']['model'])),patch('server.executions.POOL.submit') as submit:
+            response=self.client.post('/api/executions/'+source['id']+'/adjust',headers=self.headers,json={'id':'a'*32,'confirmed':True,'message':'Complete the page','strategy':'adapted','expected_parameters':params})
+            self.assertEqual(response.status_code,202)
+            self.assertEqual(submit.call_args.args[3]['reasoning'],{'effort':'high'})
+            self.assertEqual(self.client.get('/api/executions/'+source['id']).json['output'],'<html>existing</html>')
 
     def test_resume_keeps_exact_prefix_and_original_and_only_adds_new_usage(self):
         prefix='<!doctype html><html><body>✅'

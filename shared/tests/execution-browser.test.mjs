@@ -76,11 +76,12 @@ test('a partial failure, its cost and successful peer stay available in the orig
   const {executionBatchSnapshot}=await import('../../prompt-gallery/services/executions.js');
   const context={groupId:'lot',promptId:'p',title:'Mon projet'};
   const snapshot=executionBatchSnapshot([
-    {id:'failed',model:'a',context,state:'error',started:100,updated:120,output:'<html>partiel',error:{message:'Limite atteinte'},usage:{cost:2}},
+    {id:'failed',model:'a',context,state:'error',finish_reason:'length',started:100,updated:120,output:'<html>partiel',error:{message:'Limite atteinte'},usage:{cost:2}},
     {id:'peer',model:'b',context,state:'ok',started:100,updated:130,output:'<html>complet</html>',error:{},usage:{cost:1}},
   ]);
   assert.equal(snapshot.done,true);assert.deepEqual(snapshot.items.map(i=>i.status),['error','saved']);
   assert.equal(snapshot.outputs[0],'<html>partiel');assert.equal(snapshot.items[0].message,'Limite atteinte');
+  assert.equal(snapshot.items[0].incomplete,true);
   assert.equal(snapshot.costCalls.reduce((total,c)=>total+c.usd,0),3);
 });
 
@@ -132,6 +133,15 @@ test('recovery only targets the latest failed model attempt and preserves succes
   assert.equal(fallback.max_tokens,128000);assert.deepEqual(fallback.reasoning,{effort:'max'});
   assert.equal(recoveryFallback({...call,request_saved:true},[]),undefined);
   assert.equal(recoveryFallback(call,[]),undefined);
+});
+
+test('reviewed recovery defaults to the proposed adaptation but keeps an explicit original choice',async()=>{
+  const {reviewRecovery}=await import('../../prompt-gallery/services/executionRecovery.js');
+  const parameters={max_tokens:128000,reasoning:{effort:'high'}};
+  const plan={max_tokens:128000,reasoning_effort:'max',adaptation:{available:true,parameters}};
+  assert.deepEqual(reviewRecovery(plan),{strategy:'adapted',expected_parameters:parameters,maxTokens:128000,effort:'high',reasoningTokens:undefined});
+  assert.deepEqual(reviewRecovery(plan,'original'),{strategy:'original',maxTokens:128000,effort:'max',reasoningTokens:undefined});
+  assert.equal(reviewRecovery({...plan,adaptation:{available:false}}).strategy,'original');
 });
 
 test('retrying a complete prompt comparison includes every latest model, successful or failed, once',async()=>{

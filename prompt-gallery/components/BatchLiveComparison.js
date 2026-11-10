@@ -34,7 +34,7 @@ function LiveModelPane({card, liveCalls, entries, now, done, paused, theme, onFu
   const {model, index, prompt, item, output, calls,currentCalls} = card;
   const active = !done && batchItemRunning(item);
   const live = active ? batchLiveStatus(liveCalls, model, now, calls.map(call => call.telemetryId).filter(Boolean)) : null;
-  const status = paused && active ? 'En pause' : live?.label || LABELS[item.status] || 'En attente';
+  const status = paused && active ? 'En pause' : live?.label || (item.incomplete?'À compléter':LABELS[item.status]) || 'En attente';
   const costs = costTotals(calls), timing = executionMetrics(currentCalls, {now, done});
   const label = model.label || model.modelId;
   const shortLabel=label.split(' / ').at(-1).replace(/^(Anthropic|OpenAI|Google):\s*/, '');
@@ -45,8 +45,8 @@ function LiveModelPane({card, liveCalls, entries, now, done, paused, theme, onFu
   const srcdoc = useMemo(() => preview ? withPreviewStorage(preview) : '', [preview]);
   const cost = costs.confirmedUsd == null ? calls.length ? calls.some(c=>c.status==='pending')?'En attente':'Non communiqué' : 'Aucun appel'
     : formatUsd(costs.confirmedUsd)+(costs.missingCosts?' + en attente':'');
-  const tone=item.status==='error'?'danger':active?'active':['saved','verified'].includes(item.status)?'success':'neutral';
-  return html`<article class=${`live-model-pane bench-model ${item.status==='error'?'has-error':''}`} aria-label=${`Modèle : ${label}`}>
+  const tone=item.incomplete?'neutral':item.status==='error'?'danger':active?'active':['saved','verified'].includes(item.status)?'success':'neutral';
+  return html`<article class=${`live-model-pane bench-model ${item.status==='error'&&!item.incomplete?'has-error':''}`} aria-label=${`Modèle : ${label}`}>
     <header class="bench-model-head">
       <div class="bench-model-identity"><span class="bench-model-avatar" aria-hidden="true">${shortLabel.slice(0,1)}</span><div><h2 title=${label}>${shortLabel}</h2><small>${model.providerId==='openrouter'?'via OpenRouter':model.providerId}</small></div>
         <${BenchBadge} tone=${tone} live=${active}>${status}</${BenchBadge}>
@@ -55,7 +55,7 @@ function LiveModelPane({card, liveCalls, entries, now, done, paused, theme, onFu
       </div>
       <div class="bench-model-metrics"><span title="Durée de l’essai affiché, sans les anciennes tentatives ni l’attente entre deux essais."><${BenchIcon} name="clock" size=${14}/>${formatDuration(timing.elapsedMs)}</span><span title="Nombre total d’appels, anciennes tentatives comprises.">${costs.requestCount} appel(s)</span><strong>${cost}</strong></div>
       ${item.stage && html`<small>Étape ${item.stage.index}/${item.stage.total} · ${item.stage.title}</small>`}
-      ${item.message&&['error','no_progress','stopped'].includes(item.status)&&html`<p class=${item.status==='stopped'?'bench-inline-notice':'bench-inline-error'}>${item.status==='stopped'&&item.message.startsWith('Appel arrete depuis la CLI')?'Génération arrêtée à votre demande.':item.message}</p>`}
+      ${item.message&&['error','no_progress','stopped'].includes(item.status)&&html`<p class=${item.status==='stopped'||item.incomplete?'bench-inline-notice':'bench-inline-error'}>${item.status==='stopped'&&item.message.startsWith('Appel arrete depuis la CLI')?'Génération arrêtée à votre demande.':item.message}</p>`}
       ${onRetry&&!item.savedIds?.length&&['error','stopped','not-started'].includes(item.status)&&html`<button class="btn btn-sm bench-recover-model" onClick=${()=>onRetry(index)}><${BenchIcon} name="refresh" size=${14}/>${output.trim()?'Reprendre':'Réessayer'}</button>`}
     </header>
     ${displayMode==='activity' ? html`<${BatchActivity} model=${model} index=${index} calls=${calls} liveCalls=${liveCalls} entries=${entries} now=${now} statusLabel=${status}/>` : html`

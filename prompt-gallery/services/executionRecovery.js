@@ -1,5 +1,16 @@
 import {SYSTEM_PROMPT} from './htmlSystemPrompt.js';
 
+export function reviewRecovery(plan,strategy=plan?.adaptation?.available?'adapted':'original'){
+  if(strategy==='adapted'&&plan?.adaptation?.available){
+    const parameters=plan.adaptation.parameters;
+    return {strategy:'adapted',expected_parameters:parameters,
+      maxTokens:parameters.max_tokens??parameters.max_completion_tokens,
+      effort:parameters.reasoning?.effort??parameters.reasoning_effort,
+      reasoningTokens:parameters.reasoning?.max_tokens};
+  }
+  return {strategy:'original',maxTokens:plan?.max_tokens,effort:plan?.reasoning_effort,reasoningTokens:plan?.reasoning_tokens};
+}
+
 export const canRecoverExecution=call=>call?.durable && ['cancelled','interrupted','error'].includes(call.state);
 export function latestModelExecutions(calls=[]){
   const latest=new Map();

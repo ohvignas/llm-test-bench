@@ -8,7 +8,7 @@ import {HtmlLightbox} from './BatchReview.js';
 import {BenchBadge, BenchIcon, BenchMetric} from './BenchUi.js';
 import {costTotals,formatUsd} from '../services/batchCosts.js';
 import {executionMetrics,formatDuration} from '../services/executionMetrics.js';
-import {recoveryCandidates,comparisonRetryCandidates,latestModelExecutions,recoveryFallback} from '../services/executionRecovery.js';
+import {recoveryCandidates,comparisonRetryCandidates,latestModelExecutions,recoveryFallback,reviewRecovery} from '../services/executionRecovery.js';
 import {ExecutionRecoveryDialog} from './ExecutionRecoveryDialog.js';
 import {ExecutionChat} from './ExecutionChat.js';
 import {executionActive, executionProjects, executionProjectKey, executionStatus, executionCost, executionDuration, executionBatchSnapshot,executionComparisonScope} from '../services/executions.js';
@@ -82,7 +82,7 @@ export function ExecutionBrowser({view='runs', selectedProject='', onProjectChan
         const fallback=recoveryFallback(call,prompts);
         const response=await secureFetch(`/api/executions/${call.id}/recovery-plan`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fallback,restart})});
         const plan=await response.json();if(!response.ok)throw new Error(plan.error||'Reprise indisponible.');
-        return {call,plan,fallback,restart,id:crypto.randomUUID().replaceAll('-','')};
+        return {call,plan,fallback,restart,strategy:plan.adaptation?.available?'adapted':'original',id:crypto.randomUUID().replaceAll('-','')};
       }));
       if(revision===recoveryRevision.current)setRecovery({loading:false,rows,busy:false,restart});
     }catch(e){if(revision===recoveryRevision.current)setRecovery({loading:false,rows:[],busy:false,restart,error:e.message});}
@@ -92,7 +92,8 @@ export function ExecutionBrowser({view='runs', selectedProject='', onProjectChan
     setRecovery(previous=>({...previous,busy:true,error:''}));
     try{
       const results=await Promise.allSettled(recovery.rows.map(async row=>{
-        const response=await secureFetch(`/api/executions/${row.call.id}/recover`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:row.id,confirmed:true,fallback:row.fallback,restart:row.restart})});
+        const review=reviewRecovery(row.plan,row.strategy);
+        const response=await secureFetch(`/api/executions/${row.call.id}/recover`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:row.id,confirmed:true,fallback:row.fallback,restart:row.restart,strategy:review.strategy,expected_parameters:review.expected_parameters})});
         const data=await response.json();if(!response.ok)throw new Error(data.error||'Lancement non confirmé.');
       }));
       setRevision(n=>n+1);
@@ -105,7 +106,7 @@ export function ExecutionBrowser({view='runs', selectedProject='', onProjectChan
     const call=calls.find(c=>c.id===snapshot.runList[index]?.executionId);
     if(call)prepareRecovery([call]);
   };
-  const recoveryDialog=recovery&&html`<${ExecutionRecoveryDialog} state=${recovery} onClose=${()=>{recoveryRevision.current++;setRecovery(null);}} onStart=${startRecovery}/>`;
+  const recoveryDialog=recovery&&html`<${ExecutionRecoveryDialog} state=${recovery} onClose=${()=>{recoveryRevision.current++;setRecovery(null);}} onStart=${startRecovery} onStrategyChange=${(id,strategy)=>setRecovery(previous=>({...previous,error:'',rows:previous.rows.map(row=>row.call.id===id?{...row,strategy,id:crypto.randomUUID().replaceAll('-','')}:row)}))}/>`;
   const chatDialog=chat&&html`<${ExecutionChat} call=${chat} prompts=${prompts} onClose=${()=>setChat(null)} onSent=${()=>{setChat(null);setRevision(n=>n+1);}}/>`;
   const history=calls.filter(c=>!executionProjectKey(c)&&!executionActive(c));
   const comparison=executionComparisonScope(snapshot,chosen?.key);
