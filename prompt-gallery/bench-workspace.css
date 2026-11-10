@@ -106,3 +106,6 @@
 
 .bench-workspace,.bench-runs,.bench-comparison{--text-muted:var(--bench-muted)}
 .bench-search input::placeholder{color:var(--bench-muted);opacity:1}
+
+.bench-inline-notice{margin:0;padding:9px 11px;border:1px solid var(--bench-border);border-radius:6px;color:var(--bench-muted);background:var(--bench-inset);font-size:11px}
+.bench-project-sidebar{padding-bottom:58px}.bench-stage,.bench-runs{padding-bottom:74px}
