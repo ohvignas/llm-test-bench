@@ -8,7 +8,7 @@ import {HtmlLightbox} from './BatchReview.js';
 import {BenchBadge, BenchIcon, BenchMetric} from './BenchUi.js';
 import {costTotals,formatUsd} from '../services/batchCosts.js';
 import {executionMetrics,formatDuration} from '../services/executionMetrics.js';
-import {recoveryCandidates,comparisonRetryCandidates,recoveryFallback} from '../services/executionRecovery.js';
+import {recoveryCandidates,comparisonRetryCandidates,latestModelExecutions,recoveryFallback} from '../services/executionRecovery.js';
 import {ExecutionRecoveryDialog} from './ExecutionRecoveryDialog.js';
 import {executionActive, executionProjects, executionProjectKey, executionStatus, executionCost, executionDuration, executionBatchSnapshot} from '../services/executions.js';
 
@@ -110,7 +110,7 @@ export function ExecutionBrowser({view='runs', selectedProject='', onProjectChan
   const matched=projects.filter(p=>p.title.toLocaleLowerCase('fr').includes(search.toLocaleLowerCase('fr'))
     &&(statusFilter!=='active'||p.calls.some(executionActive)))
     .sort((a,b)=>Number(b.calls.some(executionActive))-Number(a.calls.some(executionActive)));
-  const stateOf=p=>p.calls.some(executionActive)?{label:'En cours',tone:'active'}:p.calls.some(c=>c.state==='error')?{label:'Échec',tone:'danger'}:p.calls.some(c=>['cancelled','interrupted'].includes(c.state))?{label:'Interrompu',tone:'neutral'}:{label:'Terminé',tone:'success'};
+  const stateOf=p=>p.calls.some(executionActive)?{label:'En cours',tone:'active'}:latestModelExecutions(p.calls).some(c=>c.state==='error')?{label:'Échec',tone:'danger'}:latestModelExecutions(p.calls).some(c=>['cancelled','interrupted'].includes(c.state))?{label:'Interrompu',tone:'neutral'}:{label:'Terminé',tone:'success'};
   const renderSearch=()=>html`<label class="bench-search"><${BenchIcon} name="search" size=${17}/><input type="search" aria-label="Rechercher un projet" placeholder="Rechercher un projet…" value=${search} onInput=${e=>setSearch(e.target.value)}/></label>`;
   if(view==='runs')return html`<section class="bench-runs" aria-label="Exécutions des projets">
     <header class="bench-page-header"><div><span class="bench-eyebrow">VOTRE ESPACE DE TEST</span><h1>Exécutions</h1><p>Chaque projet, ses modèles et sa progression. Dès le lancement.</p></div><div class="bench-header-actions"><button class="btn" onClick=${()=>setRevision(n=>n+1)}><${BenchIcon} name="refresh" size=${16}/>Actualiser</button><button class="btn" onClick=${onBrowseSaved}>Ouvrir le dossier</button></div></header>
@@ -118,7 +118,7 @@ export function ExecutionBrowser({view='runs', selectedProject='', onProjectChan
     <div class="bench-list-toolbar">${renderSearch()}<div class="bench-segmented" aria-label="Filtrer les projets"><button class=${statusFilter==='all'?'is-selected':''} aria-pressed=${statusFilter==='all'} onClick=${()=>setStatusFilter('all')}>Tous les projets</button><button class=${statusFilter==='active'?'is-selected':''} aria-pressed=${statusFilter==='active'} onClick=${()=>setStatusFilter('active')}>En cours <span>${projects.filter(p=>p.calls.some(executionActive)).length}</span></button></div></div>
     ${error&&html`<p class="bench-inline-error" role="alert">${error}</p>`}
     <div class="bench-project-grid">${matched.map(project=>{
-      const state=stateOf(project),models=[...new Map(project.calls.map(c=>[c.model,c])).values()];
+      const state=stateOf(project),models=latestModelExecutions(project.calls);
       return html`<article class="bench-project-card" key=${project.key}>
         <div class="bench-project-top"><span class="bench-project-icon"><${BenchIcon} name="layers" size=${20}/></span><${BenchBadge} tone=${state.tone} live=${state.tone==='active'}>${state.label}</${BenchBadge}></div>
         <h2>${project.title}</h2><time>${when(project.started)}</time>
