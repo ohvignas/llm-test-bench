@@ -440,7 +440,7 @@ export function BatchRunDialog({
     // Each lane is one model over the whole list, reporting into its own slice
     // of the run list. Its 'done' is held back: the summary covers every lane.
     let safetyTripped=false;
-    const runOne = async (lane) => {
+    const runOne = async (lane, { shouldStop, onFailure }) => {
       runningLanesRef.current += 1;
       try {
         const result=await runBatch({
@@ -463,15 +463,15 @@ export function BatchRunDialog({
           onEvent: (event) => {
             if (event.type === 'done') return;
             handleEvent({ ...event, model:lane.model, index:typeof event.index === 'number' ? event.index + lane.offset : lane.offset });
+            if (event.type === 'item' && ['error', 'no_progress'].includes(event.status)) onFailure();
           },
-          shouldStop: () => stopRef.current,
+          shouldStop,
           shouldPause: () => pauseRequestedRef.current,
           waitIfPaused: waitAtPauseBoundary,
         });
-        if(spendProtection && (result.failed>0||result.stopped))safetyTripped=true;
         return result;
       } catch (e) {
-        if(spendProtection)safetyTripped=true;
+        onFailure();
         handleEvent({type:'item',status:'error',index:lane.offset,model:lane.model,message:e.message});
         addToast(`Erreur d’exécution par lot${plan.multi ? ` (${lane.model.label || lane.model.modelId})` : ''}: ${e.message}`, 'error');
         return null;
@@ -485,7 +485,19 @@ export function BatchRunDialog({
     };
 
     try {
-      const summaries = await runLanes({ lanes: plan.lanes, mode: spendProtection?'sequential':laneMode, runOne, shouldStop: () => stopRef.current||safetyTripped });
+      const summaries = await runLanes({
+        lanes: plan.lanes, mode: laneMode, runOne,
+        shouldStop: () => stopRef.current, stopOnFailure: spendProtection,
+        onFailure: () => {
+          safetyTripped = true;
+          pauseRequestedRef.current = false;
+          releasePaused();
+          setPauseState('running');
+          setPauseContext(null);
+          journalRef.current?.event({type:'control',message:'Protection des dépenses : aucun nouvel appel ne sera lancé. Les appels déjà en cours peuvent terminer et leur résultat sera conservé.'});
+          syncJournal();
+        },
+      });
       setSummary({...combineSummaries(summaries.filter(Boolean)),protectionStopped:safetyTripped});
       setItems(rows=>rows.map(row=>row.status==='queued'?{...row,status:'not-started'}:row));
     } catch (e) {
@@ -693,12 +705,12 @@ export function BatchRunDialog({
         ${isMulti && html`
           <div class="batch-options batch-lane-modes" role="radiogroup" aria-label="Mode d’exécution des modèles">
             <label class="batch-opt batch-mode-opt">
-              <input type="radio" name="batch-lane-mode" value="parallel" disabled=${spendProtection} checked=${!spendProtection && laneMode === 'parallel'} onChange=${() => setLaneMode('parallel')} />
+              <input type="radio" name="batch-lane-mode" value="parallel" checked=${laneMode === 'parallel'} onChange=${() => setLaneMode('parallel')} />
               <span><strong>Simultanément</strong><small>Tous les modèles traitent la liste en parallèle. Plus rapide pour les agents CLI et les modèles hébergés.</small></span>
             </label>
             <label class="batch-opt batch-mode-opt">
-              <input type="radio" name="batch-lane-mode" value="sequential" checked=${spendProtection || laneMode === 'sequential'} onChange=${() => setLaneMode('sequential')} />
-              <span><strong>L’un après l’autre</strong><small>Terminer un modèle avant le suivant. La protection des dépenses impose ce mode pour arrêter le lot au premier échec.</small></span>
+              <input type="radio" name="batch-lane-mode" value="sequential" checked=${laneMode === 'sequential'} onChange=${() => setLaneMode('sequential')} />
+              <span><strong>L’un après l’autre</strong><small>Terminer un modèle avant le suivant. Utile lorsque les modèles partagent le même GPU local.</small></span>
             </label>
           </div>
         `}
@@ -848,7 +860,8 @@ export function BatchRunDialog({
             </select>
           </label>
           <div class="batch-opt-hint">Les nouvelles tentatives sont désactivées par défaut. Une réponse vide ou incomplète ne sera jamais relancée automatiquement.</div>
-          <label class="batch-opt"><input type="checkbox" checked=${spendProtection} onChange=${e=>setSpendProtection(e.target.checked)}/><span>Protection des dépenses : un appel à la fois, arrêt au premier échec, aucune nouvelle tentative automatique</span></label>
+          <label class="batch-opt"><input type="checkbox" checked=${spendProtection} onChange=${e=>setSpendProtection(e.target.checked)}/><span>Protection des dépenses : aucun nouvel appel après un échec, aucune nouvelle tentative automatique</span></label>
+          ${spendProtection && isMulti && laneMode === 'parallel' && html`<div class="batch-note">Les appels déjà en cours peuvent terminer et être facturés ; leurs résultats seront conservés.</div>`}
           <p class="batch-opt-hint">Un appel interrompu, vide ou filtré peut rester facturé. Les coûts affichés viennent de l’API. Les relances après un échec sont bloquées dans ce navigateur et dans le serveur local, même après actualisation.</p>
           <button class="btn btn-sm" onClick=${async()=>{try{await clearFailedGenerationBlocks();addToast('Relances autorisées : un nouvel appel pourra être facturé.','info');}catch(error){addToast(error.message,'error');}}}>Autoriser les relances après échec (nouveau coût possible)</button>
           <label class="batch-opt"><span>Adaptation aux capacités API</span>
@@ -915,7 +928,7 @@ export function BatchRunDialog({
       </div>
 
       <${BatchCosts} calls=${costCalls} startedAt=${journalStartedAtRef.current} />
-      ${runIsMulti && html`<div class="batch-note">${spendProtection||laneMode==='sequential'?'Les modèles passent l’un après l’autre.':'Les modèles tournent en parallèle.'} Sélectionnez une ligne pour changer l’aperçu et le flux HTML affichés.</div>`}
+      ${runIsMulti && html`<div class="batch-note">${laneMode==='sequential'?'Les modèles passent l’un après l’autre.':'Les modèles tournent en parallèle.'} Sélectionnez une ligne pour changer l’aperçu et le flux HTML affichés.</div>`}
 
       ${pauseState !== 'running' && html`
         <div class=${`batch-pause-state ${pauseState}`} role="status" aria-live="polite">

@@ -69,14 +69,34 @@ export function combineSummaries(summaries) {
 /**
  * Run every lane, side by side ('parallel') or one after another
  * ('sequential'). One after another stops starting new lanes once shouldStop()
- * is true. Resolves to the lanes' results in lane order.
+ * is true. With stopOnFailure, every lane receives a shared shouldStop gate:
+ * in-flight calls may finish/save, but no further calls should start after a
+ * failure. onFailure also lets the UI release lanes waiting at a pause boundary.
+ * Resolves to the lanes' results in lane order.
  */
-export async function runLanes({ lanes, mode = 'parallel', runOne, shouldStop = () => false }) {
-  if (mode === 'parallel') return Promise.all(lanes.map(lane => runOne(lane)));
+export async function runLanes({ lanes, mode = 'parallel', runOne, shouldStop = () => false, stopOnFailure = false, onFailure = () => {} }) {
+  let failed = false;
+  const stop = () => failed || shouldStop();
+  const fail = () => {
+    if (!stopOnFailure || failed) return;
+    failed = true;
+    onFailure();
+  };
+  const run = async lane => {
+    try {
+      const result = await runOne(lane, { shouldStop: stop, onFailure: fail });
+      if (result?.failed > 0) fail();
+      return result;
+    } catch (error) {
+      fail();
+      throw error;
+    }
+  };
+  if (mode === 'parallel') return Promise.all(lanes.map(run));
   const results = [];
   for (const lane of lanes) {
-    if (shouldStop()) break;
-    results.push(await runOne(lane));
+    if (stop()) break;
+    results.push(await run(lane));
   }
   return results;
 }
