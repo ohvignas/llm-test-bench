@@ -96,6 +96,32 @@ class LocalIntegrationTests(unittest.TestCase):
                 self.assertFalse(response.json['requestSent'])
             call.assert_not_called()
 
+    def test_retry_reset_is_observable_from_other_sessions_without_exposing_request_data(self):
+        from server.spend_guard import reserve, finish
+        with self.app.app_context():
+            identity=reserve(self.chat())
+            finish(identity,False)
+        other=self.app.test_client()
+        self.assertEqual(other.get('/api/openrouter/retry-blocks').status_code,401)
+        other.post('/api/auth/login',headers={'Origin':self.headers['Origin']},
+                   json={'username':'owner','password':'dummy-password-for-tests'})
+        self.assertEqual(other.get('/api/openrouter/retry-blocks').json,{'resetRevision':''})
+        with patch('server.proxy.requests.request') as call:
+            self.assertEqual(self.client.delete('/api/openrouter/retry-blocks').status_code,403)
+            reset=self.client.delete('/api/openrouter/retry-blocks',headers=self.headers)
+            self.assertEqual(reset.status_code,200)
+            revision=reset.json['resetRevision']
+            self.assertRegex(revision,r'^[a-f0-9]{32}$')
+            self.assertEqual(other.get('/api/openrouter/retry-blocks').json,{'resetRevision':revision})
+            with self.app.app_context():
+                self.assertIsNotNone(reserve(self.chat()))
+            call.assert_not_called()
+        # The marker is stable across refreshes and a server restart.
+        restarted=create_app(self.config)
+        from server.spend_guard import reset_revision
+        with restarted.app_context():
+            self.assertEqual(reset_revision(),revision)
+
     def test_project_bytes_and_vault_survive_restart_and_backup_restore(self):
         contents = {
             'prompt-gallery/projects/échantillon/site.html': b'<html>local project</html>',

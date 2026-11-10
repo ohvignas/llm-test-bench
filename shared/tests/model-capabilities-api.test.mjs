@@ -10,6 +10,7 @@ const apiModel={id:'vendor/model',name:'Model',context_length:1000000,top_provid
 let fetchCount=0,requests=[];
 globalThis.fetch=async(url,init={})=>{
  if(url==='/api/auth/status')return Response.json({authenticated:true,apiKeyConfigured:true,csrfToken:'test-csrf'});
+ if(url==='/api/openrouter/retry-blocks')return Response.json({resetRevision:''});
  if(url==='/api/openrouter/models'){fetchCount++;return Response.json({data:[apiModel]});}
  if(url==='/api/openrouter/chat/completions'){requests.push(JSON.parse(init.body));return Response.json({choices:[{message:{content:'<html>ok</html>'},finish_reason:'stop'}],usage:{cost:.012}});}
  throw new Error('Unexpected test URL '+url);

@@ -8,7 +8,7 @@ from werkzeug.exceptions import HTTPException
 
 from .auth import json_object
 from .storage import api_key
-from .spend_guard import reserve, finish, clear_failed
+from .spend_guard import reserve, finish, clear_failed, reset_revision
 from .activity import Activity
 from .model_policy import policies
 
@@ -195,5 +195,10 @@ def relay():
 @proxy.delete('/api/openrouter/retry-blocks')
 def clear_retry_blocks():
     # The application boundary enforces authentication, Origin and CSRF.
-    clear_failed()
-    return jsonify({'ok': True})
+    return jsonify({'ok': True, 'resetRevision': clear_failed()})
+
+
+@proxy.get('/api/openrouter/retry-blocks')
+def retry_blocks_status():
+    # Only the reset marker, never fingerprints, prompts, or credentials.
+    return jsonify({'resetRevision': reset_revision()})

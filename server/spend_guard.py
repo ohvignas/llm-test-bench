@@ -84,9 +84,18 @@ def finish(identity, successful, filtered=False, exhausted=False):
     connection.commit()
 
 
+def reset_revision():
+    row = db().execute("SELECT value FROM settings WHERE name='retry_blocks_revision'").fetchone()
+    return row['value'] if row else ''
+
+
 def clear_failed():
     connection = db()
+    connection.execute('BEGIN IMMEDIATE')
     for row in connection.execute('SELECT fingerprint, state FROM generation_guard').fetchall():
         if not active_worker(row['state']):
             connection.execute('DELETE FROM generation_guard WHERE fingerprint=?', (row['fingerprint'],))
+    revision = secrets.token_hex(16)
+    connection.execute("INSERT OR REPLACE INTO settings(name,value) VALUES ('retry_blocks_revision',?)", (revision,))
     connection.commit()
+    return revision

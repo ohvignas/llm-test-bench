@@ -69,3 +69,37 @@ test('unavailable protection storage is marked unsent only before the provider o
  await assert.rejects(guard.run(input,async()=>{sent++;store.getItem=()=>{throw new Error('Read denied');};return 'paid result';}),e=>e.code==='SPEND_GUARD_UNAVAILABLE'&&e.requestSent!==false);
  assert.equal(sent,1);
 });
+
+test('an unsent server rejection does not create a second persistent browser block',async()=>{
+ const store=storage(),guard=createSpendGuard(store);let sent=0;
+ await assert.rejects(guard.run(input,async()=>{throw Object.assign(new Error('Server preflight blocked'),{requestSent:false,status:409});}));
+ assert.equal(await createSpendGuard(store).run(input,async()=>{sent++;return 'html';}),'html');
+ assert.equal(sent,1);
+});
+
+test('an explicit server reset releases stale failures in another browser once, preserving subsequent failures',async()=>{
+ const browserA=createSpendGuard(storage()),browserB=createSpendGuard(storage());
+ for(const guard of [browserA,browserB])await assert.rejects(guard.run(input,async()=>{throw new Error('old failure');}));
+ const revision='1234567890abcdef1234567890abcdef';
+ browserA.syncReset(revision);browserB.syncReset(revision);
+ assert.equal(await browserB.run(input,async()=>'after reset'),'after reset');
+ await assert.rejects(browserB.run(input,async()=>{throw new Error('new paid failure');}));
+ browserB.syncReset(revision);
+ await assert.rejects(browserB.run(input,async()=>assert.fail('new failure must remain protected')),e=>e.code==='PAID_RETRY_BLOCKED');
+});
+
+test('a reset cannot release an in-memory call which is still running',async()=>{
+ const guard=createSpendGuard(storage());let release;
+ const first=guard.run(input,async()=>{await new Promise(r=>release=r);return 'ok';});
+ while(!release)await new Promise(r=>setTimeout(r,1));
+ guard.syncReset('1234567890abcdef1234567890abcdef');
+ await assert.rejects(guard.run(input,async()=>assert.fail('duplicate')),e=>e.code==='GENERATION_IN_FLIGHT');
+ release();await first;
+});
+
+test('an unsent automatic retry preserves an earlier paid failure',async()=>{
+ const guard=createSpendGuard(storage());
+ await assert.rejects(guard.run(input,async()=>{throw new Error('paid failure');}));
+ await assert.rejects(guard.run({...input,automatic},async()=>{throw Object.assign(new Error('preflight'),{requestSent:false});}));
+ await assert.rejects(guard.run(input,async()=>assert.fail('paid failure erased')),e=>e.code==='PAID_RETRY_BLOCKED');
+});
