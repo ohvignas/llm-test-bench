@@ -430,23 +430,23 @@ async function streamChatCompletionRaw({ modelId, messages, tools, appTitle, onC
 }
 
 // Empty, completed answers must not silently trigger another paid attempt.
-function requireCompletionContent(content, stats) {
+function requireCompletionContent(content, stats, settings) {
   if (stats.finishReason === 'content_filter') {
     throw Object.assign(new Error(generationFeedback(stats).message), {code:'CONTENT_FILTERED',retryable:false,stats});
   }
   if (content.trim()) return;
   const exhausted = stats.finishReason === 'length';
-  const detail = stats.reasoningTokens != null ? ` (${stats.reasoningTokens} tokens de raisonnement)` : '';
+  const feedback = exhausted ? generationFeedback({...stats,responseChars:0},settings) : null;
   const error = new Error(exhausted
-    ? `Budget de sortie épuisé sans contenu${detail}. Réduisez le raisonnement ou augmentez le budget total avant de relancer manuellement.`
+    ? feedback.message
     : 'Le modèle a terminé sans renvoyer de contenu. Aucun nouvel appel automatique.');
-  Object.assign(error, { code: exhausted ? 'OUTPUT_TOKEN_LIMIT' : 'EMPTY_RESPONSE', retryable: false, stats });
+  Object.assign(error, { code: exhausted ? 'OUTPUT_TOKEN_LIMIT' : 'EMPTY_RESPONSE', retryable: false, stats, feedback });
   throw error;
 }
 
 // ── Generic streaming chat completion ──
 
-async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onChunk, params, onStats, telemetry, signal }) {
+async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onChunk, params, onStats, telemetry, signal, settings }) {
   signal?.throwIfAborted();
   const apiKey = await getApiKeyForRequest();
   if (!apiKey) throw new Error('OpenRouter API key not set');
@@ -536,10 +536,10 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
       }
     } finally {
       try { await reader.cancel(); } catch { /* already closed */ }
-      resultStats = stats.finish();
+      resultStats = {...stats.finish(),responseChars:full.length};
       onStats?.(resultStats);
     }
-    requireCompletionContent(full, resultStats);
+    requireCompletionContent(full, resultStats, settings);
     return full;
   }
 
@@ -549,9 +549,9 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
   if (data.choices?.[0]?.message?.reasoning) stats.markReasoning();
   stats.setFinishReason(data.choices?.[0]?.finish_reason);
   stats.setUsage(data.usage);
-  const resultStats = stats.finish();
+  const resultStats = {...stats.finish(),responseChars:content.length};
   onStats?.(resultStats);
-  requireCompletionContent(content, resultStats);
+  requireCompletionContent(content, resultStats, settings);
   return content;
 }
 

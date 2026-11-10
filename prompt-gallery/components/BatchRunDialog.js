@@ -14,6 +14,7 @@ import {clearFailedGenerationBlocks} from '../../shared/services/generation-spen
 import {ModelSettingsPanel} from './ModelSettingsPanel.js';
 import { batchPromptChoices, setVisibleSelection } from '../services/batchPromptSearch.js';
 import { runBatch } from '../services/batchRunner.js';
+import { progressivePlan } from '../services/progressiveGeneration.js';
 import { getInFlight, subscribeInFlight } from '../../shared/services/generation-telemetry.js';
 import { batchLiveStatus, batchItemRunning } from '../services/batchLiveProgress.js';
 import { PROMPT_SETS, promptSetOf } from '../services/library.js';
@@ -130,6 +131,7 @@ export function BatchRunDialog({
 
   // Options
   const [mode, setMode] = useState('quick');
+  const [progressive, setProgressive] = useState(true);
   const [healAttempts, setHealAttempts] = useState(1);
   const [maxRepairRounds, setMaxRepairRounds] = useState(1);
   const [saveBothOnHeal] = useState(true); // per product decision: always keep original + healed
@@ -220,6 +222,21 @@ export function BatchRunDialog({
   const canRun = runModels.length > 0;
   const selectedInList = hasModel && batchModels.some(m => batchModelKey(m) === batchModelKey(model));
   const selectedCount = selectedPrompts.length;
+  const selectedPlans = selectedPrompts.map(prompt => ({prompt, stages: progressivePlan(prompt)})).filter(plan => plan.stages.length);
+  const progressiveActive = mode === 'quick' && progressive && selectedPlans.length > 0;
+  const shouldSkip = (prompt, selectedModel) => {
+    if (!skipExisting) return false;
+    try { return !!deps.hasExistingForModel?.(prompt, selectedModel); } catch { return false; }
+  };
+  const plannedCalls = mode === 'quick' ? runModels.reduce((total, selectedModel) => total + selectedPrompts.reduce((count, prompt) => {
+    if (shouldSkip(prompt, selectedModel)) return count;
+    return count + (progressive ? progressivePlan(prompt).length || 1 : 1);
+  }, 0), 0) : null;
+  const stageTokenLimit = (stage, report) => {
+    const configured = report.settings?.params.max_tokens ?? report.settings?.params.max_completion_tokens;
+    const selectedBudget = settingsOverrides[batchModelKey(report.model)]?.totalTokens ?? totalTokens;
+    return Math.min(...[stage.maxTokens, configured, selectedBudget].filter(value => Number.isSafeInteger(value) && value > 0));
+  };
 
   const alreadyRunCount = useMemo(() => {
     let n = 0;
@@ -307,6 +324,7 @@ export function BatchRunDialog({
           healAttempt: event.healAttempt || cur.healAttempt || 0,
           healed: event.healed ?? cur.healed,
           savedIds: event.savedIds || cur.savedIds || [],
+          stage: event.stage || cur.stage,
           repairRound: event.repairRound || event.repairRounds || cur.repairRound || 0,
           verificationStatus: event.verificationStatus || cur.verificationStatus || '',
         };
@@ -424,6 +442,7 @@ export function BatchRunDialog({
           model: lane.model,
           options: {
             mode,
+            progressive,
             heal: mode === 'runtime-heal',
             healAttempts,
             maxRepairRounds,
@@ -474,7 +493,7 @@ export function BatchRunDialog({
       setPhase('done');
       startingRef.current=false;
     }
-  }, [canRun, hasDirectory, selectedPrompts, runModels, laneMode, mode, healAttempts, maxRepairRounds, saveBothOnHeal,
+  }, [canRun, hasDirectory, selectedPrompts, runModels, laneMode, mode, progressive, healAttempts, maxRepairRounds, saveBothOnHeal,
       skipExisting, delaySec, apiRetries, spendProtection, totalTokens, reasoningTokens, settingsProfile, settingsOverrides, apiCatalogue, allModels, showLiveOutput, runId, deps, refreshCapabilities, handleEvent, waitAtPauseBoundary, addToast]);
 
   const pause = useCallback(() => {
@@ -755,7 +774,7 @@ export function BatchRunDialog({
         <div class="batch-options">
           <label class="batch-opt batch-mode-opt">
             <input type="radio" name="batch-mode" value="quick" checked=${mode === 'quick'} onChange=${() => setMode('quick')} />
-            <span><strong>Rapide</strong><small>Générer une fois à partir du prompt et du déroulement existants.</small></span>
+            <span><strong>Rapide</strong><small>Générer directement, ou construire par étapes les prompts compatibles.</small></span>
           </label>
           <label class="batch-opt batch-mode-opt">
             <input type="radio" name="batch-mode" value="runtime-heal" checked=${mode === 'runtime-heal'} onChange=${() => setMode('runtime-heal')} />
@@ -766,6 +785,22 @@ export function BatchRunDialog({
               checked=${mode === 'verified'} onChange=${() => setMode('verified')} />
             <span><strong>Vérifié</strong><small>Évaluer les exigences du prompt à partir des observations du bac à sable.</small></span>
           </label>
+          ${mode === 'quick' && html`<label class="batch-opt">
+            <input type="checkbox" checked=${progressive} onChange=${e => setProgressive(e.target.checked)} />
+            <span>Construire les prompts GTA VI par étapes, avec un appel par étape</span>
+          </label>
+          <p class="batch-opt-hint">La première étape vise une version jouable ; les suivantes l’enrichissent. Chaque étape terminée est enregistrée. Au premier échec, la construction s’arrête et les versions déjà enregistrées restent disponibles. Le résultat final n’est pas garanti. Décochez pour envoyer le prompt d’origine en un appel.</p>`}
+          ${progressiveActive && html`<section class="batch-prompt-selection" aria-label="Appels prévus pour la construction par étapes">
+            <strong>${plannedCalls} appel${plannedCalls === 1 ? '' : 's'} prévu${plannedCalls === 1 ? '' : 's'} pour ce lot</strong>
+            <p>Un appel par étape et par modèle, plus un appel par prompt sans étapes. Les prompts ignorés sont exclus. Un arrêt ou un échec peut réduire ce nombre. Chaque appel peut être facturé.</p>
+            ${selectedPlans.map(({prompt, stages}) => html`<div key=${prompt.id}>
+              <strong>${prompt.title} · ${stages.length} étapes par modèle</strong>
+              <ol>${stages.map(stage => html`<li key=${stage.id}>${stage.title} · plafond OpenRouter ${stage.maxTokens.toLocaleString('fr-FR')} tokens</li>`)}</ol>
+            </div>`)}
+            <p>Sur OpenRouter, ces plafonds incluent raisonnement et code. Une limite API ou un réglage individuel plus bas reste prioritaire. Les autres fournisseurs conservent leurs réglages natifs : les plafonds du plan ne leur sont pas appliqués.</p>
+            <p>Sur OpenRouter, les étapes utilisent le profil Génération de code : raisonnement réduit selon les capacités API, même si vous avez choisi un effort supérieur pour les générations en un appel.</p>
+            <ul>${previewReports.map(report => html`<li key=${batchModelKey(report.model)}>${report.model.label || report.model.modelId} : ${report.error ? 'réglages à corriger avant le lancement' : report.isOpenRouter ? `jusqu’à ${stageTokenLimit({maxTokens:Math.max(...selectedPlans.flatMap(plan => plan.stages.map(stage => stage.maxTokens)))}, report).toLocaleString('fr-FR')} tokens par étape` : 'réglages natifs du fournisseur ; plafonds du plan non appliqués'}</li>`)}</ul>
+          </section>`}
           ${mode === 'runtime-heal' && html`
             <label class="batch-opt batch-opt-indent">
               <span>Tentatives maximales</span>
@@ -816,6 +851,7 @@ export function BatchRunDialog({
           <p class="batch-opt-hint">Le profil par défaut utilise un raisonnement réduit et un plafond de 32 768 tokens, ajustés selon l’API. Le profil maximal utilise l’effort le plus élevé et la sortie maximale annoncés par chaque modèle. Les appels peuvent durer plus longtemps et coûter davantage. Les tokens de raisonnement peuvent consommer tout le budget ; aucun site complet n’est garanti. Aucun appel payant n’est lancé par l’actualisation.</p>
           ${settingsProfile==='manual'&&html`<label class="batch-opt"><span>Budget total demandé par appel</span><input class="form-input" type="number" min="1" value=${totalTokens} onChange=${e=>setTotalTokens(Number(e.target.value))}/></label>
             <label class="batch-opt"><span>Budget de raisonnement demandé (si l’API l’accepte)</span><input class="form-input" type="number" min="1" value=${reasoningTokens} onChange=${e=>setReasoningTokens(Number(e.target.value))}/></label>`}
+          ${progressiveActive && html`<p class="batch-opt-hint">Les réglages ci-dessous s’appliquent aux générations en un appel. Sur OpenRouter, les plafonds et le profil Génération de code annoncés dans le plan prennent priorité pour les étapes GTA VI ; un plafond individuel plus bas reste respecté.</p>`}
           <${ModelSettingsPanel} reports=${previewReports} loading=${settingsLoading} error=${settingsError}
             onRefresh=${()=>refreshCapabilities().catch(()=>{})} onOverride=${overrideSettings} onReset=${()=>setSettingsOverrides({})}/>
           <label class="batch-opt">
@@ -831,7 +867,7 @@ export function BatchRunDialog({
     <div class="modal-footer">
       <button class="btn" onClick=${onClose}>Annuler</button>
       <button class="btn btn-primary btn-generate" onClick=${start} disabled=${!canRun || !hasDirectory || selectedCount === 0 || settingsLoading || previewReports.some(r=>r.error)}>
-        <i class="fa-solid fa-play"></i> Lancer ${selectedCount} prompt${selectedCount === 1 ? '' : 's'}${isMulti ? ` × ${runModels.length} modèles` : ''}
+        <i class="fa-solid fa-play"></i> Lancer ${selectedCount} prompt${selectedCount === 1 ? '' : 's'}${isMulti ? ` × ${runModels.length} modèles` : ''}${plannedCalls !== null ? ` · ${plannedCalls} appel${plannedCalls === 1 ? '' : 's'} prévu${plannedCalls === 1 ? '' : 's'}` : ''}
       </button>
     </div>
   `;
@@ -921,6 +957,7 @@ export function BatchRunDialog({
                 <span class="batch-run-title" title=${rowTitle(p)}>${p.title}${runIsMulti && p.modelLabel ? html`<span class="batch-run-model">${p.modelLabel}</span>` : null}</span>
                 <span class="batch-run-cost">${it.status==='not-started'?'Aucun appel':generationCostLabel(idx)}</span>
                 <span class="batch-run-status">
+                  ${it.stage ? html`<span title=${it.stage.title}>Étape ${it.stage.index}/${it.stage.total} · ${it.stage.title} · </span>` : null}
                   ${it.status === 'healing' && it.healAttempt ? `correction ${it.healAttempt}`
                     : it.status === 'repairing' && it.repairRound ? `Réparation · cycle ${it.repairRound}`
                     : rowLive ? `${rowLive.label} · ${rowLive.elapsed}` : m.label}
@@ -1045,6 +1082,8 @@ export function BatchRunDialog({
               <span class="batch-run-cost">${it.status==='not-started'?'Aucun appel':generationCostLabel(idx)}</span>
                 <span class="batch-run-status">
                 ${m.label}${it.healed ? html` <span class="batch-healed-chip">corrigé</span>` : null}
+                ${it.stage ? html`<span> · Étape ${it.stage.index}/${it.stage.total} : ${it.stage.title}</span>` : null}
+                ${it.stage && it.status !== 'saved' && it.savedIds?.length ? html`<span> · ${it.savedIds.length} version(s) conservée(s)</span>` : null}
                 ${it.repairRound ? html` <span class="batch-healed-chip">${it.repairRound} correction${it.repairRound === 1 ? '' : 's'}</span>` : null}
                 ${it.status === 'error' && it.message ? html`<span class="batch-run-err" title=${it.message}> — ${it.message}</span>` : null}
                 ${it.savedIds?.length ? html`

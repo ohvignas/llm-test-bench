@@ -1,5 +1,6 @@
 // OpenRouter's advertised capabilities are authoritative; never infer them from model names.
 const EFFORTS=['max','xhigh','high','medium','low','minimal','none'];
+const rankedEfforts=efforts=>EFFORTS.filter(e=>Array.isArray(efforts)&&efforts.includes(e));
 const positive=value=>Number.isSafeInteger(value)&&value>0?value:null;
 const own=(object,key)=>Object.prototype.hasOwnProperty.call(object||{},key);
 function invalid(message) { return Object.assign(new Error(message),{code:'MODEL_SETTINGS',retryable:false}); }
@@ -45,19 +46,22 @@ export function resolveModelSettings({model,profile='code',params={},budget={},r
   const reasoning=caps.reasoning;
   const requestedReasoning=params.reasoning || (params.reasoning_effort?{effort:params.reasoning_effort}:params.enable_thinking===false?{enabled:false}:null);
   if(reasoning&&(supported.has('reasoning')||supported.has('reasoning_effort'))) {
-    const efforts=reasoning.supported_efforts===null?EFFORTS:reasoning.supported_efforts;
+    const efforts=reasoning.supported_efforts===null?EFFORTS:rankedEfforts(reasoning.supported_efforts);
     if(reasoning.mandatory&&(requestedReasoning?.enabled===false||requestedReasoning?.effort==='none'||budget.reasoningEffort==='none'))throw invalid('Le raisonnement est obligatoire pour ce modèle.');
-    if(Array.isArray(efforts)&&efforts.length) {
-      const enabled=efforts.filter(e=>e!=='none');
-      const chosen=profile==='manual'?(budget.reasoningEffort||(requestedReasoning?.enabled===false?'none':requestedReasoning?.effort)||reasoning.default_effort||enabled.at(-1))
-        :profile==='maximum'?enabled[0]:(['low','minimal','medium'].find(e=>enabled.includes(e))||enabled.at(-1));
-      if(!efforts.includes(chosen))throw invalid(`Effort non accepté par l’API : ${chosen}. Valeurs : ${efforts.join(', ')}.`);
-      if(supported.has('reasoning'))out.reasoning={effort:chosen};else out.reasoning_effort=chosen;
-      if(requestedReasoning?.max_tokens!=null)adjustments.push('Budget fixe remplacé par l’effort annoncé par l’API.');
-    } else if(reasoning.supports_max_tokens&&supported.has('reasoning')) {
+    const manualNone=profile==='manual'&&(budget.reasoningEffort==='none'||requestedReasoning?.effort==='none'||requestedReasoning?.enabled===false);
+    const fixedBudget=reasoning.supports_max_tokens&&supported.has('reasoning')&&(!efforts.length||(['code','manual'].includes(profile)&&!manualNone));
+    if(fixedBudget) {
       const amount=Number(budget.reasoningTokens??requestedReasoning?.max_tokens??Math.min(4096,Math.floor(total/4)));
       if(!positive(amount)||amount>=total)throw invalid('Le budget de raisonnement doit être positif et inférieur au total.');
       out.reasoning={max_tokens:amount};
+      adjustments.push('Budget de raisonnement explicite utilisé selon les capacités annoncées par l’API.');
+    } else if(efforts.length) {
+      const enabled=efforts.filter(e=>e!=='none');
+      const chosen=profile==='manual'?(budget.reasoningEffort||(requestedReasoning?.enabled===false?'none':requestedReasoning?.effort)||reasoning.default_effort||enabled.at(-1))
+        :profile==='maximum'?enabled[0]:enabled.at(-1);
+      if(!efforts.includes(chosen))throw invalid(`Effort non accepté par l’API : ${chosen}. Valeurs : ${efforts.join(', ')}.`);
+      if(supported.has('reasoning'))out.reasoning={effort:chosen};else out.reasoning_effort=chosen;
+      if(requestedReasoning?.max_tokens!=null)adjustments.push('Budget fixe remplacé par l’effort annoncé par l’API.');
     } else {
       adjustments.push('Raisonnement géré par le modèle : aucun contrôle précis annoncé par l’API.');
     }
@@ -69,10 +73,18 @@ export function resolveModelSettings({model,profile='code',params={},budget={},r
     maxOutputTokens:limit,contextLength:caps.contextLength,supportedParameters:caps.supportedParameters,defaultParameters:caps.defaultParameters||{},mandatoryReasoning:!!reasoning?.mandatory,
     supportedEfforts:reasoning?.supported_efforts===null?EFFORTS:reasoning?.supported_efforts||[],params:out,adjustments};
 }
-export function generationFeedback(stats={}) {
+export function generationFeedback(stats={},settings=stats.settings) {
   if(stats.finishReason==='content_filter')return {kind:'content-filtered',message:'Arrêt signalé par le fournisseur : filtrage de contenu (content_filter). Motif précis non communiqué. Aucun nouvel appel automatique.'};
   if(stats.finishReason!=='length')return null;
   const visible=Number.isFinite(stats.completionTokens)&&Number.isFinite(stats.reasoningTokens)?stats.completionTokens-stats.reasoningTokens:null;
-  return visible===0?{kind:'reasoning-exhausted',nextProfile:'code',message:'Budget consommé par le raisonnement sans code. Passez au profil Génération de code ou réduisez le périmètre ; aucun appel automatique.'}
-    :{kind:'truncated',message:'Réponse incomplète : limite de sortie atteinte. Augmentez le budget dans la limite API ou découpez le prompt ; aucun appel automatique.'};
+  const noContent=Number.isFinite(stats.responseChars)?stats.responseChars===0:visible===0;
+  if(noContent) {
+    const reasoningOnly=Number.isFinite(stats.reasoningTokens)&&stats.reasoningTokens>0;
+    const efforts=rankedEfforts(settings?.supportedEfforts);
+    const effort=settings?.params?.reasoning?.effort??settings?.params?.reasoning_effort;
+    const minimum=effort&&efforts.length&&effort===efforts.at(-1)?` L’effort « ${effort} » est déjà le minimum annoncé pour ce modèle.`:'';
+    const detail=reasoningOnly?` (${stats.reasoningTokens} tokens de raisonnement)`:'';
+    return {kind:reasoningOnly?'reasoning-exhausted':'empty-output-limit',message:`Budget de sortie épuisé sans contenu${detail}.${minimum} Utilisez une construction par étapes ou un prompt plus ciblé. Aucun nouvel appel automatique.`};
+  }
+  return {kind:'truncated',message:'Réponse incomplète : limite de sortie atteinte. Découpez la construction en étapes ou utilisez un prompt plus ciblé ; aucun appel automatique.'};
 }

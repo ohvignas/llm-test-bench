@@ -75,6 +75,21 @@ test('a reasoning-only exhausted stream reports the token budget and disables au
   globalThis.fetch=async()=>new Response('data: {"choices":[{"delta":{},"finish_reason":"length"}],"usage":{"completion_tokens":65536,"completion_tokens_details":{"reasoning_tokens":65536}}}\n\ndata: [DONE]\n\n');
   await assert.rejects(raw.streamChat(args),error=>error.code==='OUTPUT_TOKEN_LIMIT'&&error.retryable===false&&error.message.includes('65536'));
 });
+test('empty output at the minimum advertised effort suggests stages without increasing the billable budget',async()=>{
+ let finalStats;
+ globalThis.fetch=async()=>new Response('data: {"choices":[{"delta":{},"finish_reason":"length"}],"usage":{"completion_tokens":32768,"completion_tokens_details":{"reasoning_tokens":32767},"cost":0.65934}}\n\ndata: [DONE]\n\n');
+ const settings={profile:'code',params:{reasoning:{effort:'low'}},supportedEfforts:['max','low']};
+ await assert.rejects(raw.streamChat({...args,settings,onStats:value=>{finalStats=value;}}),error=>{
+  assert.equal(error.code,'OUTPUT_TOKEN_LIMIT');
+  assert.equal(error.feedback.kind,'reasoning-exhausted');
+  assert.match(error.message,/minimum annoncé/);
+  assert.match(error.message,/construction par étapes/);
+  assert.doesNotMatch(error.message,/augmentez|passez au profil|réduisez le raisonnement/i);
+  assert.equal(error.stats.cost,.65934);
+  return true;
+ });
+ assert.equal(finalStats.responseChars,0);
+});
 
 test('a non-streamed exhausted answer reports the same failure instead of returning an empty success',async()=>{
   globalThis.fetch=async()=>Response.json({choices:[{message:{content:''},finish_reason:'length'}],usage:{completion_tokens:65536,completion_tokens_details:{reasoning_tokens:65536}}});

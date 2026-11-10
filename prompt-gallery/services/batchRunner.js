@@ -13,6 +13,7 @@
 //   'done'    — the whole run finished: { summary }
 
 import { withPromptCosts } from './batchCosts.js';
+import { progressivePlan, runProgressiveGeneration } from './progressiveGeneration.js';
 
 import { runVerifiedGeneration } from './verifiedGeneration.js';
 
@@ -62,6 +63,7 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
     delayMs: 0,
     apiRetries: 0,
     stopOnFailure: true,
+    progressive: true,
     ...(options || {}),
   };
   if(opts.stopOnFailure) opts.apiRetries=0;
@@ -109,6 +111,23 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
         emit({ type: 'item', index: i, status: 'skipped' });
         continue;
       }
+    }
+
+    if (mode === 'quick' && opts.progressive && progressivePlan(p).length) {
+      const result = await runProgressiveGeneration({prompt:p, model, deps,
+        onEvent:event => emit({...event,index:i}), shouldStop:stop,
+        waitIfPaused:context => pauseGate({...context,index:i,prompt:p})});
+      summary.saved += result.savedIds.length;
+      if (result.completed) summary.generated++;
+      if (result.status === 'error') summary.failed++;
+      const message = result.status === 'saved'
+        ? `${result.completed} étapes terminées ; versions enregistrées.`
+        : `${result.error?.message || 'Exécution arrêtée.'} ${result.savedIds.length} version(s) conservée(s).`;
+      emit({type:'item', index:i, status:result.status, message, savedIds:result.savedIds, stage:result.stage});
+      // Continuing a failed plan would pay for work based on a broken checkpoint.
+      if (result.status !== 'saved') { summary.stopped = true; break; }
+      await interruptibleDelay(opts.delayMs, stop, pause);
+      continue;
     }
 
     // ── Verified strategy ──

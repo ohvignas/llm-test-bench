@@ -1313,11 +1313,13 @@ function App() {
       });
     },
     load: (id) => meta.loadGeneration(rootHandle, id),
-    save: async ({ prompt, promptText, response, model: mdl, tags, kind, healAttempts, verification, derivedFrom, billing }) => {
+    save: async ({ prompt, promptText, response, model: mdl, tags, kind, healAttempts, verification, derivedFrom, billing, progressive, runStatus }) => {
       const derivedTitle = prompt.title
         || (promptText.split('\n').find(l => l.trim()) || 'untitled').trim().slice(0, 60);
       const folder = library.promptFolderId({ ...prompt, title: derivedTitle });
-      const note = kind === 'healed'
+      const note = kind === 'progressive'
+        ? `Construction par étapes ${progressive.index}/${progressive.total} : ${progressive.title}${progressive.complete ? ' — dernière étape' : ' — version intermédiaire'}`
+        : kind === 'healed'
         ? `Batch self-heal (${healAttempts} attempt${healAttempts === 1 ? '' : 's'})`
         : kind === 'verified-repair'
           ? `Verified generation repair round ${verification?.round || 0}`
@@ -1330,6 +1332,7 @@ function App() {
         providerId: mdl.providerId,
         aiGenerated: true,
         ...(billing ? {billing} : {}),
+        ...(progressive ? {progressive, runStatus} : {}),
         batch: {
           // A multi-model batch gives each model its own run (lane) id and ties
           // them with groupId; a one-model batch has neither and uses the dialog's id.
@@ -1354,6 +1357,7 @@ function App() {
           || (folder.startsWith(slug + '-') && /^\d+$/.test(folder.slice(slug.length + 1)));
         if (!folderMatch) return false;
         const m = g.metadata || {};
+        if (m.progressive && !m.progressive.complete) return false;
         return m.modelId === mdl.modelId || (mdl.label && m.model === mdl.label);
       });
     },

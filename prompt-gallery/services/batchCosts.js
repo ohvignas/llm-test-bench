@@ -17,7 +17,8 @@ export function withPromptCosts(deps, emit) {
     wrapped[role] = async (...args) => {
       const position = role === 'generate' ? 1 : 0;
       const options = args[position] || {};
-      const call = {id:globalThis.crypto?.randomUUID?.() || `call-${Date.now().toString(36)}-${++sequence}`,role,startedAt:Date.now(),status:'pending',usd:null};
+      const call = {id:globalThis.crypto?.randomUUID?.() || `call-${Date.now().toString(36)}-${++sequence}`,role,startedAt:Date.now(),status:'pending',usd:null,
+        ...(options.stage ? {stage:options.stage} : {})};
       const publish = () => { calls.set(call.id,{...call}); emit({type:'cost',call:{...call}}); };
       publish();
       args[position] = {...options,onStats:stats => {
