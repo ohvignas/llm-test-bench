@@ -176,6 +176,7 @@ function App() {
   // UI state
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showBatchDialog, setShowBatchDialog] = useState(false);
+  const [batchPresentation, setBatchPresentation] = useState('modal');
   const batchIdRef = useRef('');
   // One controller per batch: Stop aborts every in-flight call (all lanes), so
   // a CLI-agent run with no time limit cannot hold the batch open.
@@ -1378,6 +1379,8 @@ function App() {
   }), [batchTarget, rootHandle, generations]);
 
   const handleOpenBatch = useCallback(async () => {
+    // Reopen the existing runner; navigating must not create another batch id.
+    if (showBatchDialog) { setBatchPresentation('modal'); return; }
     if (!rootHandle) {
       addToast('Connectez d’abord un dossier : les générations du lot y seront enregistrées', 'error');
       handlePickDirectory();
@@ -1393,11 +1396,13 @@ function App() {
     } catch (e) { /* fall through — save will surface any real problem */ }
     await refreshGenerations();
     batchIdRef.current = `batch-${Date.now().toString(36)}`;
+    setBatchPresentation('modal');
     setShowBatchDialog(true);
-  }, [rootHandle, handlePickDirectory, refreshGenerations, addToast]);
+  }, [showBatchDialog, rootHandle, handlePickDirectory, refreshGenerations, addToast]);
 
   const handleCloseBatch = useCallback(() => {
     setShowBatchDialog(false);
+    setBatchPresentation('modal');
     refreshGenerations();
     refreshLibrary();
   }, [refreshGenerations, refreshLibrary]);
@@ -1695,7 +1700,37 @@ function App() {
       />
     `}
     <div class="main-content">
-      ${renderContent()}
+      <!-- Keep the runner mounted in this position across every app route. -->
+      ${showBatchDialog && html`
+        <${BatchRunDialog}
+          key="active-batch"
+          presentation=${batchPresentation === 'modal' ? 'modal' : batchPresentation === 'live' && route.name === 'compare' ? 'compare' : 'minimized'}
+          onOpenComparison=${() => { setBatchPresentation('live'); navigate('compare'); }}
+          onMinimize=${() => setBatchPresentation('minimized')}
+          onRestore=${() => setBatchPresentation('modal')}
+          prompts=${libraryPrompts}
+          model=${batchModel}
+          allModels=${allModels.filter(m => !disabledProviders.includes(m.providerId))}
+          modelsLoading=${pickerLoading}
+          backend=${backend}
+          selectedProviderId=${selectedProviderId}
+          selectedModelId=${selectedModelId}
+          agentId=${selectedAgentId}
+          agentModelId=${agentModels[selectedAgentId] || ''}
+          onExecutorChange=${handleExecutorChange}
+          onProviderSettingsClick=${() => setShowProviderSettings(true)}
+          hasDirectory=${!!rootHandle}
+          onPickDirectory=${handlePickDirectory}
+          deps=${batchDeps}
+          runId=${batchIdRef.current}
+          theme=${theme}
+          onOpenGallery=${() => navigate('gallery')}
+          onOpenRuns=${(id) => navigate(id ? 'runs/' + encodeURIComponent(id) : 'runs')}
+          onClose=${handleCloseBatch}
+          addToast=${addToast}
+        />
+      `}
+      ${!(showBatchDialog && batchPresentation === 'live' && route.name === 'compare') && renderContent()}
     </div>
     ${showSaveDialog && html`
       <${SaveDialog}
@@ -1710,30 +1745,6 @@ function App() {
         response=${response}
         providerId=${batchModel.providerId}
         modelId=${batchModel.modelId}
-      />
-    `}
-    ${showBatchDialog && html`
-      <${BatchRunDialog}
-        prompts=${libraryPrompts}
-        model=${batchModel}
-        allModels=${allModels.filter(m => !disabledProviders.includes(m.providerId))}
-        modelsLoading=${pickerLoading}
-        backend=${backend}
-        selectedProviderId=${selectedProviderId}
-        selectedModelId=${selectedModelId}
-        agentId=${selectedAgentId}
-        agentModelId=${agentModels[selectedAgentId] || ''}
-        onExecutorChange=${handleExecutorChange}
-        onProviderSettingsClick=${() => setShowProviderSettings(true)}
-        hasDirectory=${!!rootHandle}
-        onPickDirectory=${handlePickDirectory}
-        deps=${batchDeps}
-        runId=${batchIdRef.current}
-        theme=${theme}
-        onOpenGallery=${() => navigate('gallery')}
-        onOpenRuns=${(id) => navigate(id ? 'runs/' + encodeURIComponent(id) : 'runs')}
-        onClose=${handleCloseBatch}
-        addToast=${addToast}
       />
     `}
     ${promptForm && html`

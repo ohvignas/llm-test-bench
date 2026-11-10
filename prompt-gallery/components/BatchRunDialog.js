@@ -5,7 +5,9 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'preact/hooks'
 import { ExecutorModelSelector } from '../../shared/components/ExecutorModelSelector.js';
 import { CellEditor } from '../../shared/components/CellEditor.js';
 import { BatchCosts } from './BatchCosts.js';
+import { BatchLiveComparison } from './BatchLiveComparison.js';
 import { costTotals, formatUsd } from '../services/batchCosts.js';
+import { executionMetrics, formatDuration } from '../services/executionMetrics.js';
 import { BatchGenerationLog } from './BatchGenerationLog.js';
 import { createBatchJournal, logModelKey, safeLogText } from '../services/batchGenerationLog.js';
 import { HtmlLightbox } from './BatchReview.js';
@@ -92,6 +94,10 @@ export function BatchRunDialog({
   onOpenGallery,
   onOpenRuns,
   onClose,
+  presentation = 'modal', // Presentation changes never unmount the batch runner.
+  onOpenComparison,
+  onMinimize,
+  onRestore,
   addToast,
 }) {
   // phase: 'config' | 'running' | 'done'
@@ -255,11 +261,11 @@ export function BatchRunDialog({
 
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape' && phase !== 'running') onClose();
+      if (e.key === 'Escape' && phase !== 'running' && presentation === 'modal') onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [phase, onClose]);
+  }, [phase, presentation, onClose]);
 
   const toggleOne = useCallback((id) => {
     setSelectedIds(prev => {
@@ -903,6 +909,23 @@ export function BatchRunDialog({
     entries=${logEntries} models=${logModels} calls=${liveCalls} startedAt=${journalStartedAtRef.current}
     now=${rateClock} filter=${logFilter} onFilterChange=${setLogFilter} done=${done} costCalls=${costCalls} />`;
 
+  const renderRunControls = () => html`
+    <div class="modal-footer">
+      ${pauseState === 'paused'
+        ? html`<button class="btn btn-primary batch-resume-button" onClick=${resume}>
+            <i class="fa-solid fa-play"></i> Reprendre
+          </button>`
+        : html`<button class="btn batch-pause-button" onClick=${pause} disabled=${pauseState === 'pausing' || stopRef.current}
+            title="Terminer l’appel au modèle en cours, puis suspendre avant le suivant">
+            <i class=${`fa-solid ${pauseState === 'pausing' ? 'fa-spinner fa-spin' : 'fa-pause'}`}></i>
+            ${pauseState === 'pausing' ? 'Mise en pause…' : 'Pause'}
+          </button>`}
+      <button class="btn btn-danger" onClick=${stop} disabled=${stopRef.current}>
+        <i class="fa-solid fa-stop"></i> ${stopRef.current ? 'Arrêt…' : 'Arrêter'}
+      </button>
+    </div>
+  `;
+
   const renderRunning = () => html`
     <div class="modal-body batch-running">
       <div class="batch-progress">
@@ -1050,20 +1073,7 @@ export function BatchRunDialog({
       `}
     </div>
 
-    <div class="modal-footer">
-      ${pauseState === 'paused'
-        ? html`<button class="btn btn-primary batch-resume-button" onClick=${resume}>
-            <i class="fa-solid fa-play"></i> Reprendre
-          </button>`
-        : html`<button class="btn batch-pause-button" onClick=${pause} disabled=${pauseState === 'pausing' || stopRef.current}
-            title="Terminer l’appel au modèle en cours, puis suspendre avant le suivant">
-            <i class=${`fa-solid ${pauseState === 'pausing' ? 'fa-spinner fa-spin' : 'fa-pause'}`}></i>
-            ${pauseState === 'pausing' ? 'Mise en pause…' : 'Pause'}
-          </button>`}
-      <button class="btn btn-danger" onClick=${stop} disabled=${stopRef.current}>
-        <i class="fa-solid fa-stop"></i> ${stopRef.current ? 'Arrêt…' : 'Arrêter'}
-      </button>
-    </div>
+    ${renderRunControls()}
   `;
 
   const renderDone = () => html`
@@ -1131,19 +1141,55 @@ export function BatchRunDialog({
     </div>
   `;
 
+  const renderComparison = () => {
+    const totals = costTotals(costCalls);
+    const timing = executionMetrics(costCalls, {now:rateClock, done:phase === 'done', startedAt:journalStartedAtRef.current, finishedAt:batchFinishedAt});
+    const confirmedCost = totals.confirmedUsd == null
+      ? phase === 'done' ? 'Coût non communiqué' : 'Coût en attente'
+      : `${formatUsd(totals.confirmedUsd)}${totals.missingCosts ? ` + ${totals.missingCosts} coût(s) en attente ou non communiqué(s)` : ''}`;
+    return html`
+    <section class="batch-live-workspace" aria-label="Suivi du lot en direct">
+      <header class="batch-live-header">
+        <div><h2>Comparer en direct</h2><p>${doneCount} / ${runList.length} terminé(s) · ${phase === 'done' ? 'Lot terminé' : pauseState === 'paused' ? 'En pause' : 'Lot en cours'}</p></div>
+        <div class="batch-window-actions">
+          <button class="btn" onClick=${onRestore}>Journal et détails du lot</button>
+          <button class="btn" onClick=${onMinimize}>Réduire</button>
+          ${phase === 'done' && html`<button class="btn" onClick=${onClose}>Fermer le suivi</button>`}
+        </div>
+      </header>
+      <details class="batch-live-summary">
+        <summary>Durée du lot : ${formatDuration(timing.elapsedMs)} · ${totals.requestCount} appel(s) API · Total confirmé : ${confirmedCost} · Détails</summary>
+        <${BatchCosts} calls=${costCalls} done=${phase === 'done'} startedAt=${journalStartedAtRef.current} finishedAt=${batchFinishedAt}/>
+      </details>
+      <${BatchLiveComparison} models=${logModels} runList=${runList} items=${items} outputs=${outputs} costCalls=${costCalls}
+        liveCalls=${liveCalls} now=${rateClock} done=${phase === 'done'} paused=${pauseState === 'paused'} theme=${theme}
+        onFullscreen=${openFullscreen} showLiveOutput=${showLiveOutput}/>
+      ${phase === 'running' ? renderRunControls() : html`<div class="modal-footer"><button class="btn" onClick=${() => {setPhase('config');onRestore?.();}}>Nouvelle exécution</button><button class="btn" onClick=${() => {onOpenGallery?.();onClose();}}>Voir dans la galerie</button></div>`}
+    </section>`;
+  };
+
   return html`
     <${Fragment}>
-      <div class="modal-overlay">
+      ${presentation === 'minimized' ? html`
+        <aside class="batch-live-dock" aria-label="Lot réduit">
+          <span><strong>${phase === 'done' ? 'Lot terminé' : pauseState === 'paused' ? 'Lot en pause' : 'Lot en cours'}</strong> · ${doneCount}/${runList.length} terminé(s)</span>
+          <button class="btn btn-primary" onClick=${onOpenComparison}>Comparer en direct</button>
+          <button class="btn" onClick=${onRestore}>Ouvrir le lot</button>
+        </aside>` : presentation === 'compare' && phase !== 'config' ? renderComparison() : html`<div class="modal-overlay">
         <div class=${`modal batch-dialog ${phase === 'running' ? 'is-running' : ''}`} onClick=${(e) => e.stopPropagation()}>
           <div class="modal-header">
             <h2><i class="fa-solid fa-layer-group"></i> Exécution par lot</h2>
+            <div class="batch-window-actions">
+            ${phase !== 'config' && onOpenComparison && html`<button class="btn btn-primary btn-sm" onClick=${onOpenComparison}>Comparer en direct</button>`}
+            ${phase !== 'config' && onMinimize && html`<button class="btn btn-sm" onClick=${onMinimize}>Réduire</button>`}
             ${phase !== 'running' && html`
-              <button class="btn-icon" onClick=${onClose}><i class="fa-solid fa-xmark"></i></button>
+              <button class="btn-icon" aria-label="Fermer le lot" onClick=${onClose}><i class="fa-solid fa-xmark"></i></button>
             `}
+            </div>
           </div>
           ${phase === 'config' ? renderConfig() : phase === 'running' ? renderRunning() : renderDone()}
         </div>
-      </div>
+      </div>`}
       ${fullscreenIndex >= 0 && html`
         <${HtmlLightbox}
           html=${fullscreenHtml}
