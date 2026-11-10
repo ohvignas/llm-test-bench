@@ -55,6 +55,8 @@ def initialize(app):
             CREATE TABLE IF NOT EXISTS automatic_runs (
                 id TEXT PRIMARY KEY, model_hash TEXT NOT NULL, calls INTEGER NOT NULL,
                 pending TEXT, created_at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS manual_retries (
+                id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, created_at INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS generation_activity (
                 id TEXT PRIMARY KEY, model TEXT NOT NULL, worker TEXT NOT NULL,
                 started REAL NOT NULL, updated REAL NOT NULL, state TEXT NOT NULL,
@@ -67,6 +69,8 @@ def initialize(app):
                 address TEXT NOT NULL, attempted_at INTEGER NOT NULL);
             CREATE INDEX IF NOT EXISTS login_attempt_time ON login_attempts(attempted_at);
         ''')
+        if 'error' not in {row[1] for row in connection.execute('PRAGMA table_info(generation_activity)')}:
+            connection.execute("ALTER TABLE generation_activity ADD COLUMN error TEXT NOT NULL DEFAULT '{}'")
     database.chmod(0o600)
     @app.teardown_appcontext
     def close_connection(_error):

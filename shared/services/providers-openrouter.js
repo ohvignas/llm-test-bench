@@ -100,13 +100,14 @@ export async function streamChat({ provider, modelId, systemPrompt, userPrompt, 
     telemetry,
     signal,
     automatic:generationOptions?.automatic,
+    explicitRetry:generationOptions?.explicitRetry,
   });
     generationOptions?.validateResult?.(result);
     return result;
   };
   try {
     if(settings)await syncFailedGenerationBlocks();
-    return await (settings ? generationSpendGuard().run({modelId,systemPrompt,userPrompt,params,automatic:generationOptions?.automatic},invoke) : invoke());
+    return await (settings ? generationSpendGuard().run({modelId,systemPrompt,userPrompt,params,automatic:generationOptions?.automatic,explicitRetry:generationOptions?.explicitRetry},invoke) : invoke());
   } catch (error) {
     if (settings && [400,404,422].includes(error.status)) {
       error.retryable = false;

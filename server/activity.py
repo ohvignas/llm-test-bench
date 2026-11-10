@@ -93,3 +93,19 @@ class Activity:
     def finish(self, state):
         self.state = state
         self.flush(force=True)
+
+    def reject(self, status, message):
+        # Store only structured diagnostics, never arbitrary provider text (which
+        # can contain prompts or credentials). The UI still receives the message.
+        detail = {'http_status': status}
+        if status == 402:
+            detail['kind'] = 'credit_required'
+            match = re.search(r'can only afford\s+([\d,]+)\b', message, re.I)
+            if match and match[1].replace(',', '').isdigit() and len(match[1]) < 12:
+                amount = int(match[1].replace(',', ''))
+                if 0 < amount <= 10_000_000:
+                    detail['affordable_tokens'] = amount
+        connection = db()
+        connection.execute('UPDATE generation_activity SET error=? WHERE id=?', (json.dumps(detail), self.id))
+        connection.commit()
+        self.finish('error')

@@ -42,6 +42,7 @@ def status(root):
                 item['duration_seconds'] = round((now if item['state'] in ACTIVE else row['updated']) - row['started'], 1)
                 item['last_signal_seconds'] = round(max(0, now-row['updated']), 1)
                 item['settings'], item['usage'] = json.loads(row['settings']), json.loads(row['usage'])
+                item['error'] = json.loads(row['error']) if 'error' in row.keys() else {}
                 calls.append(item)
         https = 0
         for name in ('/proc/net/tcp', '/proc/net/tcp6'):

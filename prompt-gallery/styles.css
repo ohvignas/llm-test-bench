@@ -3109,3 +3109,11 @@ button.create-run-label:hover { text-decoration: underline; }
 .execution-summary li { display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px 12px; padding:4px 0; }
 .execution-summary small { color:var(--text-secondary); font-size:11px; }
 .execution-summary-compact { padding:6px 10px; font-size:12px; flex-shrink:0; border-bottom:1px solid var(--border-color); overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
+
+/* Manual recovery keeps the active batch visible and its other calls alive. */
+.batch-retry-review { margin: 16px 0; padding: 16px; border: 1px solid var(--accent); border-radius: 10px; background: var(--bg-secondary); }
+.batch-retry-review p { margin: 8px 0; }
+.batch-retry-review label { display: block; margin: 12px 0; }
+.batch-retry-review input { display: block; max-width: 220px; margin-top: 6px; }
+.batch-error-detail { padding: 10px; color: var(--danger); overflow-wrap: anywhere; white-space: normal; user-select: text; }
+.batch-run-item > .btn { flex-shrink: 0; }

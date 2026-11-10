@@ -447,7 +447,7 @@ function requireCompletionContent(content, stats, settings) {
 
 // ── Generic streaming chat completion ──
 
-async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onChunk, params, onStats, telemetry, signal, settings, automatic }) {
+async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onChunk, params, onStats, telemetry, signal, settings, automatic, explicitRetry }) {
   signal?.throwIfAborted();
   const apiKey = await getApiKeyForRequest();
   if (!apiKey) throw Object.assign(new Error('OpenRouter API key not set'), {requestSent:false});
@@ -474,6 +474,7 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
       'HTTP-Referer': window.location.origin,
       'X-Title': appTitle || 'DevTools Hub',
       ...(SERVER_VAULT && automatic ? {'X-Bench-Automatic':JSON.stringify(automatic)} : {}),
+      ...(SERVER_VAULT && explicitRetry ? {'X-Bench-Retry':explicitRetry} : {}),
     },
     body: JSON.stringify(body),
   });

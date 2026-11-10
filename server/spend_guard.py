@@ -44,9 +44,26 @@ def fingerprint(payload):
                                      separators=(',', ':')).encode()).hexdigest()
 
 
-def reserve(payload, automatic=None):
+def reserve(payload, automatic=None, explicit_retry=None):
     identity = fingerprint(payload)
     connection = db()
+    if explicit_retry:
+        # One reviewed click, one request. Never release another model or an active call.
+        connection.execute('BEGIN IMMEDIATE')
+        try:
+            record = connection.execute('SELECT state FROM generation_guard WHERE fingerprint=?', (identity,)).fetchone()
+            used = connection.execute('SELECT 1 FROM manual_retries WHERE id=?', (explicit_retry,)).fetchone()
+            if used or (record and record['state'] not in ('failed', 'exhausted')):
+                connection.rollback()
+                return None
+            connection.execute('INSERT INTO manual_retries VALUES (?, ?, ?)', (explicit_retry, identity, int(time.time())))
+            connection.execute('INSERT OR REPLACE INTO generation_guard VALUES (?, ?, ?)',
+                (identity, f'pending:{os.getpid()}:{process_marker(os.getpid())}', int(time.time())))
+            connection.commit()
+            return identity
+        except Exception:
+            connection.rollback()
+            raise
     if automatic:
         # A new explicit UI launch grants at most three calls for this model.
         # Failed fingerprints are released only inside this bounded run, never globally.

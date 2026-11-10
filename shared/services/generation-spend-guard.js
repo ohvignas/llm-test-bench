@@ -26,14 +26,15 @@ export function createSpendGuard(storage) {
    storage.removeItem(KEY);
    storage.setItem(RESET_KEY,revision);
   },
-  async run({modelId,systemPrompt,userPrompt,params,automatic},operation) {
+  async run({modelId,systemPrompt,userPrompt,params,automatic,explicitRetry},operation) {
    const base=await digest({modelId,systemPrompt,userPrompt});
    const exact=await digest({base,params});
    try {
     if(pending.has(exact))throw failure('GENERATION_IN_FLIGHT','Cet appel est déjà en cours. Aucun second appel envoyé.');
     const records=read();
     if(automatic && (automatic.limit!==3 || !/^[a-zA-Z0-9-]{16,80}$/.test(automatic.id)))throw failure('AUTOMATIC_LIMIT','Configuration automatique invalide.');
-    if(records.some(r=>(r.base===base&&(r.filtered||r.pending)) || (!automatic&&r.exact===exact)))throw failure('PAID_RETRY_BLOCKED','Relance bloquée : appel en cours, interrompu ou déjà échoué. Aucun second appel envoyé. Vérifiez les réglages ou préparez une reprise.');
+    if(explicitRetry && (automatic || !/^[a-f0-9]{32}$/.test(explicitRetry)))throw failure('MANUAL_RETRY_INVALID','Relance manuelle invalide.');
+    if(records.some(r=>(r.base===base&&(r.filtered||r.pending)) || (!automatic&&!explicitRetry&&r.exact===exact)))throw failure('PAID_RETRY_BLOCKED','Relance bloquée : appel en cours, interrompu ou déjà échoué. Aucun second appel envoyé. Vérifiez les réglages ou préparez une reprise.');
     if(automatic) {
       let runs;
       try {runs=JSON.parse(storage.getItem(AUTO_KEY)||'[]');if(!Array.isArray(runs))throw new Error();}

@@ -103,3 +103,17 @@ test('an unsent automatic retry preserves an earlier paid failure',async()=>{
  await assert.rejects(guard.run({...input,automatic},async()=>{throw Object.assign(new Error('preflight'),{requestSent:false});}));
  await assert.rejects(guard.run(input,async()=>assert.fail('paid failure erased')),e=>e.code==='PAID_RETRY_BLOCKED');
 });
+
+test('manual retry is scoped to the chosen request and never releases a peer or filtered request',async()=>{
+ const guard=createSpendGuard(storage()),explicitRetry='a'.repeat(32);let release;
+ await assert.rejects(guard.run(input,async()=>{throw new Error('credit');}));
+ const other={...input,modelId:'other/model'};
+ await assert.rejects(guard.run(other,async()=>{throw new Error('other paid failure');}));
+ const retry=guard.run({...input,explicitRetry},async()=>{await new Promise(r=>release=r);return 'ok';});
+ while(!release)await new Promise(r=>setTimeout(r,1));
+ await assert.rejects(guard.run({...input,explicitRetry},async()=>assert.fail('duplicate')),e=>e.requestSent===false);
+ await assert.rejects(guard.run(other,async()=>assert.fail('other unlocked')),e=>e.code==='PAID_RETRY_BLOCKED');
+ release();await retry;
+ await assert.rejects(guard.run(input,async()=>{throw Object.assign(new Error('filter'),{code:'CONTENT_FILTERED'});}));
+ await assert.rejects(guard.run({...input,explicitRetry},async()=>assert.fail('filter bypass')),e=>e.code==='PAID_RETRY_BLOCKED');
+});

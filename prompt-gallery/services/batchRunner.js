@@ -78,6 +78,7 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
     model = {...model, generationOptions: {
       ...batchGenerationOptions({mode}),
       reviewedMaxTokens: model.generationOptions?.reviewedMaxTokens,
+      explicitRetry: model.generationOptions?.explicitRetry,
     }};
   }
   const emit = (event) => { try { onEvent?.(event); } catch (e) { /* never let a listener break the run */ } };

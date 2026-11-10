@@ -18,6 +18,7 @@ import {clearFailedGenerationBlocks} from '../../shared/services/generation-spen
 import {ModelSettingsPanel} from './ModelSettingsPanel.js';
 import { batchPromptChoices, setVisibleSelection } from '../services/batchPromptSearch.js';
 import { runBatch } from '../services/batchRunner.js';
+import {retryProposal, manualRetryModel, applyRetrySummaries, createRetryQueue} from '../services/manualRetry.js';
 import { prepareGenerationResume } from '../services/resumeGeneration.js';
 import { progressivePlan } from '../services/progressiveGeneration.js';
 import { getInFlight, subscribeInFlight } from '../../shared/services/generation-telemetry.js';
@@ -183,6 +184,12 @@ export function BatchRunDialog({
   const [fullscreenIndex, setFullscreenIndex] = useState(-1);
   const [fullscreenLoading, setFullscreenLoading] = useState(false);
   const [summary, setSummary] = useState(null);
+  const [retryReview, setRetryReview] = useState(null);
+  const [retryTokens, setRetryTokens] = useState(0);
+  const retryQueueRef = useRef(createRetryQueue());
+  const retrySummariesRef = useRef([]);
+  const mainRunningRef = useRef(false);
+  const configuredModelsRef = useRef([]);
   const [pauseState, setPauseState] = useState('running'); // running | pausing | paused
   const [pauseContext, setPauseContext] = useState(null);
   const [rateClock, setRateClock] = useState(() => Date.now());
@@ -420,6 +427,10 @@ export function BatchRunDialog({
         reviewedMaxTokens:shown?.params.max_tokens??shown?.params.max_completion_tokens??report.settings.params.max_tokens??report.settings.params.max_completion_tokens}};
     });
     const plan = planBatchLanes({ prompts: list, models: configured, runId });
+    configuredModelsRef.current = plan.lanes.map(lane => lane.model);
+    retrySummariesRef.current = [];
+    setRetryReview(null);
+    mainRunningRef.current = true;
     const startedAt = Date.now();
     journalStartedAtRef.current = startedAt;
     setBatchFinishedAt(null);
@@ -512,11 +523,14 @@ export function BatchRunDialog({
           syncJournal();
         },
       });
-      setSummary({...combineSummaries(summaries.filter(Boolean)),protectionStopped:safetyTripped});
-      setItems(rows=>rows.map(row=>row.status==='queued'?{...row,status:'not-started'}:row));
+      setSummary(applyRetrySummaries({...combineSummaries(summaries.filter(Boolean)),protectionStopped:safetyTripped}, retrySummariesRef.current));
+      setItems(rows=>rows.map((row,index)=>row.status==='queued' && !retryQueueRef.current.has(index)?{...row,status:'not-started'}:row));
     } catch (e) {
       addToast('Erreur d’exécution par lot : ' + e.message, 'error');
     } finally {
+      mainRunningRef.current = false;
+      startingRef.current=false;
+      if (retryQueueRef.current.size === 0) {
       pauseRequestedRef.current = false;
       releasePaused();
       setPauseState('running');
@@ -524,7 +538,7 @@ export function BatchRunDialog({
       setActiveIndex(-1);
       setBatchFinishedAt(Date.now());
       setPhase('done');
-      startingRef.current=false;
+      }
     }
   }, [canRun, hasDirectory, selectedPrompts, runModels, laneMode, mode, progressive, healAttempts, maxRepairRounds, saveBothOnHeal,
       skipExisting, delaySec, apiRetries, spendProtection, totalTokens, reasoningTokens, settingsProfile, settingsOverrides, apiCatalogue, allModels, showLiveOutput, runId, deps, refreshCapabilities, handleEvent, waitAtPauseBoundary, addToast, resumeFrom]);
@@ -601,7 +615,7 @@ export function BatchRunDialog({
   }, [phase]);
 
   const inspectOutput = useCallback((index) => {
-    if (index < 0 || (!outputs[index] && !batchItemRunning(items[index]))) return;
+    if (index < 0 || (!outputs[index] && !batchItemRunning(items[index]) && items[index]?.status !== 'error')) return;
     followActiveRef.current = index === activeIndexRef.current;
     setInspectedIndex(index);
     const item = journalRunListRef.current[index];
@@ -669,18 +683,79 @@ export function BatchRunDialog({
     } catch (error) { addToast(error.message, 'error'); }
   };
   const prepareNewRun = () => {
+    setRetryReview(null);
     setResumeFrom(null);
     setMode(DEFAULT_BATCH_MODE);
     setPhase('config');
     onRestore?.();
   };
-  const prepareRetry = index => {
-    const prompt = runList[index], selectedModel = logModels[prompt.laneIndex || 0];
-    setResumeFrom(null); setBatchModels([selectedModel]);
-    setSelectedIds(new Set([prompt.id])); setPromptSet(promptSetOf(prompt));
-    setPromptSearch(''); setSkipExisting(false); setMode(DEFAULT_BATCH_MODE); setPhase('config'); onRestore?.();
-    addToast('Nouvel essai au maximum préparé pour ce modèle uniquement ; aucun appel envoyé avant le lancement.', 'info');
+
+  const reviewRetry = index => {
+    const item = items[index];
+    if (!item || !['error','stopped','not-started'].includes(item.status) || retryQueueRef.current.has(index)) return;
+    const selectedModel = configuredModelsRef.current[runList[index].laneIndex || 0];
+    const report = outputStats[index]?.settings;
+    const maximum = selectedModel?.generationOptions?.reviewedMaxTokens || report?.maxOutputTokens || 128000;
+    const proposal = retryProposal(item.message, maximum);
+    setRetryTokens(proposal.maximum);
+    setRetryReview({index, ...proposal});
+    onRestore?.();
   };
+
+  const launchRetry = async () => {
+    if (!retryReview) return;
+    const {index, maximum} = retryReview;
+    const previous = items[index];
+    if (!previous || !['error','stopped','not-started'].includes(previous.status) || retryQueueRef.current.has(index)) return;
+    let selectedModel;
+    try {
+      selectedModel = manualRetryModel(configuredModelsRef.current[runList[index].laneIndex || 0], Number(retryTokens), maximum, crypto.randomUUID().replaceAll('-', ''));
+    } catch (error) { addToast(error.message, 'error'); return; }
+    setRetryReview(null);
+    if (phase !== 'running') {
+      stopRef.current = false;
+      deps.beginRun?.();
+    }
+    setPhase('running'); setBatchFinishedAt(null);
+    setItems(rows => rows.map((row, i) => i === index ? {...row, status:'queued', message:''} : row));
+    journalRef.current?.event({type:'control',message:`Relance manuelle de ${selectedModel.label || selectedModel.modelId} · ${runList[index].title} · effort maximal · plafond ${retryTokens} tokens · un seul appel.`});
+    syncJournal();
+    try {
+      await retryQueueRef.current.run(index, async () => {
+        runningLanesRef.current++;
+        try {
+          const result = await runBatch({prompts:[runList[index]], model:selectedModel,
+            options:{mode:'comparison', progressive:false, apiRetries:0, skipExisting:false, runId:selectedModel.batchRunId}, deps,
+            shouldStop:() => stopRef.current, shouldPause:() => pauseRequestedRef.current, waitIfPaused:waitAtPauseBoundary,
+            onEvent:event => {if (event.type !== 'done') handleEvent({...event, model:selectedModel, index});}});
+          const adjustment = {result, wasError:previous.status === 'error'};
+          retrySummariesRef.current.push(adjustment);
+          if (!mainRunningRef.current) setSummary(current => applyRetrySummaries(current, [adjustment]));
+        } catch(error) {
+          handleEvent({type:'item', status:'error', index, model:selectedModel, message:error.message});
+        } finally { runningLanesRef.current--; }
+      });
+    } finally {
+      if (!mainRunningRef.current && retryQueueRef.current.size === 0) {
+        pauseRequestedRef.current=false; releasePaused(); setPauseState('running');
+        setActiveIndex(-1); setBatchFinishedAt(Date.now()); setPhase('done');
+      }
+    }
+  };
+
+  const retryAllowed = index => !items[index]?.savedIds?.length && ['error','stopped','not-started'].includes(items[index]?.status);
+  const renderRetryReview = () => retryReview && html`<section class="batch-retry-review" aria-label="Relancer une génération">
+    <strong>Relancer ce modèle · ${runList[retryReview.index]?.modelLabel}</strong>
+    <p>${runList[retryReview.index]?.title}</p>
+    <p class="batch-error-detail">${items[retryReview.index]?.message}</p>
+    ${retryReview.affordable && html`<p>Crédit insuffisant pour ${retryReview.maximum.toLocaleString('fr-FR')} tokens. OpenRouter annonçait ${retryReview.affordable.toLocaleString('fr-FR')} tokens possibles ; après recharge, gardez le plafond maximal. Le solde peut changer pendant les autres appels.</p><button class="btn btn-sm" onClick=${()=>setRetryTokens(retryReview.recommended)}>Adapter au dernier crédit annoncé (marge de 5 %)</button>`}
+    <label>Plafond de sortie de cette relance (raisonnement compris)
+      <input class="form-input" type="number" min="256" max=${retryReview.maximum} value=${retryTokens} onInput=${event=>setRetryTokens(event.target.value)} />
+    </label>
+    <p>Effort maximal conservé. Un seul appel pour cette ligne ; les autres modèles et résultats sont conservés. Cette relance peut être facturée.</p>
+    <div class="batch-output-tabs"><button class="btn" onClick=${()=>setRetryReview(null)}>Annuler la relance</button>
+      <button class="btn btn-primary" onClick=${launchRetry}>Confirmer et relancer ce modèle</button></div>
+  </section>`;
 
   // ── Renderers ──
 
@@ -1014,6 +1089,7 @@ export function BatchRunDialog({
       </div>
 
       <${BatchCosts} calls=${costCalls} startedAt=${journalStartedAtRef.current} />
+      ${renderRetryReview()}
       ${runIsMulti && html`<div class="batch-note">${laneMode==='sequential'?'Les modèles passent l’un après l’autre.':'Les modèles tournent en parallèle.'} Sélectionnez une ligne pour changer l’aperçu et le flux HTML affichés.</div>`}
 
       ${pauseState !== 'running' && html`
@@ -1039,7 +1115,7 @@ export function BatchRunDialog({
             const m = STATUS_META[it.status] || STATUS_META.queued;
             const isActive = batchItemRunning(it);
             const isInspected = idx === inspectedIndex;
-            const canInspect = showLiveOutput && (!!outputs[idx] || isActive);
+            const canInspect = it.status === 'error' || showLiveOutput && (!!outputs[idx] || isActive);
             const canOpenFullscreen = isActive || !!outputs[idx] || !!it.savedIds?.length;
             const rowLive = it.status === 'generating'
               ? batchLiveStatus(liveCalls, runModels[p.laneIndex ?? 0], rateClock) : null;
@@ -1050,7 +1126,7 @@ export function BatchRunDialog({
                 role=${canInspect ? 'button' : undefined}
                 tabIndex=${canInspect ? 0 : undefined}
                 aria-current=${isInspected ? 'true' : undefined}
-                title=${canInspect ? (isActive ? 'Voir la génération en direct' : 'Examiner cette génération pendant l’exécution du lot') : ''}
+                title=${it.status === 'error' ? it.message : canInspect ? (isActive ? 'Voir la génération en direct' : 'Examiner cette génération pendant l’exécution du lot') : ''}
                 onClick=${canInspect ? () => inspectOutput(idx) : undefined}
                 onKeyDown=${canInspect ? (event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -1074,10 +1150,12 @@ export function BatchRunDialog({
                       <i class="fa-solid fa-expand"></i>
                     </button>` : null}
                 </span>
+                ${retryAllowed(idx) && html`<button class="btn btn-xs" onClick=${event=>{event.stopPropagation();reviewRetry(idx);}}>Relancer ce modèle</button>`}
               </div>
             `;
           })}
           <div ref=${listEndRef}></div>
+          ${items[inspectedIndex]?.status === 'error' && html`<p class="batch-error-detail" role="alert">${items[inspectedIndex].message}</p>`}
         </div>
         ${outputView === 'log' ? renderJournal() : showLiveOutput
           ? html`
@@ -1165,6 +1243,7 @@ export function BatchRunDialog({
       </div>
 
       <${BatchCosts} calls=${costCalls} done=${true} startedAt=${journalStartedAtRef.current} finishedAt=${batchFinishedAt} />
+      ${renderRetryReview()}
       <div class="batch-run-list batch-run-list-done">
         ${runList.map((p, idx) => {
           const it = items[idx] || { status: 'queued' };
@@ -1184,7 +1263,7 @@ export function BatchRunDialog({
                   <button class="btn btn-xs" onClick=${() => prepareResume(idx)}>Reprendre / corriger</button>
                   <button class="batch-fullscreen-button" title="Ouvrir la génération interactive en plein écran"
                     onClick=${() => openFullscreen(idx)}><i class="fa-solid fa-expand"></i></button>` : null}
-                ${!it.savedIds?.length && ['error','stopped','not-started'].includes(it.status) && html`<button class="btn btn-xs" onClick=${() => prepareRetry(idx)}>Préparer un nouvel essai</button>`}
+                ${retryAllowed(idx) && html`<button class="btn btn-xs" onClick=${() => reviewRetry(idx)}>Relancer ce modèle</button>`}
               </span>
             </div>
           `;
@@ -1227,9 +1306,10 @@ export function BatchRunDialog({
         <summary>Durée du lot : ${formatDuration(timing.elapsedMs)} · ${totals.requestCount} appel(s) API · Total confirmé : ${confirmedCost} · Détails</summary>
         <${BatchCosts} calls=${costCalls} done=${phase === 'done'} startedAt=${journalStartedAtRef.current} finishedAt=${batchFinishedAt}/>
       </details>
+      ${renderRetryReview()}
       <${BatchLiveComparison} models=${logModels} runList=${runList} items=${items} outputs=${outputs} costCalls=${costCalls}
         liveCalls=${liveCalls} now=${rateClock} done=${phase === 'done'} paused=${pauseState === 'paused'} theme=${theme}
-        onFullscreen=${openFullscreen} showLiveOutput=${showLiveOutput}/>
+        onFullscreen=${openFullscreen} onRetry=${reviewRetry} showLiveOutput=${showLiveOutput}/>
       ${phase === 'running' ? renderRunControls() : html`<div class="modal-footer"><button class="btn" onClick=${prepareNewRun}>Nouvelle exécution</button><button class="btn" onClick=${() => {onOpenGallery?.();onClose();}}>Voir dans la galerie</button></div>`}
     </section>`;
   };
@@ -1253,7 +1333,7 @@ export function BatchRunDialog({
             `}
             </div>
           </div>
-          ${phase === 'config' ? renderConfig() : phase === 'running' ? renderRunning() : renderDone()}
+          <${Fragment} key=${phase}>${phase === 'config' ? renderConfig() : phase === 'running' ? renderRunning() : renderDone()}</${Fragment}>
         </div>
       </div>`}
       ${fullscreenIndex >= 0 && html`

@@ -27,7 +27,7 @@ function usePreviewDocument(output, active, identity) {
   return preview;
 }
 
-function LiveModelPane({card, liveCalls, now, done, paused, theme, onFullscreen, showLiveOutput}) {
+function LiveModelPane({card, liveCalls, now, done, paused, theme, onFullscreen, onRetry, showLiveOutput}) {
   const {model, index, prompt, item, output, calls} = card;
   const active = !done && batchItemRunning(item);
   const live = active ? batchLiveStatus(liveCalls, model, now) : null;
@@ -48,6 +48,7 @@ function LiveModelPane({card, liveCalls, now, done, paused, theme, onFullscreen,
       ${item.stage && html`<small>Étape ${item.stage.index}/${item.stage.total} · ${item.stage.title}</small>`}
       <div class="live-model-cost">${cost}</div>
       ${item.message && ['error','no_progress','stopped'].includes(item.status) && html`<p class="live-model-error">${item.message}</p>`}
+      ${onRetry && !item.savedIds?.length && ['error','stopped','not-started'].includes(item.status) && html`<button class="btn btn-sm" onClick=${()=>onRetry(index)}>Relancer ce modèle</button>`}
     </header>
     ${showLiveOutput ? html`<div class="live-model-preview-head"><strong>Aperçu ${active ? 'en direct' : 'du résultat'}</strong>
       <button class="btn btn-sm" disabled=${!output && !item.savedIds?.length} onClick=${() => onFullscreen(index)}>Plein écran</button>
@@ -61,7 +62,7 @@ function LiveModelPane({card, liveCalls, now, done, paused, theme, onFullscreen,
   </article>`;
 }
 
-export function BatchLiveComparison({models, runList, items, outputs, costCalls, liveCalls, now, done, paused, theme, onFullscreen, showLiveOutput}) {
+export function BatchLiveComparison({models, runList, items, outputs, costCalls, liveCalls, now, done, paused, theme, onFullscreen, onRetry, showLiveOutput}) {
   const [promptId, setPromptId] = useState('');
   const prompts = useMemo(() => liveComparisonPrompts(runList), [runList]);
   const cards = liveComparisonCards({models, runList, items, outputs, calls:costCalls, promptId});
@@ -76,7 +77,7 @@ export function BatchLiveComparison({models, runList, items, outputs, costCalls,
     </div>
     <div class="live-comparison-grid" style=${{'--live-columns':Math.max(1, Math.min(cards.length, 3))}}>
       ${cards.map(card => html`<${LiveModelPane} key=${card.laneIndex} card=${card} liveCalls=${liveCalls} now=${now}
-        done=${done} paused=${paused} theme=${theme} onFullscreen=${onFullscreen} showLiveOutput=${showLiveOutput}/>`)}
+        done=${done} paused=${paused} theme=${theme} onFullscreen=${onFullscreen} onRetry=${onRetry} showLiveOutput=${showLiveOutput}/>`)}
     </div>
   </section>`;
 }

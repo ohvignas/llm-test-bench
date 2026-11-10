@@ -140,3 +140,22 @@ test('comparison sends maximum effort to the completion endpoint even after a le
   assert.equal(requests.at(-1).messages.at(-1).content,'Identical full comparison prompt');
  }finally{apiModel.reasoning=previousReasoning;delete apiModel.bench_policy;}
 });
+
+test('explicit retry sends a one-use local header, keeps maximal effort and uses the reviewed token limit',async()=>{
+ const previous=globalThis.fetch, sent=[];
+ globalThis.fetch=async(url,init)=>{
+  if(url==='/api/openrouter/chat/completions'){
+   sent.push({headers:new Headers(init.headers),body:JSON.parse(init.body)});
+   if(sent.length===1)return Response.json({error:{message:'can only afford 50000',code:402}},{status:402});
+  }
+  return previous(url,init);
+ };
+ const args={modelId:'vendor/model',appTitle:'Prompt Gallery',userPrompt:'manual-credit-retry',generationOptions:{profile:'maximum'}};
+ try{
+  await assert.rejects(adapter.streamChat(args),e=>e.status===402);
+  await adapter.streamChat({...args,generationOptions:{profile:'maximum',reviewedMaxTokens:45000,explicitRetry:'b'.repeat(32)}});
+  assert.equal(sent.length,2);assert.equal(sent[1].headers.get('X-Bench-Retry'),'b'.repeat(32));
+  assert.equal(sent[1].body.max_tokens,45000);assert.equal(sent[1].body.reasoning.effort,'max');
+  assert.equal(sent[1].body.explicitRetry,undefined);
+ }finally{globalThis.fetch=previous;}
+});
