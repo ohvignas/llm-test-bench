@@ -12,6 +12,7 @@ const STATES = {
   auditing: 'Audit demandé', repairing: 'Réparation demandée', saved: 'Résultat enregistré',
   skipped: 'Prompt ignoré', stopped: 'Exécution arrêtée', verified: 'Résultat vérifié',
   warned: 'Résultat à vérifier', no_progress: 'Aucun progrès observé', error: 'Échec',
+  'saved-unverified': 'Code enregistré — vérification interrompue, reprise disponible',
 };
 export const logModelKey = model => JSON.stringify([model?.providerId || '', model?.modelId || '']);
 export function safeLogText(value, max = 1200) {

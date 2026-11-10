@@ -8,7 +8,7 @@ import {costTotals, formatUsd} from '../services/batchCosts.js';
 import {executionMetrics, formatDuration} from '../services/executionMetrics.js';
 
 const LABELS = {queued:'En attente', 'not-started':'Non lancé', saved:'Enregistré', error:'Échec',
-  stopped:'Arrêté', skipped:'Ignoré', verified:'Vérifié', warned:'À vérifier', no_progress:'Aucun progrès',
+  'saved-unverified':'Enregistré — vérification interrompue', stopped:'Arrêté', skipped:'Ignoré', verified:'Vérifié', warned:'À vérifier', no_progress:'Aucun progrès',
   generating:'Génération', checking:'Vérification', healing:'Correction', repairing:'Réparation', auditing:'Audit', planning:'Planification'};
 
 // Refresh regularly during streaming, rather than remounting a preview on every

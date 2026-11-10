@@ -8,7 +8,7 @@ import { VerificationDetails } from './VerificationBadge.js';
 import { BatchCosts } from './BatchCosts.js';
 import { sanitizeRichHtml } from '../../shared/services/content-sanitizer.js';
 
-export function MetadataPanel({ generation, response, onUpdateMetadata, onSavePromptToLibrary, onRefine, onEdit, onDelete, onCompare, onClose, allowHandoffs = true, allowMorph = allowHandoffs }) {
+export function MetadataPanel({ generation, response, onUpdateMetadata, onSavePromptToLibrary, onResume, onRefine, onEdit, onDelete, onCompare, onClose, allowHandoffs = true, allowMorph = allowHandoffs }) {
   const [tagInput, setTagInput] = useState('');
 
   if (!generation) return null;
@@ -160,6 +160,11 @@ export function MetadataPanel({ generation, response, onUpdateMetadata, onSavePr
         <button class="btn" onClick=${() => onCompare(id)} title="Ajouter à la comparaison">
           <i class="fa-solid fa-columns"></i> Comparer
         </button>
+        ${onResume && response && meta.modelId && meta.providerId && html`
+          <button class="btn" onClick=${() => onResume(id)} title="Reprendre depuis ce code enregistré, sans repayer la génération initiale">
+            <i class="fa-solid fa-play"></i> Reprendre / corriger
+          </button>
+        `}
         ${onRefine && html`
           <button class="btn" onClick=${() => onRefine(id)} title="Ouvrir dans Améliorer : corriger les erreurs ou ajouter des fonctionnalités (nouvelle variante)">
             <i class="fa-solid fa-screwdriver-wrench"></i> Améliorer

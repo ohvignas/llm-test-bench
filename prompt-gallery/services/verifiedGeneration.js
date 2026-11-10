@@ -51,7 +51,7 @@ function telemetryTotals(calls, startedAt) {
   };
 }
 
-export async function runVerifiedGeneration({ promptItem, model, options, deps, onEvent, shouldStop, waitIfPaused }) {
+export async function runVerifiedGeneration({ promptItem, model, options, deps, onEvent, shouldStop, waitIfPaused, initialCandidate }) {
   const opts = { maxRepairRounds: 1, apiRetries: 0, ...(options || {}) };
   opts.maxRepairRounds = Math.max(0, Math.min(2, Number(opts.maxRepairRounds) || 0));
   opts.apiRetries = Math.max(0, Number(opts.apiRetries) || 0);
@@ -61,7 +61,7 @@ export async function runVerifiedGeneration({ promptItem, model, options, deps, 
   const checklist = deriveAcceptanceChecklist(promptItem);
   const savedIds = [];
   const candidates = [];
-  let previousSaved = null;
+  let previousSaved = initialCandidate || null;
   let previousFailedIds = null;
   let previousSandboxFailed = false;
   let stopped = false;
@@ -110,8 +110,10 @@ export async function runVerifiedGeneration({ promptItem, model, options, deps, 
           outcome: 'error', attempt,
         });
         emit({ type: 'retry', role, attempt, message: error?.message || String(error) });
-        if (checkStop(`${role}_error`)) return { stopped: true };
-        if (error?.retryable === false || error?.name === 'AbortError') break;
+        // Another stop must never overwrite a provider's actual failure.
+        if (error?.name === 'AbortError') { stopped = true; return { stopped: true }; }
+        if (stopRequested(shouldStop)) break;
+        if (error?.retryable === false) break;
       }
     }
     throw lastError || new Error(`${role} failed`);
@@ -170,6 +172,7 @@ export async function runVerifiedGeneration({ promptItem, model, options, deps, 
       verdict: candidate.verdict,
       sandbox: compactSandbox(candidate.sandbox),
       telemetry,
+      ...(initialCandidate?.id ? {resumedFrom:initialCandidate.id} : {}),
     };
     let saved;
     try { saved = await deps.save({
@@ -180,7 +183,7 @@ export async function runVerifiedGeneration({ promptItem, model, options, deps, 
       tags: ['ai-gen', 'batch', 'verified', statusTag, ...((promptItem.tags || []).filter(Boolean))],
       kind: candidate.candidate === 'original' ? 'verified-original' : 'verified-repair',
       verification,
-      derivedFrom: previousSaved?.variantKey || '',
+      derivedFrom: previousSaved?.variantKey || previousSaved?.id || '',
       repairRound: candidate.round,
     });
       if (!saved?.id) throw new Error('La sauvegarde de la génération n’a pas été confirmée.');
@@ -210,17 +213,25 @@ export async function runVerifiedGeneration({ promptItem, model, options, deps, 
   emit({ type: 'state', status: 'planning', phase: 'planning', checklist });
   if (checkStop('planning')) return { status: 'stopped', stopReason: 'stopped', savedIds, candidates, checklist, telemetry: telemetryTotals(calls, startedAt) };
 
-  emit({ type: 'state', status: 'generating', phase: 'generating' });
   let generated;
-  try {
-    const response = await callRole('generator', deps.generate, {
-      prompt: promptItem.prompt, promptItem, checklist, model,
-      onChunk: html => emit({ type: 'chunk', html }),
-    });
-    generated = resultValue(response.value, ['html', 'text', 'content', 'response']);
-    if (response.stopped) return preserveInterrupted(generated,0);
-  } catch (error) {
-    return { status: 'generation_error', stopReason: 'generation_error', error, savedIds, candidates, checklist, telemetry: telemetryTotals(calls, startedAt) };
+  if (initialCandidate) {
+    generated = initialCandidate.html;
+    if (typeof generated !== 'string' || !generated.trim()) {
+      return {status:'generation_error',error:new Error('Aucun HTML enregistré à reprendre.'),savedIds,candidates,checklist,telemetry:telemetryTotals(calls,startedAt)};
+    }
+    emit({type:'chunk',html:generated});
+  } else {
+    emit({ type: 'state', status: 'generating', phase: 'generating' });
+    try {
+      const response = await callRole('generator', deps.generate, {
+        prompt: promptItem.prompt, promptItem, checklist, model,
+        onChunk: html => emit({ type: 'chunk', html }),
+      });
+      generated = resultValue(response.value, ['html', 'text', 'content', 'response']);
+      if (response.stopped) return preserveInterrupted(generated,0);
+    } catch (error) {
+      return { status: 'generation_error', stopReason: 'generation_error', error, savedIds, candidates, checklist, telemetry: telemetryTotals(calls, startedAt) };
+    }
   }
   if (!generated.trim()) return { status: 'generation_error', stopReason: 'generation_error', error: new Error('Model returned an empty response'), savedIds, candidates, checklist, telemetry: telemetryTotals(calls, startedAt) };
 

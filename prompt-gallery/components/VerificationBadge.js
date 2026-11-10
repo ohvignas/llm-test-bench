@@ -7,7 +7,7 @@ const META = {
   audit_error: { label: 'Erreur d’audit', icon: 'fa-triangle-exclamation', cls: 'failed' },
   no_progress: { label: 'Aucun progrès', icon: 'fa-equals', cls: 'warned' },
   budget: { label: 'Budget de correction atteint', icon: 'fa-gauge-high', cls: 'failed' },
-  stopped: { label: 'Arrêté', icon: 'fa-hand', cls: 'warned' },
+  stopped: { label: 'Enregistré — vérification interrompue', icon: 'fa-hand', cls: 'warned' },
 };
 
 export function verificationMeta(verification) {
@@ -46,9 +46,9 @@ export function VerificationDetails({ verification, parentId, onOpenParent }) {
             ? html`<button class="verification-parent-link" onClick=${() => onOpenParent(parentId)}>${parentId}</button>`
             : html`<span>${parentId}</span>`}
         </div>`}
-        <div class=${`verification-sandbox ${sandbox.timedOut || sandbox.errorCount ? 'failed' : 'passed'}`}>
+        <div class=${`verification-sandbox ${sandbox.executed === false ? 'warned' : sandbox.timedOut || sandbox.errorCount ? 'failed' : 'passed'}`}>
           <strong>Bac à sable :</strong>
-          ${sandbox.timedOut ? 'délai dépassé' : `${sandbox.errorCount || 0} erreurs, ${sandbox.warningCount || 0} avertissements`}
+          ${sandbox.executed === false ? 'non exécuté' : sandbox.timedOut ? 'délai dépassé' : `${sandbox.errorCount || 0} erreurs, ${sandbox.warningCount || 0} avertissements`}
           ${sandbox.duration ? ` · ${sandbox.duration}ms` : ''}
         </div>
         <div class="verification-checks">

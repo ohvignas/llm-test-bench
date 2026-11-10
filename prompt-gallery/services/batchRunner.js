@@ -67,6 +67,9 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
     ...(options || {}),
   };
   if(opts.stopOnFailure) opts.apiRetries=0;
+  if (opts.resumeFrom && (prompts.length !== 1 || opts.mode !== 'verified')) {
+    throw new Error('La reprise doit cibler un seul résultat en mode Vérifié.');
+  }
   const mode = opts.mode || (opts.heal ? 'runtime-heal' : 'quick');
   const emit = (event) => { try { onEvent?.(event); } catch (e) { /* never let a listener break the run */ } };
   const stop = () => { try { return !!shouldStop?.(); } catch (e) { return false; } };
@@ -83,6 +86,7 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
     skipped: 0,
     failed: 0,
     saved: 0,
+    resumed: 0,
     stopped: false,
     verifiedPassed: 0,
     verifiedWarned: 0,
@@ -135,6 +139,7 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
       const verified = await runVerifiedGeneration({
         promptItem: p,
         model,
+        initialCandidate: opts.resumeFrom,
         options: {
           maxRepairRounds: opts.maxRepairRounds,
           apiRetries: opts.apiRetries,
@@ -174,7 +179,10 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
       });
 
       const candidateCount = verified.candidates?.length || 0;
-      if (candidateCount > 0) summary.generated++;
+      if (candidateCount > 0) {
+        if (opts.resumeFrom) summary.resumed++;
+        else summary.generated++;
+      }
       summary.saved += verified.savedIds?.length || 0;
       summary.repairRounds += Math.max(0, candidateCount - 1);
       summary.roleCalls += verified.telemetry?.calls?.length || 0;
@@ -195,11 +203,11 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
       const finalStatus = verified.status === 'passed' ? 'verified'
         : verified.status === 'warned' ? 'warned'
           : verified.status === 'no_progress' ? 'no_progress'
-            : verified.status === 'stopped' ? 'stopped' : 'error';
+            : verified.status === 'stopped' ? (verified.savedIds?.length ? 'saved-unverified' : 'stopped') : 'error';
       emit({
         type: 'item', index: i, status: finalStatus, savedIds: verified.savedIds || [],
         verificationStatus: verified.status, repairRounds: Math.max(0, candidateCount - 1),
-        message: verified.error?.message || '',
+        message: verified.error?.message || (finalStatus === 'saved-unverified' ? 'Code conservé ; la vérification peut être reprise depuis cette version.' : ''),
       });
       if (verified.status === 'stopped' || (opts.stopOnFailure && !['passed','warned'].includes(verified.status))) {summary.stopped=true;break;}
       await interruptibleDelay(opts.delayMs, stop, pause);
@@ -234,7 +242,7 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
 
     // A response can finish just as Stop is clicked. Keep a completed paid result;
     // stopping prevents further calls, not the local save of work already received.
-    if (stop() && (genError || !genHtml || !genHtml.trim())) {
+    if ((genError?.name === 'AbortError') || (stop() && !genError && !genHtml?.trim())) {
       summary.stopped = true; emit({ type: 'item', index: i, status: 'stopped' }); break;
     }
     if (genError || !genHtml || !genHtml.trim()) {

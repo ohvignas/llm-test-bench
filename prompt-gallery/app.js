@@ -14,6 +14,7 @@ import { ImportPromptsDialog } from './components/ImportPromptsDialog.js';
 import { RefineView } from './components/RefineView.js';
 import { fetchModels as fetchOpenRouterCatalogue } from '../shared/services/openrouter.js';
 import { BatchRunDialog } from './components/BatchRunDialog.js';
+import { prepareGenerationResume } from './services/resumeGeneration.js';
 import { runHtmlSandbox, runStatusLabel } from './services/sandboxRunner.js';
 import { addConsoleEntry, consoleCounts, mergePreviewErrors } from './services/previewConsole.js';
 import { withPreviewStorage } from '../shared/services/preview-storage.js';
@@ -177,6 +178,8 @@ function App() {
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showBatchDialog, setShowBatchDialog] = useState(false);
   const [batchPresentation, setBatchPresentation] = useState('modal');
+  const [batchResumeSource, setBatchResumeSource] = useState(null);
+  const [batchRunning, setBatchRunning] = useState(false);
   const batchIdRef = useRef('');
   // One controller per batch: Stop aborts every in-flight call (all lanes), so
   // a CLI-agent run with no time limit cannot hold the batch open.
@@ -1400,8 +1403,18 @@ function App() {
     setShowBatchDialog(true);
   }, [showBatchDialog, rootHandle, handlePickDirectory, refreshGenerations, addToast]);
 
+  const handleResumeGeneration = useCallback(async id => {
+    if (batchRunning) { addToast('Un lot est encore en cours. Attendez sa fin avant de préparer une reprise.', 'info'); return; }
+    try {
+      const source = prepareGenerationResume(await meta.loadGeneration(rootHandle, id), libraryPrompts);
+      batchIdRef.current = `resume-${Date.now().toString(36)}`;
+      setBatchResumeSource(source); setBatchPresentation('modal'); setShowBatchDialog(true);
+    } catch (error) { addToast(error.message, 'error'); }
+  }, [batchRunning, rootHandle, libraryPrompts, addToast]);
+
   const handleCloseBatch = useCallback(() => {
     setShowBatchDialog(false);
+    setBatchResumeSource(null);
     setBatchPresentation('modal');
     refreshGenerations();
     refreshLibrary();
@@ -1510,6 +1523,7 @@ function App() {
               onUpdateMetadata=${handleUpdateMetadata}
               onSavePromptToLibrary=${(title, promptText) => handleOpenPromptForm({ title, prompt: promptText })}
               onRefine=${handleRefineGeneration}
+              onResume=${handleResumeGeneration}
               onEdit=${handleEdit}
               onDelete=${handleDelete}
               onCompare=${handleCompareFromView}
@@ -1703,7 +1717,9 @@ function App() {
       <!-- Keep the runner mounted in this position across every app route. -->
       ${showBatchDialog && html`
         <${BatchRunDialog}
-          key="active-batch"
+          key=${batchIdRef.current}
+          resumeSource=${batchResumeSource}
+          onRunningChange=${setBatchRunning}
           presentation=${batchPresentation === 'modal' ? 'modal' : batchPresentation === 'live' && route.name === 'compare' ? 'compare' : 'minimized'}
           onOpenComparison=${() => { setBatchPresentation('live'); navigate('compare'); }}
           onMinimize=${() => setBatchPresentation('minimized')}

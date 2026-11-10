@@ -17,6 +17,7 @@ import {clearFailedGenerationBlocks} from '../../shared/services/generation-spen
 import {ModelSettingsPanel} from './ModelSettingsPanel.js';
 import { batchPromptChoices, setVisibleSelection } from '../services/batchPromptSearch.js';
 import { runBatch } from '../services/batchRunner.js';
+import { prepareGenerationResume } from '../services/resumeGeneration.js';
 import { progressivePlan } from '../services/progressiveGeneration.js';
 import { getInFlight, subscribeInFlight } from '../../shared/services/generation-telemetry.js';
 import { batchLiveStatus, batchItemRunning } from '../services/batchLiveProgress.js';
@@ -57,7 +58,7 @@ import {
 } from '../services/batchMetrics.js';
 
 const STATUS_META = {
-  'not-started': {icon:'fa-regular fa-circle',cls:'queued',label:'Non lancé — lot arrêté'},
+  'not-started': {icon:'fa-regular fa-circle',cls:'queued',label:'Non lancé pour ce modèle'},
   queued:     { icon: 'fa-regular fa-circle',        cls: 'queued',  label: 'En attente' },
   planning:   { icon: 'fa-solid fa-list-check',      cls: 'active',  label: 'Planification' },
   generating: { icon: 'fa-solid fa-bolt',            cls: 'active',  label: 'Génération' },
@@ -72,6 +73,7 @@ const STATUS_META = {
   skipped:    { icon: 'fa-solid fa-forward',         cls: 'skipped', label: 'Ignoré' },
   error:      { icon: 'fa-solid fa-triangle-exclamation', cls: 'error', label: 'Échec' },
   stopped:    { icon: 'fa-solid fa-hand',            cls: 'skipped', label: 'Arrêté' },
+  'saved-unverified': {icon:'fa-solid fa-floppy-disk',cls:'warn',label:'Enregistré — vérification interrompue'},
 };
 
 export function BatchRunDialog({
@@ -98,10 +100,14 @@ export function BatchRunDialog({
   onOpenComparison,
   onMinimize,
   onRestore,
+  resumeSource = null,
+  onRunningChange,
   addToast,
 }) {
   // phase: 'config' | 'running' | 'done'
   const [phase, setPhase] = useState('config');
+  const [resumeFrom, setResumeFrom] = useState(resumeSource);
+  useEffect(() => { onRunningChange?.(phase === 'running'); }, [phase, onRunningChange]);
   const [outputView, setOutputView] = useState('log');
   const [logFilter, setLogFilter] = useState('all');
   const [logEntries, setLogEntries] = useState([]);
@@ -135,10 +141,10 @@ export function BatchRunDialog({
   const promptChoices = useMemo(() => batchPromptChoices({prompts,setId:promptSet,query:promptSearch,selectedIds}),
     [prompts,promptSet,promptSearch,selectedIds]);
   const visiblePrompts = promptChoices.visible;
-  const selectedPrompts = promptChoices.selected;
+  const selectedPrompts = useMemo(() => resumeFrom ? [resumeFrom.prompt] : promptChoices.selected, [resumeFrom, promptChoices]);
 
   // Options
-  const [mode, setMode] = useState('quick');
+  const [mode, setMode] = useState(resumeSource ? 'verified' : 'quick');
   const [progressive, setProgressive] = useState(true);
   const [healAttempts, setHealAttempts] = useState(1);
   const [maxRepairRounds, setMaxRepairRounds] = useState(1);
@@ -201,10 +207,11 @@ export function BatchRunDialog({
   const activeModelId = selectedModelId || (activeBackend === 'model' ? model?.modelId : '');
   const hasModel = !!(model?.providerId && model?.modelId);
   const runModels = useMemo(() => {
+    if (resumeFrom) return [resumeFrom.model];
     if (batchModels.length) return batchModels;
     const snap = snapshotModel(model);
     return snap ? [snap] : [];
-  }, [batchModels, model]);
+  }, [batchModels, model, resumeFrom]);
   const isOpenRouterModel=selected=>selected.providerId==='openrouter'||deps.getProviderType?.(selected.providerId)==='openrouter'||allModels.find(m=>m.providerId===selected.providerId&&m.modelId===selected.modelId)?.providerType==='openrouter';
   const needsApiCapabilities=runModels.some(isOpenRouterModel);
   const refreshCapabilities = useCallback(async () => {
@@ -453,13 +460,14 @@ export function BatchRunDialog({
           prompts: lane.prompts,
           model: lane.model,
           options: {
-            mode,
+            mode: resumeFrom ? 'verified' : mode,
+            resumeFrom,
             progressive,
             heal: mode === 'runtime-heal',
             healAttempts,
             maxRepairRounds,
             saveBothOnHeal,
-            skipExisting,
+            skipExisting: resumeFrom ? false : skipExisting,
             delayMs: Math.max(0, Math.round(delaySec * 1000)),
             apiRetries,
             stopOnFailure:spendProtection,
@@ -475,6 +483,9 @@ export function BatchRunDialog({
           shouldPause: () => pauseRequestedRef.current,
           waitIfPaused: waitAtPauseBoundary,
         });
+        if (result?.stopped) setItems(rows => rows.map((row, index) =>
+          index >= lane.offset && index < lane.offset + lane.prompts.length && row.status === 'queued'
+            ? {...row, status:'not-started'} : row));
         return result;
       } catch (e) {
         onFailure();
@@ -494,13 +505,9 @@ export function BatchRunDialog({
       const summaries = await runLanes({
         lanes: plan.lanes, mode: laneMode, runOne,
         shouldStop: () => stopRef.current, stopOnFailure: spendProtection,
-        onFailure: () => {
+        onFailure: (lane) => {
           safetyTripped = true;
-          pauseRequestedRef.current = false;
-          releasePaused();
-          setPauseState('running');
-          setPauseContext(null);
-          journalRef.current?.event({type:'control',message:'Protection des dépenses : aucun nouvel appel ne sera lancé. Les appels déjà en cours peuvent terminer et leur résultat sera conservé.'});
+          journalRef.current?.event({type:'control',message:`Protection des dépenses : arrêt des nouveaux appels pour ${lane.model.label || lane.model.modelId}. Les autres modèles continuent. Les résultats enregistrés peuvent être repris.`});
           syncJournal();
         },
       });
@@ -519,7 +526,7 @@ export function BatchRunDialog({
       startingRef.current=false;
     }
   }, [canRun, hasDirectory, selectedPrompts, runModels, laneMode, mode, progressive, healAttempts, maxRepairRounds, saveBothOnHeal,
-      skipExisting, delaySec, apiRetries, spendProtection, totalTokens, reasoningTokens, settingsProfile, settingsOverrides, apiCatalogue, allModels, showLiveOutput, runId, deps, refreshCapabilities, handleEvent, waitAtPauseBoundary, addToast]);
+      skipExisting, delaySec, apiRetries, spendProtection, totalTokens, reasoningTokens, settingsProfile, settingsOverrides, apiCatalogue, allModels, showLiveOutput, runId, deps, refreshCapabilities, handleEvent, waitAtPauseBoundary, addToast, resumeFrom]);
 
   const pause = useCallback(() => {
     if (pauseRequestedRef.current || stopRef.current) return;
@@ -554,7 +561,7 @@ export function BatchRunDialog({
     addToast('Arrêt : annulation de l’exécution en cours…', 'info');
   }, [addToast, deps]);
 
-  const doneCount = items.filter(it => ['saved', 'skipped', 'error', 'stopped', 'verified', 'warned', 'no_progress'].includes(it.status)).length;
+  const doneCount = items.filter(it => ['saved', 'saved-unverified', 'skipped', 'error', 'stopped', 'verified', 'warned', 'no_progress'].includes(it.status)).length;
   const progressPct = runList.length ? Math.round((doneCount / runList.length) * 100) : 0;
   const activeStatus = items[inspectedIndex >= 0 ? inspectedIndex : activeIndex]?.status || '';
   const isStreaming = ['generating', 'healing', 'repairing'].includes(activeStatus);
@@ -653,10 +660,31 @@ export function BatchRunDialog({
     }
   }, []);
 
+  const prepareResume = async index => {
+    try {
+      const saved = await deps.load(items[index]?.savedIds?.at(-1));
+      setResumeFrom(prepareGenerationResume(saved, prompts));
+      setMode('verified'); setPhase('config'); onRestore?.();
+    } catch (error) { addToast(error.message, 'error'); }
+  };
+  const prepareRetry = index => {
+    const prompt = runList[index], selectedModel = logModels[prompt.laneIndex || 0];
+    setResumeFrom(null); setBatchModels([selectedModel]);
+    setSelectedIds(new Set([prompt.id])); setPromptSet(promptSetOf(prompt));
+    setPromptSearch(''); setSkipExisting(false); setPhase('config'); onRestore?.();
+    addToast('Tentative préparée pour ce modèle uniquement. Vérifiez les réglages avant de lancer ; aucun appel envoyé.', 'info');
+  };
+
   // ── Renderers ──
 
   const renderConfig = () => html`
     <div class="modal-body batch-config">
+      ${resumeFrom && html`<section class="batch-prompt-selection" aria-label="Reprise du résultat enregistré">
+        <strong>Reprendre : ${resumeFrom.prompt.title}</strong>
+        <p>${resumeFrom.model.label} · ${resumeFrom.html.length.toLocaleString('fr-FR')} caractères conservés.</p>
+        <p>La vérification repart du code enregistré, sans nouvelle génération initiale. Les audits et corrections peuvent être facturés. L’original reste disponible ; chaque résultat corrigé est une nouvelle version.</p>
+      </section>`}
+      ${!resumeFrom && html`
       <div class=${`batch-model-row ${hasModel ? '' : 'warn'}`}>
         <div class="batch-model-label">
           <i class=${`fa-solid ${hasModel ? 'fa-microchip' : 'fa-triangle-exclamation'}`}></i>
@@ -794,9 +822,11 @@ export function BatchRunDialog({
           :html`<p>Cochez les prompts à tester. Vous pouvez en choisir dans Base, Avancés, Sites web et Simulations complexes.</p>`}
       </section>
 
+      `}
       <div class="batch-section">
         <div class="batch-section-head"><span><i class="fa-solid fa-wand-magic-sparkles"></i> Mode de génération</span></div>
         <div class="batch-options">
+          ${!resumeFrom && html`
           <label class="batch-opt batch-mode-opt">
             <input type="radio" name="batch-mode" value="quick" checked=${mode === 'quick'} onChange=${() => setMode('quick')} />
             <span><strong>Rapide</strong><small>Générer directement, ou construire par étapes les prompts compatibles.</small></span>
@@ -805,6 +835,7 @@ export function BatchRunDialog({
             <input type="radio" name="batch-mode" value="runtime-heal" checked=${mode === 'runtime-heal'} onChange=${() => setMode('runtime-heal')} />
             <span><strong>Correction des erreurs</strong><small>Vérifier le bac à sable et corriger les erreurs d’exécution capturées.</small></span>
           </label>
+          `}
           <label class="batch-opt batch-mode-opt">
             <input type="radio" name="batch-mode" value="verified"
               checked=${mode === 'verified'} onChange=${() => setMode('verified')} />
@@ -866,8 +897,8 @@ export function BatchRunDialog({
             </select>
           </label>
           <div class="batch-opt-hint">Les nouvelles tentatives sont désactivées par défaut. Une réponse vide ou incomplète ne sera jamais relancée automatiquement.</div>
-          <label class="batch-opt"><input type="checkbox" checked=${spendProtection} onChange=${e=>setSpendProtection(e.target.checked)}/><span>Protection des dépenses : aucun nouvel appel après un échec, aucune nouvelle tentative automatique</span></label>
-          ${spendProtection && isMulti && laneMode === 'parallel' && html`<div class="batch-note">Les appels déjà en cours peuvent terminer et être facturés ; leurs résultats seront conservés.</div>`}
+          <label class="batch-opt"><input type="checkbox" checked=${spendProtection} onChange=${e=>setSpendProtection(e.target.checked)}/><span>Protection des dépenses : arrêter uniquement le modèle en échec, sans nouvelle tentative automatique</span></label>
+          ${spendProtection && isMulti && laneMode === 'parallel' && html`<div class="batch-note">Les autres modèles continuent leurs générations, vérifications et corrections. Les versions déjà enregistrées sont conservées.</div>`}
           <p class="batch-opt-hint">Un appel interrompu, vide ou filtré peut rester facturé. Les coûts affichés viennent de l’API. Les relances après un échec sont bloquées dans ce navigateur et dans le serveur local, même après actualisation.</p>
           <button class="btn btn-sm" onClick=${async()=>{try{await clearFailedGenerationBlocks();addToast('Relances autorisées : un nouvel appel pourra être facturé.','info');}catch(error){addToast(error.message,'error');}}}>Autoriser les relances après échec (nouveau coût possible)</button>
           <label class="batch-opt"><span>Adaptation aux capacités API</span>
@@ -893,7 +924,7 @@ export function BatchRunDialog({
     <div class="modal-footer">
       <button class="btn" onClick=${onClose}>Annuler</button>
       <button class="btn btn-primary btn-generate" onClick=${start} disabled=${!canRun || !hasDirectory || selectedCount === 0 || settingsLoading || previewReports.some(r=>r.error)}>
-        <i class="fa-solid fa-play"></i> Lancer ${selectedCount} prompt${selectedCount === 1 ? '' : 's'}${isMulti ? ` × ${runModels.length} modèles` : ''}${plannedCalls !== null ? ` · ${plannedCalls} appel${plannedCalls === 1 ? '' : 's'} prévu${plannedCalls === 1 ? '' : 's'}` : ''}
+        <i class="fa-solid fa-play"></i> ${resumeFrom ? 'Reprendre la vérification de' : 'Lancer'} ${selectedCount} prompt${selectedCount === 1 ? '' : 's'}${isMulti ? ` × ${runModels.length} modèles` : ''}${plannedCalls !== null ? ` · ${plannedCalls} appel${plannedCalls === 1 ? '' : 's'} prévu${plannedCalls === 1 ? '' : 's'}` : ''}
       </button>
     </div>
   `;
@@ -1083,6 +1114,7 @@ export function BatchRunDialog({
         <div class="batch-summary-grid">
           ${runIsMulti ? html`<div class="batch-stat"><strong>${summary?.lanes || 0}</strong><span>modèles</span></div>` : null}
           <div class="batch-stat"><strong>${summary?.generated || 0}</strong><span>générés</span></div>
+          ${summary?.resumed ? html`<div class="batch-stat"><strong>${summary.resumed}</strong><span>repris</span></div>` : null}
           <div class="batch-stat"><strong>${summary?.healed || 0}</strong><span>corrigés</span></div>
           <div class="batch-stat"><strong>${summary?.saved || 0}</strong><span>enregistrés</span></div>
           <div class="batch-stat"><strong>${summary?.skipped || 0}</strong><span>ignorés</span></div>
@@ -1097,7 +1129,7 @@ export function BatchRunDialog({
             <span><strong>${summary?.repairRounds || 0}</strong> cycles de correction</span>
           </div>
         ` : null}
-        ${summary?.stopped ? html`<div class="batch-note"><i class="fa-solid fa-hand"></i> ${summary.protectionStopped?'Protection des dépenses : lot arrêté après un échec. Les lignes « Non lancé » n’ont déclenché aucun appel.':'Exécution interrompue.'}</div>` : null}
+        ${summary?.stopped ? html`<div class="batch-note"><i class="fa-solid fa-hand"></i> ${summary.protectionStopped?'Protection des dépenses : les modèles en échec ont été arrêtés indépendamment. Les autres ont pu continuer. Les résultats enregistrés restent disponibles.':'Exécution interrompue.'}</div>` : null}
       </div>
 
       <${BatchCosts} calls=${costCalls} done=${true} startedAt=${journalStartedAtRef.current} finishedAt=${batchFinishedAt} />
@@ -1117,8 +1149,10 @@ export function BatchRunDialog({
                 ${it.repairRound ? html` <span class="batch-healed-chip">${it.repairRound} correction${it.repairRound === 1 ? '' : 's'}</span>` : null}
                 ${it.status === 'error' && it.message ? html`<span class="batch-run-err" title=${it.message}> — ${it.message}</span>` : null}
                 ${it.savedIds?.length ? html`
+                  <button class="btn btn-xs" onClick=${() => prepareResume(idx)}>Reprendre / corriger</button>
                   <button class="batch-fullscreen-button" title="Ouvrir la génération interactive en plein écran"
                     onClick=${() => openFullscreen(idx)}><i class="fa-solid fa-expand"></i></button>` : null}
+                ${!it.savedIds?.length && ['error','stopped','not-started'].includes(it.status) && html`<button class="btn btn-xs" onClick=${() => prepareRetry(idx)}>Préparer un nouvel essai</button>`}
               </span>
             </div>
           `;
@@ -1128,7 +1162,7 @@ export function BatchRunDialog({
     </div>
 
     <div class="modal-footer">
-      <button class="btn" onClick=${() => setPhase('config')}><i class="fa-solid fa-rotate-left"></i> Nouvelle exécution</button>
+      <button class="btn" onClick=${() => {setResumeFrom(null);setPhase('config');}}><i class="fa-solid fa-rotate-left"></i> Nouvelle exécution</button>
       <button class="btn" onClick=${() => { onOpenGallery?.(); onClose(); }}>
         <i class="fa-solid fa-images"></i> Voir dans la galerie
       </button>
@@ -1164,7 +1198,7 @@ export function BatchRunDialog({
       <${BatchLiveComparison} models=${logModels} runList=${runList} items=${items} outputs=${outputs} costCalls=${costCalls}
         liveCalls=${liveCalls} now=${rateClock} done=${phase === 'done'} paused=${pauseState === 'paused'} theme=${theme}
         onFullscreen=${openFullscreen} showLiveOutput=${showLiveOutput}/>
-      ${phase === 'running' ? renderRunControls() : html`<div class="modal-footer"><button class="btn" onClick=${() => {setPhase('config');onRestore?.();}}>Nouvelle exécution</button><button class="btn" onClick=${() => {onOpenGallery?.();onClose();}}>Voir dans la galerie</button></div>`}
+      ${phase === 'running' ? renderRunControls() : html`<div class="modal-footer"><button class="btn" onClick=${() => {setResumeFrom(null);setPhase('config');onRestore?.();}}>Nouvelle exécution</button><button class="btn" onClick=${() => {onOpenGallery?.();onClose();}}>Voir dans la galerie</button></div>`}
     </section>`;
   };
 
