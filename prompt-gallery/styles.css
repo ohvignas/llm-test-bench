@@ -3133,34 +3133,12 @@ button.create-run-label:hover { text-decoration: underline; }
 .batch-error-detail { padding: 10px; color: var(--danger); overflow-wrap: anywhere; white-space: normal; user-select: text; }
 .batch-run-item > .btn { flex-shrink: 0; }
 /* Persisted executions and per-prompt comparisons. */
-.execution-browser { padding: 20px; min-height: 0; overflow: auto; flex-shrink: 0; }
-.main-content > .execution-browser { height: 100%; box-sizing: border-box; }
-.execution-heading { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px; }
-.execution-heading h2 { font-size: 18px; margin: 0; }
-.execution-heading > span, .execution-note { font-size: 13px; color: var(--text-secondary, #aaa); }
-.execution-heading > button:last-child { margin-left: auto; }
-.execution-projects { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
-.execution-project { display: flex; flex-direction: column; text-align: left; gap: 10px; padding: 20px; border: 1px solid var(--border-color, #444); border-radius: 10px; background: var(--bg-secondary, #242424); color: inherit; cursor: pointer; font: inherit; }
-.execution-project:hover, .execution-project:focus-visible { border-color: #3b82f6; outline: 2px solid #3b82f655; }
-.execution-project b { color: #60a5fa; margin-top: 8px; font-size: 13px; }
-.execution-project small { opacity: .7; }
-.execution-table-wrap { overflow-x: auto; }
-.execution-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
-.execution-table th, .execution-table td { padding: 12px; border-bottom: 1px solid var(--border-color, #444); vertical-align: top; }
-.execution-table td:first-child { min-width: 230px; }
-.execution-table td span, .execution-table td small { display: block; margin-top: 5px; }
-.execution-table td small { opacity: .75; }
-.execution-error { color: #f87171; overflow-wrap: anywhere; }
-.execution-panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 16px; align-items: start; }
-.execution-pane { min-width: 0; border: 1px solid var(--border-color, #444); border-radius: 10px; background: var(--bg-secondary, #242424); overflow: hidden; }
-.execution-pane.is-error { border-color: #f87171; }
-.execution-pane header { display: flex; flex-direction: column; gap: 8px; padding: 15px; font-size: 13px; }
-.execution-pane header > span { color: #60a5fa; }
-.execution-pane header > button { align-self: flex-start; }
-.execution-preview-head { padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; border-top: 1px solid var(--border-color, #444); }
-.execution-preview { height: 440px; background: var(--bg-primary, #1b1b1b); }
-.execution-preview > iframe { width: 100%; height: 100%; border: 0; }
-.execution-preview > p { padding: 30px; color: var(--text-secondary, #aaa); }
-.execution-pane details, .execution-pane > .execution-note { padding: 12px 15px; font-size: 13px; }
-.execution-pane summary { cursor: pointer; }
-.execution-code pre, .execution-summary-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 280px; overflow: auto; font-size: 12px; }
+
+/* Project navigation uses the batch workspace, not a second results browser. */
+.execution-project-tabs { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.execution-project-tabs > button { display:flex; flex-direction:column; align-items:flex-start; gap:4px; max-width:360px; white-space:normal; text-align:left; }
+.execution-project-tabs small, .execution-project-row small { display:block; font-size:12px; font-weight:400; opacity:.8; }
+.execution-project-tabs label { display:flex; flex-direction:column; gap:4px; margin-left:auto; font-size:12px; }
+.execution-project-row .runs-row-model { white-space:normal; }
+.execution-legacy-history { font-size:12px; flex-shrink:0; }
+.execution-legacy-history > summary { cursor:pointer; padding:10px; color:var(--text-secondary); }

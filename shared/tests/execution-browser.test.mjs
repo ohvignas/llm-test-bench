@@ -49,3 +49,37 @@ test('explicit Stop cancels the server call but merely disconnecting the reader 
     if(manual)await assert.rejects(reader.read(),e=>e.name==='AbortError');
   }
 });
+
+test('restored batch view includes all six zero-output calls before a single page exists',async()=>{
+  const {executionBatchSnapshot}=await import('../../prompt-gallery/services/executions.js');
+  const {liveComparisonCards}=await import('../../prompt-gallery/services/batchLiveComparison.js');
+  const {batchActivity}=await import('../../prompt-gallery/services/batchActivity.js');
+  const calls=Array.from({length:6},(_,i)=>({id:'call'+i,model:'model'+Math.floor(i/3),started:100,updated:105,
+    context:{groupId:'batch',promptId:'prompt'+i%3,title:'Projet '+i%3},
+    state:i===0?'queued':'reasoning',output_chars:0,reasoning_events:i+10,usage:{},error:{}}));
+  const snapshot=executionBatchSnapshot(calls,106000);
+  assert.equal(snapshot.models.length,2);assert.equal(snapshot.runList.length,6);
+  assert.equal(snapshot.done,false);assert.equal(snapshot.outputs.join(''),'');
+  assert.equal(snapshot.costCalls.length,6);assert.equal(snapshot.liveCalls.length,6);
+  for(const project of executionProjects(calls)){
+    const cards=liveComparisonCards({...snapshot,calls:snapshot.costCalls,promptId:project.key});
+    assert.equal(cards.length,2);
+    for(const card of cards){
+      assert.equal(card.prompt.title,project.title);assert.equal(card.calls.length,1);
+      const activity=batchActivity({...card,liveCalls:snapshot.liveCalls,entries:snapshot.entries});
+      assert.equal(activity.live.id,card.calls[0].id);
+      assert.equal(activity.signals,calls.find(c=>c.id===activity.live.id).reasoning_events);
+    }
+  }
+});
+test('a partial failure, its cost and successful peer stay available in the original batch panes',async()=>{
+  const {executionBatchSnapshot}=await import('../../prompt-gallery/services/executions.js');
+  const context={groupId:'lot',promptId:'p',title:'Mon projet'};
+  const snapshot=executionBatchSnapshot([
+    {id:'failed',model:'a',context,state:'error',started:100,updated:120,output:'<html>partiel',error:{message:'Limite atteinte'},usage:{cost:2}},
+    {id:'peer',model:'b',context,state:'ok',started:100,updated:130,output:'<html>complet</html>',error:{},usage:{cost:1}},
+  ]);
+  assert.equal(snapshot.done,true);assert.deepEqual(snapshot.items.map(i=>i.status),['error','saved']);
+  assert.equal(snapshot.outputs[0],'<html>partiel');assert.equal(snapshot.items[0].message,'Limite atteinte');
+  assert.equal(snapshot.costCalls.reduce((total,c)=>total+c.usd,0),3);
+});

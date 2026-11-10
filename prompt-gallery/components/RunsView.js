@@ -6,6 +6,7 @@ import { ExecutionSummary } from './ExecutionSummary.js';
 import { RatingWidget } from './RatingWidget.js';
 import { promptSetLabel } from '../services/library.js';
 import { ExecutionBrowser } from './ExecutionBrowser.js';
+import { secureMode } from '../../shared/services/secure-session.js';
 
 // Core is the default, so it stays quiet; any other set is called out.
 function SetBadge({ promptSet }) {
@@ -43,6 +44,7 @@ export function RunsView({ generations, hasDirectory, onPickDirectory, onOpen, o
   const [singleId, setSingleId] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [merging, setMerging] = useState(false);
+  const [browseSaved, setBrowseSaved] = useState(false);
 
   const runs = useMemo(() => buildRuns(generations), [generations]);
   // Pages are not in the scan any more, so the run being looked at fetches its
@@ -222,10 +224,11 @@ export function RunsView({ generations, hasDirectory, onPickDirectory, onOpen, o
     rating: it.rating,
   })), [singleRun, pageOf]);
 
+  if (secureMode() && !browseSaved && !initialRunId) return html`<${ExecutionBrowser} view="runs" onBrowseSaved=${()=>setBrowseSaved(true)} />`;
   if (!hasDirectory) {
     return html`
       <div class="runs-view">
-        <${ExecutionBrowser} />
+        ${secureMode() && html`<button class="btn" onClick=${()=>setBrowseSaved(false)}>← Revenir aux projets en cours</button>`}
         <div class="runs-empty">
           <i class="fa-solid fa-folder-open"></i>
           <p>Connectez un dossier pour consulter les exécutions par lot enregistrées.</p>
@@ -277,7 +280,7 @@ export function RunsView({ generations, hasDirectory, onPickDirectory, onOpen, o
           <span>Cette exécution ne figure pas dans ce dossier ; aucun enregistrement sous <code>${initialRunId}</code>. Actualisez ou choisissez une exécution ci-dessous.</span>
         </div>
       `}
-      <${ExecutionBrowser} />
+      ${secureMode() && html`<button class="btn btn-sm" onClick=${()=>setBrowseSaved(false)}>← Revenir aux projets en cours</button>`}
       <div class="runs-toolbar">
         <div class="runs-intro">
           <i class="fa-solid fa-clock-rotate-left"></i>
