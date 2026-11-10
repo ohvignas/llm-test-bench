@@ -10,6 +10,7 @@ from .auth import json_object
 from .storage import api_key
 from .spend_guard import reserve, finish, clear_failed
 from .activity import Activity
+from .model_policy import policies
 
 proxy = Blueprint('proxy', __name__)
 UPSTREAM = 'https://openrouter.ai/api/v1'
@@ -153,12 +154,19 @@ def relay():
             finally:
                 upstream.close()
                 successful = completed and not failed and ((received and stop_reason == 'stop') or stop_reason == 'tool_calls')
-                finish(identity, successful, filtered=filtered or stop_reason == 'content_filter')
+                effort=(payload.get('reasoning') or {}).get('effort') or payload.get('reasoning_effort')
+                exhausted=completed and not received and stop_reason=='length' and effort in ('low','minimal','none')
+                finish(identity, successful, filtered=filtered or stop_reason == 'content_filter', exhausted=exhausted)
                 activity.finish('ok' if successful else 'cancelled' if cancelled or not completed and not failed else 'error')
         return Response(stream_with_context(chunks()), mimetype='text/event-stream',
-                        headers={'X-Accel-Buffering': 'no', 'Cache-Control': 'no-store'})
+                        headers={'X-Accel-Buffering': 'no', 'Cache-Control': 'no-store', 'X-Bench-Call-Id': activity.id})
     try:
         result = upstream.json()
+        if not chat and isinstance(result, dict) and isinstance(result.get('data'), list):
+            learned = policies()
+            for model in result['data']:
+                if isinstance(model, dict) and model.get('id') in learned:
+                    model['bench_policy'] = learned[model['id']]
         # Normally the service never echoes credentials; enforce this at our boundary.
         if identity:
             activity.observe(result)

@@ -11,8 +11,8 @@ import time
 ACTIVE = ('connecting', 'waiting', 'reasoning', 'writing')
 
 
-def redact(value):
-    text = str(value or '')[:2000]
+def redact(value, limit=2000):
+    text = str(value or '')[:limit]
     text = re.sub(r'(?i)\bsk-[a-z0-9_-]+', '[clé masquée]', text)
     text = re.sub(r'(?i)Bearer\s+[^\s,;]+', 'Bearer [masqué]', text)
     return re.sub(r'(?i)(api[_-]?key|authorization|access[_-]?token|secret)\s*[:=]\s*[^\s,;]+', r'\1=[masqué]', text)
@@ -53,7 +53,7 @@ def status(root):
                 pass
         return {'active_calls': len(active), 'https_connections': https, 'calls': calls,
                 'legacy_active_calls': max(0, len(active)-sum(c['state'] in ACTIVE for c in calls)),
-                'failed_blocks': sum(r['state'] in ('failed', 'filtered') for r in guards),
+                'failed_blocks': sum(r['state'] in ('failed', 'filtered', 'exhausted') for r in guards),
                 'live_tracking_available': bool(has_activity)}
 
 
@@ -117,13 +117,13 @@ def journal(source):
     return json.loads(redact_json(result))
 
 
-def redact_json(value):
+def redact_json(value, limit=2000):
     if isinstance(value, dict):
         return json.dumps({k: '[masqué]' if re.search(r'(?i)api.?key|authorization|secret|password|access.?token', k)
-                           else json.loads(redact_json(v)) for k,v in value.items()}, ensure_ascii=False)
+                           else json.loads(redact_json(v, limit)) for k,v in value.items()}, ensure_ascii=False)
     if isinstance(value, list):
-        return json.dumps([json.loads(redact_json(v)) for v in value], ensure_ascii=False)
-    return json.dumps(redact(value) if isinstance(value, str) else value, ensure_ascii=False)
+        return json.dumps([json.loads(redact_json(v, limit)) for v in value], ensure_ascii=False)
+    return json.dumps(redact(value, limit) if isinstance(value, str) else value, ensure_ascii=False)
 
 
 def cancel(root, call_id):

@@ -74,12 +74,12 @@ def reserve(payload, automatic=None):
     return identity if inserted else None
 
 
-def finish(identity, successful, filtered=False):
+def finish(identity, successful, filtered=False, exhausted=False):
     connection = db()
     if successful:
         connection.execute('DELETE FROM generation_guard WHERE fingerprint=?', (identity,))
     else:
-        connection.execute('UPDATE generation_guard SET state=? WHERE fingerprint=?', ('filtered' if filtered else 'failed', identity))
+        connection.execute('UPDATE generation_guard SET state=? WHERE fingerprint=?', ('filtered' if filtered else 'exhausted' if exhausted else 'failed', identity))
     connection.execute('UPDATE automatic_runs SET pending=NULL WHERE pending=?', (identity,))
     connection.commit()
 

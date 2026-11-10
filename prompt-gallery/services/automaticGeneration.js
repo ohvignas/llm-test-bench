@@ -39,6 +39,7 @@ export async function runAutomaticGeneration({prompt,model,deps,onEvent=()=>{},s
   const savedIds=[];
   let candidate=initialCandidate?.html || '', partial='', recoveryLevel=0, calls=0, repairs=0;
   let reason=initialCandidate?'Vérifier le code conservé':'Génération initiale', action=initialCandidate?'check':'generate', runtime=null;
+  let lastSettings=null, callCost=null;
   let error=null, runtimeErrors=[], lastSaved=initialCandidate?.variantKey || initialCandidate?.id || '', savedCandidate='';
   if(initialCandidate)try {requireHtmlDocument(candidate);} catch {action='complete';reason='Terminer le code conservé';recoveryLevel=1;}
   const emit=event=>onEvent(event);
@@ -57,8 +58,8 @@ export async function runAutomaticGeneration({prompt,model,deps,onEvent=()=>{},s
       await waitIfPaused?.({phase:'automatic-boundary',attempt:calls+1});
       if (shouldStop()) break;
       if (action !== 'check') {
-        calls++; partial=''; runtime=null;
-        const options={model:configured(),onChunk:html=>{if(html)partial=html;emit({type:'chunk',html:html||candidate});},onStats:stats=>emit({type:'stats',stats})};
+        calls++; partial=''; runtime=null;callCost=null;lastSettings=null;
+        const options={model:configured(),onChunk:html=>{if(html)partial=html;emit({type:'chunk',html:html||candidate});},onStats:stats=>{if(stats?.settings)lastSettings=stats.settings;if(Number.isFinite(stats?.cost)&&stats.cost>=0)callCost=stats.cost;emit({type:'stats',stats});}};
         emit({type:'log',message:`Automatique · appel ${calls}/${AUTOMATIC_CALL_LIMIT} · ${reason}`});
         emit({type:'item',status:action==='repair'?'healing':'generating',attempt:calls-1});
         try {
@@ -77,6 +78,16 @@ export async function runAutomaticGeneration({prompt,model,deps,onEvent=()=>{},s
           // Save a checkpoint even after Stop/transport failure; never discard paid code.
           if(candidate)await save(candidate,false,`${reason} — ${failure.message}`);
           if(failure.name==='AbortError'||shouldStop())break;
+          if(failure.stats?.settings)lastSettings=failure.stats.settings;
+          if(Number.isFinite(failure.stats?.cost)&&failure.stats.cost>=0)callCost=failure.stats.cost;
+          const effort=lastSettings?.params?.reasoning?.effort??lastSettings?.params?.reasoning_effort;
+          const minimum=['max','xhigh','high','medium','low','minimal'].filter(e=>(lastSettings?.supportedEfforts||[]).includes(e)).at(-1);
+          if(!received&&['OUTPUT_TOKEN_LIMIT','EMPTY_RESPONSE'].includes(failure.code)&&effort&&effort===minimum) {
+            emit({type:'log',message:'Aucun code même au plus faible effort disponible : arrêt des répétitions payantes. Le diagnostic et le coût restent conservés.'});break;
+          }
+          if(callCost===null&&failure.requestSent!==false) {
+            emit({type:'log',message:'Coût final non reçu : aucune relance payante automatique. Rapprocher le coût avant de reprendre.'});break;
+          }
           const recovery=recoveryFor(failure,received);
           if(!recovery||calls>=AUTOMATIC_CALL_LIMIT)break;
           if(recovery.kind==='reasoning'||recovery.kind==='complete')recoveryLevel=Math.min(2,recoveryLevel+1);

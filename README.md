@@ -153,25 +153,42 @@ Toutes les commandes se lancent depuis le dossier contenant `compose.yaml`.
 
 Le bouton flottant **Suivi des générations** ouvre maintenant un panneau sur place : chaque modèle, durée, caractères reçus et signaux de raisonnement sont visibles sans quitter la génération.
 
-### CLI locale pour le diagnostic
+### CLI locale : piloter, diagnostiquer et reprendre les lots
 
-Depuis le dossier du projet, avec Python 3 et Docker :
+La CLI utilise le coffre du serveur et les droits Docker locaux. Elle permet de gérer les générations sans ouvrir le navigateur. Python 3 et Docker Compose sont requis sur l’hôte.
 
 ```sh
 ./benchctl status --json
 ./benchctl doctor
-./benchctl history --limit 10
-./benchctl journal "/chemin/journal-generation.json"
-./benchctl cancel IDENTIFIANT_EXACT_DE_L_APPEL
+./benchctl models --query claude --json
+./benchctl prompts --query jeu --json
+./benchctl plan --model IDENTIFIANT_API --prompt IDENTIFIANT_PROMPT --budget-usd 1 --json
+./benchctl run IDENTIFIANT_DU_LOT --execute --json
+./benchctl logs IDENTIFIANT_DU_LOT --follow --seconds 30
+./benchctl show IDENTIFIANT_DU_LOT --json
 ```
 
-`status` lit les appels en cours côté serveur, `doctor` signale notamment les sorties épuisées sans code, `history` lit les métriques enregistrées et `journal` analyse un export de l’interface. `cancel` demande l’arrêt d’un seul appel au prochain fragment du fournisseur ; il ne relance rien et n’efface pas les résultats. Les tokens déjà traités peuvent rester facturés. L’interface peut classer cet arrêt comme un échec, avec son message explicite.
+`plan` ne génère rien. **Seuls `run --execute` et `resume --execute` peuvent lancer des appels payants.** Le budget est obligatoire, la sortie s’adapte aux tarifs annoncés et chaque tentative réserve son coût maximal avant l’appel. Les coûts affichés comme confirmés viennent de l’API ; un coût absent ne vaut jamais zéro. Cette protection concerne le lot CLI, pas les appels lancés séparément dans le navigateur.
 
-Les commandes n’effectuent aucun appel de génération et ne lisent pas la clé du coffre. L’accès repose sur les droits Docker locaux, sans endpoint d’administration public. `--json` fournit une sortie structurée pour les agents. Sans Python sur l’hôte, utiliser `docker compose exec -T bench python -m server.diagnostics status --json` (idem pour `doctor`, `history` et `cancel`). Sur Windows avec Python : `python benchctl status --json`.
+Plusieurs `--model` et `--prompt` permettent un lot simultané avec des prompts de catégories différentes. `--prompt-file consigne.md` accepte votre propre consigne. Les sorties et métadonnées sont enregistrées dans la galerie. Fermer le terminal ne coupe pas le worker ; redémarrer Docker l’interrompt.
 
-Le suivi détaillé serveur commence avec les appels lancés après cette mise à jour ; les anciens appels restent identifiés comme tels. Il conserve uniquement les compteurs, réglages et coûts reçus, pendant 30 jours pour les appels terminés, sans texte des prompts, code ou raisonnement interne. Un coût absent reste inconnu, jamais zéro. `history` dépend des métriques enregistrées par l’interface. Le suivi ne prouve pas qu’un modèle ne boucle pas intérieurement et ne garantit pas la réussite de la génération.
+`pause` attend la fin des appels en cours ; `stop` demande leur arrêt. `resume` conserve le budget et les trois tentatives maximum par élément et ne refait pas les réussites. `repair --generation DOSSIER/VARIANTE --instructions "Erreur observée" --budget-usd 0.5` prépare un nouveau plan de correction en conservant l’original. `reconcile` récupère une facture manquante sans générer à nouveau. Les échecs d’un modèle ne coupent pas les autres.
 
-Pour une installation obtenue en ZIP, sauvegarder les volumes avant une mise à jour et suivre le [guide de migration](docs/OPERATIONS.md) : un dossier renommé peut désigner un autre projet Compose et donc d'autres volumes.
+Le mode automatique apprend les épuisements de raisonnement sans code et réduit l’effort au prochain départ. Les capacités API restent la référence ; les paramètres manuels permettent un choix volontaire différent. Un document enregistré doit encore être vérifié visuellement et fonctionnellement. Aucun fournisseur ne garantit une sortie correcte pour toute consigne.
+
+- [Commandes détaillées](skills/llm-bench-operator/references/commands.md)
+- [Diagnostic et reprises](skills/llm-bench-operator/references/recovery.md)
+- Diagnostics existants : `history --limit 10`, `journal /chemin/journal-generation.json`, `cancel ID_APPEL`.
+- Tests serveur sans appel payant : `./benchctl self-test`.
+- Installation Python native : `python -m server.control --help` avec vos répertoires de données habituels.
+
+Le skill Codex complet est inclus dans le dépôt et s’installe localement :
+
+```sh
+./benchctl install-skill
+```
+
+Puis demander à Codex d’utiliser **`$llm-bench-operator`**. Ouvrir un nouveau chat si le skill n’apparaît pas encore. L’installation ne copie aucune clé ; elle mémorise seulement le chemin local du dépôt. Sur Windows avec Python, remplacer `./benchctl` par `python benchctl`.
 
 ## Données, sauvegarde et migration
 

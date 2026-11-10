@@ -76,7 +76,7 @@ export async function streamChat({ provider, modelId, systemPrompt, userPrompt, 
   if (appTitle === 'Prompt Gallery' || generationOptions) {
     try {
       signal?.throwIfAborted();
-      const model = await getModelCapabilities(modelId,{signal});
+      const model = await getModelCapabilities(modelId,{signal,refresh:generationOptions?.profile==='automatic'});
       settings = resolveModelSettings({...generationOptions,model,params});
       params = settings.params;
       // Only numeric capabilities and sent settings, never prompts or credentials.

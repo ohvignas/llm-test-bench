@@ -107,3 +107,13 @@ test('automatic mode carries its bounded allowance to the actual local proxy and
   assert.ok(sent.every(r=>r.body.max_tokens===64000));assert.equal(saved.length,1);
  } finally {globalThis.fetch=previous;}
 });
+
+
+test('learned policy is refreshed and applied in the real automatic adapter',async()=>{
+ apiModel.bench_policy={recovery_level:2};
+ try {
+  const before=fetchCount;
+  await adapter.streamChat({modelId:'vendor/model',appTitle:'Prompt Gallery',userPrompt:'learned-policy-fixture',generationOptions:{profile:'automatic',automatic:{id:crypto.randomUUID(),limit:3}}});
+  assert.ok(fetchCount>before);assert.equal(requests.at(-1).reasoning.effort,'low');
+ }finally{delete apiModel.bench_policy;}
+});

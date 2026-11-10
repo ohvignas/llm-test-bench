@@ -61,6 +61,8 @@ def initialize(app):
                 output_chars INTEGER NOT NULL DEFAULT 0, reasoning_events INTEGER NOT NULL DEFAULT 0,
                 finish_reason TEXT, usage TEXT NOT NULL DEFAULT '{}', settings TEXT NOT NULL DEFAULT '{}',
                 cancel_requested INTEGER NOT NULL DEFAULT 0);
+            CREATE TABLE IF NOT EXISTS model_policies (
+                model TEXT PRIMARY KEY, effort TEXT, max_tokens INTEGER);
             CREATE TABLE IF NOT EXISTS login_attempts (
                 address TEXT NOT NULL, attempted_at INTEGER NOT NULL);
             CREATE INDEX IF NOT EXISTS login_attempt_time ON login_attempts(attempted_at);

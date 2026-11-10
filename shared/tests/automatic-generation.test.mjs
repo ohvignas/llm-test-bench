@@ -37,7 +37,7 @@ test('reasoning exhaustion then runtime error consumes exactly three calls and p
 test('incomplete HTML is saved before its targeted completion, without paying to restart from nothing',async()=>{
  const saved=[],requests=[];let calls=0;
  const result=await runAutomaticGeneration({prompt,model,deps:{
-  generate:async(text,{onChunk})=>{requests.push(text);if(++calls===1){onChunk('<html><body>Conserver ce travail');throw fail('INCOMPLETE_HTML');}assert.equal(saved.length,1);return html('final');},
+  generate:async(text,{onChunk,onStats})=>{onStats({cost:.01});requests.push(text);if(++calls===1){onChunk('<html><body>Conserver ce travail');throw fail('INCOMPLETE_HTML');}assert.equal(saved.length,1);return html('final');},
   runSandbox:async()=>healthy(),save:async data=>{saved.push(data);return{id:`s${saved.length}`};},
  }});
  assert.equal(result.status,'saved');assert.equal(calls,2);assert.match(requests[1],/Conserver ce travail/);
@@ -46,14 +46,14 @@ test('incomplete HTML is saved before its targeted completion, without paying to
 
 test('three exhausted outputs stop and cannot trigger a fourth call',async()=>{
  let calls=0;
- const result=await runAutomaticGeneration({prompt,model,deps:{generate:async()=>{calls++;throw fail('OUTPUT_TOKEN_LIMIT');}}});
+ const result=await runAutomaticGeneration({prompt,model,deps:{generate:async(_,{onStats})=>{onStats({cost:.01});calls++;throw fail('OUTPUT_TOKEN_LIMIT');}}});
  assert.equal(calls,3);assert.equal(result.status,'error');assert.deepEqual(result.savedIds,[]);
 });
 
 for(const error of [fail('CONTENT_FILTERED'),fail('unauthorized',401),fail('credit',402),fail('forbidden',403),fail('bad settings',400),fail('blocked',409)]) {
  test(`non-recoverable ${error.code}/${error.status} stops without another call`,async()=>{
   let calls=0;
-  const result=await runAutomaticGeneration({prompt,model,deps:{generate:async()=>{calls++;throw error;}}});
+  const result=await runAutomaticGeneration({prompt,model,deps:{generate:async(_,{onStats})=>{onStats({cost:.01});calls++;throw error;}}});
   assert.equal(calls,1);assert.equal(result.status,'error');
  });
 }
@@ -63,7 +63,7 @@ test('Retry-After is respected and Stop during wait prevents a new paid request'
  assert.equal(recoveryFor(error).delay,30000);
  assert.equal(recoveryFor({...error,headers:{'retry-after':'900'}}),null);
  let calls=0,stopped=false;
- const result=await runAutomaticGeneration({prompt,model,shouldStop:()=>stopped,wait:async ms=>{assert.equal(ms,30000);stopped=true;},deps:{generate:async()=>{calls++;throw error;}}});
+ const result=await runAutomaticGeneration({prompt,model,shouldStop:()=>stopped,wait:async ms=>{assert.equal(ms,30000);stopped=true;},deps:{generate:async(_,{onStats})=>{onStats({cost:.01});calls++;throw error;}}});
  assert.equal(calls,1);assert.equal(result.status,'stopped');
 });
 
@@ -107,4 +107,28 @@ test('automatic resume of incomplete code completes it before sandbox execution'
   generate:async text=>{calls++;assert.match(text,/Saved/);return html(1);},runSandbox:async text=>{assert.equal(text,html(1));return healthy();},save:async()=>({id:'completed'}),
  }});
  assert.equal(result.status,'saved');assert.equal(calls,1);
+});
+
+
+test('known exhausted model starts low and does not repeat low reasoning-only calls',async()=>{
+ const api=normalizeOpenRouterModel({id:'fixture',bench_policy:{recovery_level:2},supported_parameters:['max_tokens','reasoning'],top_provider:{max_completion_tokens:128000},reasoning:{mandatory:true,supported_efforts:['high','medium','low']}});
+ const settings=resolveModelSettings({model:api,profile:'automatic'});
+ assert.equal(settings.params.reasoning.effort,'low');
+ assert.equal(resolveModelSettings({model:api,profile:'manual',budget:{reasoningEffort:'high'}}).params.reasoning.effort,'high');
+ let calls=0;
+ const result=await runAutomaticGeneration({prompt,model,deps:{generate:async(_,{onStats})=>{calls++;onStats({settings,cost:.1});throw fail('OUTPUT_TOKEN_LIMIT');}}});
+ assert.equal(calls,1);assert.equal(result.status,'error');
+});
+
+test('missing final cost stops automatic retries and retains partial output',async()=>{
+ let calls=0;const saved=[];
+ const result=await runAutomaticGeneration({prompt,model,deps:{generate:async(_,{onChunk})=>{calls++;onChunk('<html><body>Keep');throw fail('INCOMPLETE_HTML');},save:async data=>{saved.push(data);return{id:'partial'};}}});
+ assert.equal(calls,1);assert.equal(saved[0].response,'<html><body>Keep');assert.equal(result.status,'error');
+});
+
+
+test('a cost attached only to the error permits bounded recovery',async()=>{
+ let calls=0;
+ const result=await runAutomaticGeneration({prompt,model,deps:{generate:async()=>{if(++calls===1)throw Object.assign(fail('OUTPUT_TOKEN_LIMIT'),{stats:{cost:.01}});return html(1);},runSandbox:async()=>healthy(),save:async()=>({id:'fixed'})}});
+ assert.equal(calls,2);assert.equal(result.status,'saved');
 });

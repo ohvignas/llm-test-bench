@@ -1,0 +1,4 @@
+interface:
+  display_name: "Piloter LLM Test Bench"
+  short_description: "Lots, coûts et diagnostic OpenRouter via la CLI locale"
+  default_prompt: "Utilise $llm-bench-operator pour examiner les générations, corriger les erreurs et piloter les lots autorisés avec un budget borné."
