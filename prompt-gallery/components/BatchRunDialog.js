@@ -667,12 +667,18 @@ export function BatchRunDialog({
       setMode('automatic'); setPhase('config'); onRestore?.();
     } catch (error) { addToast(error.message, 'error'); }
   };
+  const prepareNewRun = () => {
+    setResumeFrom(null);
+    setMode('automatic');
+    setPhase('config');
+    onRestore?.();
+  };
   const prepareRetry = index => {
     const prompt = runList[index], selectedModel = logModels[prompt.laneIndex || 0];
     setResumeFrom(null); setBatchModels([selectedModel]);
     setSelectedIds(new Set([prompt.id])); setPromptSet(promptSetOf(prompt));
-    setPromptSearch(''); setSkipExisting(false); setPhase('config'); onRestore?.();
-    addToast('Tentative préparée pour ce modèle uniquement. Vérifiez les réglages avant de lancer ; aucun appel envoyé.', 'info');
+    setPromptSearch(''); setSkipExisting(false); setMode('automatic'); setPhase('config'); onRestore?.();
+    addToast('Reprise automatique préparée pour ce modèle uniquement ; aucun appel envoyé avant le lancement.', 'info');
   };
 
   // ── Renderers ──
@@ -1177,7 +1183,7 @@ export function BatchRunDialog({
     </div>
 
     <div class="modal-footer">
-      <button class="btn" onClick=${() => {setResumeFrom(null);setPhase('config');}}><i class="fa-solid fa-rotate-left"></i> Nouvelle exécution</button>
+      <button class="btn" onClick=${prepareNewRun}><i class="fa-solid fa-rotate-left"></i> Nouvelle exécution</button>
       <button class="btn" onClick=${() => { onOpenGallery?.(); onClose(); }}>
         <i class="fa-solid fa-images"></i> Voir dans la galerie
       </button>
@@ -1213,7 +1219,7 @@ export function BatchRunDialog({
       <${BatchLiveComparison} models=${logModels} runList=${runList} items=${items} outputs=${outputs} costCalls=${costCalls}
         liveCalls=${liveCalls} now=${rateClock} done=${phase === 'done'} paused=${pauseState === 'paused'} theme=${theme}
         onFullscreen=${openFullscreen} showLiveOutput=${showLiveOutput}/>
-      ${phase === 'running' ? renderRunControls() : html`<div class="modal-footer"><button class="btn" onClick=${() => {setResumeFrom(null);setPhase('config');onRestore?.();}}>Nouvelle exécution</button><button class="btn" onClick=${() => {onOpenGallery?.();onClose();}}>Voir dans la galerie</button></div>`}
+      ${phase === 'running' ? renderRunControls() : html`<div class="modal-footer"><button class="btn" onClick=${prepareNewRun}>Nouvelle exécution</button><button class="btn" onClick=${() => {onOpenGallery?.();onClose();}}>Voir dans la galerie</button></div>`}
     </section>`;
   };
 
