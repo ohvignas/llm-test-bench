@@ -4,6 +4,7 @@ import re
 
 from flask import Blueprint, Response, abort, jsonify, request, stream_with_context
 import requests
+from werkzeug.exceptions import HTTPException
 
 from .auth import json_object
 from .storage import api_key
@@ -13,19 +14,27 @@ proxy = Blueprint('proxy', __name__)
 UPSTREAM = 'https://openrouter.ai/api/v1'
 
 
+def unsent_error(status, message):
+    # This marker is local evidence, only emitted before requests.request().
+    return jsonify({'error': message, 'requestSent': False}), status
+
+
 @proxy.get('/api/openrouter/models')
 @proxy.post('/api/openrouter/chat/completions')
 def relay():
     key = api_key()
     chat = request.method == 'POST'
     if chat and not key:
-        abort(409, description='Enregistrez votre clé OpenRouter dans Mon compte.')
-    payload = json_object() if chat else None
+        return unsent_error(409, 'Enregistrez votre clé OpenRouter dans Mon compte.')
+    try:
+        payload = json_object() if chat else None
+    except HTTPException as error:
+        return unsent_error(error.code, error.description)
     if chat and (not isinstance(payload.get('model'), str) or not isinstance(payload.get('messages'), list)):
-        abort(400, description='Un modèle et une liste de messages sont requis.')
+        return unsent_error(400, 'Un modèle et une liste de messages sont requis.')
     identity = reserve(payload) if chat else None
     if chat and identity is None:
-        abort(409, description='Appel bloqué : ce prompt et ce modèle sont déjà en cours ou ont échoué. Aucun nouvel appel envoyé. Modifiez le prompt, ou autorisez volontairement les relances dans les options du lot.')
+        return unsent_error(409, 'Appel bloqué : ce prompt et ce modèle sont déjà en cours ou ont échoué. Aucun nouvel appel envoyé. Modifiez le prompt, ou autorisez volontairement les relances dans les options du lot.')
     stream = bool(chat and payload.get('stream'))
     headers = {'Accept': 'text/event-stream' if stream else 'application/json',
                'Content-Type': 'application/json'}
@@ -76,10 +85,18 @@ def relay():
                 except (ValueError, TypeError):
                     return
                 if not isinstance(event, dict):
-                    return
+                    raise ValueError('Invalid event')
                 failed = failed or bool(event.get('error'))
-                for choice in event.get('choices', []):
-                    received = received or bool((choice.get('delta') or {}).get('content'))
+                choices = event.get('choices', [])
+                if not isinstance(choices, list):
+                    raise ValueError('Invalid choices')
+                for choice in choices:
+                    if not isinstance(choice, dict):
+                        raise ValueError('Invalid choice')
+                    delta = choice.get('delta')
+                    if delta is not None and not isinstance(delta, dict):
+                        raise ValueError('Invalid choice')
+                    received = received or bool((delta or {}).get('content'))
                     stop_reason = choice.get('finish_reason') or stop_reason
             try:
                 # Reassemble lines before redaction so credentials split across chunks
@@ -98,7 +115,11 @@ def relay():
                     observe(buffer)
                     yield buffer.replace(key.encode(), b'[redacted]') if key else buffer
             except requests.RequestException:
+                failed = True
                 yield b'data: {"error":"Connexion OpenRouter interrompue."}\n\n'
+            except (ValueError, TypeError):
+                failed = True
+                yield b'data: {"error":"Flux OpenRouter illisible."}\n\n'
             finally:
                 upstream.close()
                 finish(identity, not failed and ((received and stop_reason == 'stop') or stop_reason == 'tool_calls'))
@@ -109,6 +130,10 @@ def relay():
         # Normally the service never echoes credentials; enforce this at our boundary.
         if identity:
             choices = result.get('choices', []) if isinstance(result, dict) else []
+            if (not isinstance(choices, list) or not choices
+                    or any(not isinstance(choice, dict)
+                           or not isinstance(choice.get('message'), dict) for choice in choices)):
+                raise ValueError('Invalid completion')
             successful = bool(choices) and all(choice.get('finish_reason') in ('stop', 'tool_calls') and
                 bool((choice.get('message') or {}).get('content') or (choice.get('message') or {}).get('tool_calls')) for choice in choices)
             finish(identity, successful)

@@ -156,7 +156,10 @@ NESTED_NUMBERS = {
 
 
 def finite_number(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    try:
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 def sanitize_metric(payload):
@@ -221,6 +224,11 @@ def typical():
                         record = json.loads(line)
                     except (ValueError, TypeError):
                         continue
+                    if not isinstance(record, dict):
+                        continue
+                    # Backups/imports can contain older or damaged records;
+                    # apply the same shape checks as the ingestion endpoint.
+                    record = sanitize_metric({'record': record})
                     if (record.get('modelId') == request.args.get('model')
                             and record.get('provider', {}).get('id') == request.args.get('provider')
                             and record.get('outcome') == 'ok'):

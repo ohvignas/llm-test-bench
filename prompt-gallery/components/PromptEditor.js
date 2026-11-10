@@ -7,6 +7,7 @@ import {
   tokensPerSecond,
 } from '../services/batchMetrics.js';
 import { consoleCounts, entryLine, formatConsoleForCopy } from '../services/previewConsole.js';
+import { BatchCosts } from './BatchCosts.js';
 
 export function PromptEditor({
   prompt,
@@ -15,6 +16,7 @@ export function PromptEditor({
   onResponseChange,
   responseStats,
   responseTiming,
+  responseCosts = [],
   isGenerating,
   theme,
   onMorph,
@@ -210,6 +212,7 @@ export function PromptEditor({
       </div>
       <!-- Response Section -->
       <div class="response-section">
+        ${responseCosts.length > 0 && html`<${BatchCosts} calls=${responseCosts} done=${!isGenerating} />`}
         <div class="section-header">
           ${showErrors
             ? html`<span><i class="fa-solid fa-bug"></i> Erreurs</span>`

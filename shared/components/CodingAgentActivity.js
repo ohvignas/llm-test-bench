@@ -1,6 +1,7 @@
 import { html } from 'htm/preact';
 import { useEffect, useState } from 'preact/hooks';
-import { AGENTS, cancelAgentRun, listAgentRuns } from '../services/agent-backend.js';
+import { AGENTS, cancelAgentRun, listAgentRuns, isAgentBridgeReachable } from '../services/agent-backend.js';
+import { secureMode } from '../services/secure-session.js';
 
 const POLL_MS = 5000;
 
@@ -19,15 +20,21 @@ export function CodingAgentActivity({ appId = '' }) {
   const [stopping, setStopping] = useState(() => new Set());
 
   useEffect(() => {
+    // The authenticated server does not expose the CLI process bridge.
+    if (secureMode()) return;
     let live = true;
+    let timer;
     const poll = async () => {
       const result = await listAgentRuns();
       const prefix = appId ? `${appId}/` : '';
       const active = (result.runs || []).filter(run => !run.done && (!prefix || run.projectDir?.startsWith(prefix)));
       if (live) setRuns(active);
     };
-    poll();
-    const timer = setInterval(poll, POLL_MS);
+    isAgentBridgeReachable().then(reachable => {
+      if (!live || !reachable) return;
+      poll();
+      timer = setInterval(poll, POLL_MS);
+    });
     return () => { live = false; clearInterval(timer); };
   }, [appId]);
 

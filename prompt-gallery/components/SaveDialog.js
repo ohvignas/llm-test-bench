@@ -50,9 +50,12 @@ export function SaveDialog({
   const [tags, setTags] = useState('');
   const [suggestingName, setSuggestingName] = useState(false);
   const [suggestingTags, setSuggestingTags] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const nameInputRef = useRef(null);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
+    if (savingRef.current) return;
     const trimmed = name.trim();
     if (!trimmed) {
       addToast('Saisissez un nom pour cette génération', 'error');
@@ -60,12 +63,18 @@ export function SaveDialog({
     }
     const folderName = trimmed.replace(/[<>:"/\\|?*]+/g, '-').replace(/\s+/g, '-').toLowerCase();
     const tagList = tags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
-    onSave(folderName, tagList, modelName.trim() || 'unknown');
+    savingRef.current = true;
+    setSaving(true);
+    try { await onSave(folderName, tagList, modelName.trim() || 'unknown'); }
+    finally { savingRef.current = false; setSaving(false); }
   }, [name, tags, modelName, onSave, addToast]);
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Escape') onClose();
-    if (e.key === 'Enter' && !e.shiftKey) handleSave();
+    if (e.key === 'Enter' && !e.shiftKey && e.target?.tagName !== 'BUTTON') {
+      e.preventDefault();
+      handleSave();
+    }
   }, [onClose, handleSave]);
 
   useEffect(() => {
@@ -144,9 +153,9 @@ export function SaveDialog({
 
   return html`
     <div class="modal-overlay" onKeyDown=${handleKeyDown}>
-      <div class="modal save-dialog" onClick=${(e) => e.stopPropagation()} style=${{ width: '560px' }}>
+      <div class="modal save-dialog" role="dialog" aria-modal="true" aria-labelledby="save-generation-title" onClick=${(e) => e.stopPropagation()} style=${{ width: '560px' }}>
         <div class="modal-header">
-          <h2>Enregistrer la génération</h2>
+          <h2 id="save-generation-title">Enregistrer la génération</h2>
           <button class="btn-icon" onClick=${onClose}>
             <i class="fa-solid fa-xmark"></i>
           </button>
@@ -154,14 +163,14 @@ export function SaveDialog({
 
         <div class="modal-body">
           <div class="form-group">
-            <label>Nom</label>
+            <label for="save-generation-name">Nom</label>
             <div class="input-with-suggest">
               <input
+                id="save-generation-name"
                 ref=${nameInputRef}
                 class="form-input"
                 value=${name}
                 onInput=${(e) => setName(e.target.value)}
-                onKeyDown=${(e) => e.key === 'Enter' && handleSave()}
                 placeholder="ex. page-accueil-v1"
               />
               ${showNameSuggest && html`
@@ -182,8 +191,9 @@ export function SaveDialog({
           </div>
 
           <div class="form-group">
-            <label>Modèle</label>
+            <label for="save-generation-model">Modèle</label>
             <input
+              id="save-generation-model"
               class="form-input"
               value=${modelName}
               onInput=${(e) => setModelName(e.target.value)}
@@ -195,9 +205,10 @@ export function SaveDialog({
           </div>
 
           <div class="form-group">
-            <label>Étiquettes (séparées par des virgules)</label>
+            <label for="save-generation-tags">Étiquettes (séparées par des virgules)</label>
             <div class="input-with-suggest">
               <input
+                id="save-generation-tags"
                 class="form-input"
                 value=${tags}
                 onInput=${(e) => setTags(e.target.value)}
@@ -220,8 +231,8 @@ export function SaveDialog({
 
         <div class="modal-footer">
           <button class="btn" onClick=${onClose}>Annuler</button>
-          <button class="btn btn-primary" onClick=${handleSave}>
-            <i class="fa-solid fa-floppy-disk"></i> Enregistrer
+          <button class="btn btn-primary" onClick=${handleSave} disabled=${saving}>
+            <i class="fa-solid fa-floppy-disk"></i> ${saving ? 'Enregistrement…' : 'Enregistrer'}
           </button>
         </div>
       </div>

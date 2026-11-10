@@ -18,6 +18,7 @@ import {
 } from '../services/providers-unsloth-studio.js';
 import { prefs as readPrefs, setPref as setAppPref } from '../services/app-prefs.js';
 import { isPublicDistribution } from '../services/distribution.js';
+import { secureMode } from '../services/secure-session.js';
 
 const LOCAL_PROVIDER_META = {
   lmstudio: {
@@ -69,6 +70,7 @@ function localProviderMeta(type) {
 
 export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
   const isPerApp = !!appId;
+  const proxyAvailable = !secureMode() && !isPublicDistribution();
   // The private hub has a full global Settings app, so its per-app dialogs only
   // control visibility. The small public distribution has no provider manager;
   // let visitors add/edit shared endpoints directly from any gallery instead.
@@ -88,7 +90,7 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
   const [newType, setNewType] = useState('lmstudio');
   const [newApiKey, setNewApiKey] = useState('');
   const [newModelIds, setNewModelIds] = useState('');
-  const [newUseProxy, setNewUseProxy] = useState(true);
+  const [newUseProxy, setNewUseProxy] = useState(proxyAvailable);
   const [newTags, setNewTags] = useState('');
   const [newTimeout, setNewTimeout] = useState('30000');
   const [editingId, setEditingId] = useState(null);
@@ -177,10 +179,10 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
     setNewUrl('');
     setNewApiKey('');
     setNewModelIds('');
-    setNewUseProxy(true);
+    setNewUseProxy(proxyAvailable);
     setNewTags('');
     setNewTimeout('30000');
-  }, []);
+  }, [proxyAvailable]);
 
   const startAddEndpoint = useCallback((type) => {
     const meta = localProviderMeta(type);
@@ -190,11 +192,11 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
     setNewUrl(meta.defaultUrl);
     setNewApiKey('');
     setNewModelIds('');
-    setNewUseProxy(true);
+    setNewUseProxy(proxyAvailable);
     setNewTags('');
     setNewTimeout('30000');
     setShowAddForm(true);
-  }, []);
+  }, [proxyAvailable]);
 
   // ── Add local endpoint ──
   const handleAdd = useCallback(() => {
@@ -211,7 +213,7 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
     // Unsloth key store, and that can pin model ids / route via the hub proxy.
     if (meta.keyOnProvider) cfg.apiKey = newApiKey.trim();
     if (meta.supportsModelIds) cfg.modelIds = newModelIds.trim();
-    if (meta.supportsProxy) cfg.useProxy = newUseProxy;
+    if (meta.supportsProxy) cfg.useProxy = proxyAvailable && newUseProxy;
     const provider = meta.create(cfg);
     try {
       providers.addProvider(provider);
@@ -221,7 +223,7 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
     } catch (e) {
       alert(e.message);
     }
-  }, [newType, newName, newUrl, newApiKey, newModelIds, newUseProxy, newTags, newTimeout, resetEndpointForm, reload]);
+  }, [newType, newName, newUrl, newApiKey, newModelIds, newUseProxy, newTags, newTimeout, resetEndpointForm, reload, proxyAvailable]);
 
   // ── Edit local endpoint ──
   const handleStartEdit = useCallback((provider) => {
@@ -234,10 +236,10 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
     setNewApiKey(meta.keyOnProvider ? (provider.apiKey || '')
       : (meta.needsKey ? getUnslothStudioApiKey(provider) : ''));
     setNewModelIds(Array.isArray(provider.modelIds) ? provider.modelIds.join(', ') : (provider.modelIds || ''));
-    setNewUseProxy(provider.useProxy !== false);
+    setNewUseProxy(proxyAvailable && provider.useProxy !== false);
     setNewTags((provider.tags || []).join(', '));
     setNewTimeout(String(provider.timeoutMs || 30000));
-  }, []);
+  }, [proxyAvailable]);
 
   const handleSaveEdit = useCallback(() => {
     if (!editingId || !newUrl.trim()) return;
@@ -252,13 +254,13 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
     };
     if (meta.keyOnProvider) cfg.apiKey = newApiKey.trim();
     if (meta.supportsModelIds) cfg.modelIds = newModelIds.trim();
-    if (meta.supportsProxy) cfg.useProxy = newUseProxy;
+    if (meta.supportsProxy) cfg.useProxy = proxyAvailable && newUseProxy;
     providers.updateProvider(editingId, cfg);
     if (meta.needsKey && !meta.keyOnProvider) saveUnslothStudioApiKey(editingId, newApiKey);
     resetEndpointForm();
     setEditingId(null);
     reload();
-  }, [editingId, providerList, newType, newName, newUrl, newApiKey, newModelIds, newUseProxy, newTags, newTimeout, resetEndpointForm, reload]);
+  }, [editingId, providerList, newType, newName, newUrl, newApiKey, newModelIds, newUseProxy, newTags, newTimeout, resetEndpointForm, reload, proxyAvailable]);
 
   const handleCancelEdit = useCallback(() => {
     resetEndpointForm();
@@ -309,7 +311,11 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
             placeholder="qwen3.8-27b — uniquement si le serveur ne propose pas /v1/models" />
         </div>
       `}
-      ${meta.supportsProxy && !isPublicDistribution() && html`
+      ${meta.supportsProxy && !proxyAvailable && html`
+        <p class="setting-help">Connexion directe au serveur : autorisez cette origine dans ses réglages CORS.
+          Le proxy générique <code>/__llm</code> n’est pas disponible dans cette installation.</p>
+      `}
+      ${meta.supportsProxy && proxyAvailable && html`
         <div class="form-group">
           <label style=${{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <input type="checkbox" checked=${newUseProxy}
@@ -351,7 +357,7 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
             }}>
               <i class="fa-solid fa-circle-info" style=${{ marginRight: '6px', color: 'var(--accent)' }}></i>
               Ces options concernent uniquement le sélecteur de modèles de cette application. Ajoutez ou modifiez les fournisseurs dans
-              <a href="../settings/" style=${{ color: 'var(--accent)' }}>les paramètres globaux</a>.
+              <a href="../settings.html" style=${{ color: 'var(--accent)' }}>les paramètres globaux</a>.
             </div>
           `}
           <!-- OpenRouter Section -->
@@ -396,7 +402,7 @@ export function ProviderSettingsDialog({ onClose, onProvidersChanged, appId }) {
                 <div style=${{ display: 'flex', gap: '6px' }}>
                   <input class="form-input" type="password" value=${apiKey}
                     onInput=${e => setApiKey(e.target.value)}
-                    onKeyDown=${e => e.key === 'Entrée' && handleSaveApiKey()}
+                    onKeyDown=${e => e.key === 'Enter' && handleSaveApiKey()}
                     placeholder="sk-or-v1-..."
                     style=${{ flex: 1, fontFamily: 'monospace', fontSize: '13px' }}
                   />

@@ -15,6 +15,20 @@ const args = {modelId:'dummy/model',systemPrompt:'test',userPrompt:'test',onChun
 const encoder = new TextEncoder();
 const bounded = promise => Promise.race([promise, new Promise(resolve=>setTimeout(()=>resolve('still waiting'),100))]);
 
+test('a local proxy preflight block is identified as unsent while upstream failures remain unknown', async () => {
+  globalThis.fetch = async () => Response.json({error:'Request blocked before upstream',requestSent:false}, {status:409});
+  await assert.rejects(raw.streamChat(args), error => error.requestSent === false && error.status === 409);
+  globalThis.fetch = async () => Response.json({error:{message:'Provider unavailable'}}, {status:503});
+  await assert.rejects(raw.streamChat(args), error => error.requestSent !== false && error.status === 503);
+});
+
+test('an empty prompt is rejected before any completion is sent', async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {calls++;throw new Error('Unexpected request');};
+  await assert.rejects(raw.streamChat({...args,userPrompt:''}), error => error.requestSent === false);
+  assert.equal(calls,0);
+});
+
 test('Stop reaches the OpenRouter transport while waiting for response headers', async () => {
   let requested, release;
   const entered = new Promise(resolve=>{requested=resolve;});

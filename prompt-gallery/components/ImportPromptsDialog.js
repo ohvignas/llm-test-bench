@@ -1,5 +1,5 @@
 import { html } from 'htm/preact';
-import { useState, useCallback, useMemo } from 'preact/hooks';
+import { useState, useCallback, useMemo, useRef } from 'preact/hooks';
 import { CATEGORIES } from '../services/library.js';
 
 // items: [{ key, title, prompt, category, tags, notes, sourceLabel,
@@ -7,6 +7,8 @@ import { CATEGORIES } from '../services/library.js';
 export function ImportPromptsDialog({ items, onImport, onClose }) {
   const importable = useMemo(() => items.filter(i => !i.alreadyInLibrary), [items]);
   const [checked, setChecked] = useState(() => new Set());
+  const [importing, setImporting] = useState(false);
+  const importingRef = useRef(false);
   const [categories, setCategories] = useState(() => {
     const map = {};
     for (const i of items) map[i.key] = i.category;
@@ -28,11 +30,16 @@ export function ImportPromptsDialog({ items, onImport, onClose }) {
     );
   }, [importable]);
 
-  const handleImport = useCallback(() => {
+  const handleImport = useCallback(async () => {
+    if (importingRef.current) return;
     const selected = importable
       .filter(i => checked.has(i.key))
       .map(i => ({ ...i, category: categories[i.key] || i.category }));
-    onImport(selected);
+    if (!selected.length) return;
+    importingRef.current = true;
+    setImporting(true);
+    try { await onImport(selected); }
+    finally { importingRef.current = false; setImporting(false); }
   }, [importable, checked, categories, onImport]);
 
   return html`
@@ -50,7 +57,7 @@ export function ImportPromptsDialog({ items, onImport, onClose }) {
             ? html`
                 <div class="gallery-empty" style=${{ padding: '32px 0' }}>
                   <i class="fa-solid fa-file-import"></i>
-                  <p>Aucun prompt trouvé dans les générations enregistrées ni dans Three Prompt Lab</p>
+                  <p>Aucun prompt à importer trouvé dans les sources disponibles</p>
                 </div>
               `
             : html`
@@ -98,8 +105,8 @@ export function ImportPromptsDialog({ items, onImport, onClose }) {
 
         <div class="modal-footer">
           <button class="btn" onClick=${onClose}>Annuler</button>
-          <button class="btn btn-primary" onClick=${handleImport} disabled=${checked.size === 0}>
-            <i class="fa-solid fa-file-import"></i> Importer ${checked.size > 0 ? checked.size : ''} prompt${checked.size === 1 ? '' : 's'}
+          <button class="btn btn-primary" onClick=${handleImport} disabled=${importing || checked.size === 0}>
+            <i class="fa-solid fa-file-import"></i> ${importing ? 'Importation…' : `Importer ${checked.size || ''} prompt${checked.size === 1 ? '' : 's'}`}
           </button>
         </div>
       </div>

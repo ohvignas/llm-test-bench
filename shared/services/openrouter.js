@@ -94,6 +94,7 @@ async function throwOpenRouterError(res, context = {}) {
   // X-RateLimit-* values) ride on the thrown Error; the message is unchanged.
   const fail = text => {
     const error = withHttpDetails(new Error(text), res, { metadata: err.error?.metadata || null });
+    if (SERVER_VAULT && err.requestSent === false) error.requestSent = false;
     if (res.status >= 400 && res.status < 500 && ![408,429].includes(res.status)) error.retryable = false;
     return error;
   };
@@ -449,8 +450,8 @@ function requireCompletionContent(content, stats, settings) {
 async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onChunk, params, onStats, telemetry, signal, settings }) {
   signal?.throwIfAborted();
   const apiKey = await getApiKeyForRequest();
-  if (!apiKey) throw new Error('OpenRouter API key not set');
-  if (!userPrompt) throw new Error('Prompt is empty');
+  if (!apiKey) throw Object.assign(new Error('OpenRouter API key not set'), {requestSent:false});
+  if (!userPrompt) throw Object.assign(new Error('Prompt is empty'), {requestSent:false});
 
   const stats = createRunStats(undefined, telemetry);
   let body = applyParams({

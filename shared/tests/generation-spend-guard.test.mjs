@@ -6,7 +6,7 @@ const input={modelId:'vendor/model',systemPrompt:'HTML',userPrompt:'private prom
 test('paid failure blocks an identical manual restart across guard instances without storing prompts',async()=>{
  const store=storage();let paid=0;
  await assert.rejects(createSpendGuard(store).run(input,async()=>{paid++;throw Object.assign(new Error('empty'),{code:'OUTPUT_TOKEN_LIMIT'});}));
- await assert.rejects(createSpendGuard(store).run(input,async()=>{paid++;}),e=>e.code==='PAID_RETRY_BLOCKED'&&e.retryable===false);
+ await assert.rejects(createSpendGuard(store).run(input,async()=>{paid++;}),e=>e.code==='PAID_RETRY_BLOCKED'&&e.retryable===false&&e.requestSent===false);
  assert.equal(paid,1);assert.ok(!JSON.stringify([...store.data]).includes('private prompt'));
 });
 test('filter failure cannot be retried merely by increasing tokens or effort',async()=>{
@@ -26,7 +26,7 @@ test('concurrent duplicate launch is blocked before a second paid operation',asy
  const guard=createSpendGuard(storage());let release;let paid=0;
  const first=guard.run(input,async()=>{paid++;await new Promise(r=>release=r);return 'ok';});
  while(!release)await new Promise(r=>setTimeout(r,1));
- await assert.rejects(guard.run(input,async()=>{paid++;}),e=>e.code==='GENERATION_IN_FLIGHT');
+ await assert.rejects(guard.run(input,async()=>{paid++;}),e=>e.code==='GENERATION_IN_FLIGHT'&&e.requestSent===false);
  release();await first;assert.equal(paid,1);
 });
 test('a page reload cannot send a second copy of a still-running or interrupted request',async()=>{
@@ -35,4 +35,15 @@ test('a page reload cannot send a second copy of a still-running or interrupted 
  while(!release)await new Promise(r=>setTimeout(r,1));
  await assert.rejects(createSpendGuard(store).run(input,async()=>'duplicate'),e=>e.code==='PAID_RETRY_BLOCKED');
  release();await first;
+});
+
+test('unavailable protection storage is marked unsent only before the provider operation',async()=>{
+ let sent=0;
+ const unreadable={getItem(){throw new Error('Read denied');}};
+ await assert.rejects(createSpendGuard(unreadable).run(input,async()=>{sent++;}),e=>e.code==='SPEND_GUARD_UNAVAILABLE'&&e.requestSent===false);
+ assert.equal(sent,0);
+ const store=storage();
+ const guard=createSpendGuard(store);
+ await assert.rejects(guard.run(input,async()=>{sent++;store.getItem=()=>{throw new Error('Read denied');};return 'paid result';}),e=>e.code==='SPEND_GUARD_UNAVAILABLE'&&e.requestSent!==false);
+ assert.equal(sent,1);
 });

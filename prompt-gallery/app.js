@@ -17,10 +17,12 @@ import { BatchRunDialog } from './components/BatchRunDialog.js';
 import { runHtmlSandbox, runStatusLabel } from './services/sandboxRunner.js';
 import { addConsoleEntry, consoleCounts, mergePreviewErrors } from './services/previewConsole.js';
 import { planRunMerge } from './services/runs.js';
+import { generationRoute, parseGalleryRoute } from './services/routes.js';
 import { withRating, ratingFromKey, RATING_MAX } from './services/rating.js';
 import { auditHtml, healHtml, repairAgainstAudit } from './services/refine.js';
 import { MetadataPanel } from './components/MetadataPanel.js';
 import { SaveDialog } from './components/SaveDialog.js';
+import { createCostCall, updateCostCall, finishCostCall, costTotals } from './services/batchCosts.js';
 import { Toast } from './components/Toast.js';
 import { ApiKeyDialog } from './components/ApiKeyDialog.js';
 import { ProviderSettingsDialog } from '../shared/components/ProviderSettingsDialog.js';
@@ -57,11 +59,7 @@ import { ShowcaseLanding, useShowcaseRoute } from '../shared/components/Showcase
 import { mountGenerationStatus } from '../shared/components/GenerationStatus.js';
 
 function getRoute() {
-  const hash = window.location.hash || '#/create';
-  const path = hash.replace('#/', '');
-  const firstSlash = path.indexOf('/');
-  if (firstSlash === -1) return { name: path || 'create', param: '' };
-  return { name: path.substring(0, firstSlash), param: path.substring(firstSlash + 1) };
+  return parseGalleryRoute(window.location.hash);
 }
 
 function decodeRouteParam(value) {
@@ -582,7 +580,7 @@ function App() {
         );
         clearPromptGalleryReturnHandoff();
         await refreshGenerations();
-        navigate('view/' + result.id);
+        navigate(generationRoute(result.id));
         addToast(`Résultat transformé enregistré : ${result.id}`, 'success');
       } catch (e) {
         addToast('Échec du retour de Code Morph : ' + e.message, 'error');
@@ -618,6 +616,8 @@ function App() {
         }
       }
       const metadata = meta.createMetadata(modelName, tags);
+      const billing = responseMetrics.call ? {scope:'generation', ...costTotals([responseMetrics.call])} : responseMetrics.billing;
+      if (billing) metadata.billing = billing;
       // Picture the page as it is on screen now; a page with no canvas gives
       // null and its card runs live until the thumbnail backfill reaches it.
       const thumbnail = await Promise.resolve(previewCaptureRef.current?.()).catch(() => null);
@@ -635,7 +635,7 @@ function App() {
     } catch (e) {
       addToast('Échec de l’enregistrement : ' + e.message, 'error');
     }
-  }, [rootHandle, prompt, response, addToast]);
+  }, [rootHandle, prompt, response, responseMetrics, addToast]);
 
   // Provider/model handlers
   const handleModelChange = useCallback((providerId, modelId) => {
@@ -704,13 +704,15 @@ function App() {
     setIsGenerating(true);
     setResponse('');
     const responseStartedAt = Date.now();
+    let generationCall = createCostCall('generate', {modelLabel:allModels.find(m => m.providerId === selectedProviderId && m.modelId === selectedModelId)?.displayLabel || selectedModelId, promptTitle:promptText.slice(0,100)});
+    let generationError = null;
     const abort = backend === 'agent' ? null : new AbortController();
     if (abort) {
       generateAbortRef.current = abort;
       setModelStopping(false);
       setModelRunActive(true);
     }
-    setResponseMetrics({ stats: null, timing: { startedAt: responseStartedAt, endedAt: null } });
+    setResponseMetrics({ stats: null, call:generationCall, timing: { startedAt: responseStartedAt, endedAt: null } });
     setCreateRunStatus(null);
     try {
       let finalHtml = '';
@@ -756,9 +758,11 @@ function App() {
             finalHtml = cleaned;
             setResponse(cleaned);
           },
-          (stats) => setResponseMetrics(current => current.timing?.startedAt === responseStartedAt
-            ? { ...current, stats }
-            : current),
+          (stats) => {
+            generationCall = updateCostCall(generationCall, stats);
+            setResponseMetrics(current => current.call?.id === generationCall.id
+              ? { ...current, stats, call:generationCall } : current);
+          },
           undefined,
           { signal: abort.signal },
         );
@@ -779,6 +783,7 @@ function App() {
         });
       }
     } catch (e) {
+      generationError = e;
       if (abort?.signal.aborted) addToast('Génération arrêtée', 'info');
       else if (!agentRun.wasCancelled()) addToast('Échec de la génération : ' + e.message, 'error');
     } finally {
@@ -788,8 +793,9 @@ function App() {
         setModelStopping(false);
       }
       setIsGenerating(false);
-      setResponseMetrics(current => current.timing?.startedAt === responseStartedAt
-        ? { ...current, timing: { ...current.timing, endedAt: Date.now() } }
+      generationCall = finishCostCall(generationCall, generationError);
+      setResponseMetrics(current => current.call?.id === generationCall.id
+        ? { ...current, call:generationCall, timing: { ...current.timing, endedAt: Date.now() } }
         : current);
     }
   }, [prompt, backend, selectedProviderId, selectedModelId, selectedAgentId, agentModels, agentRun,
@@ -808,13 +814,14 @@ function App() {
   // Manual edits invalidate the last sandbox verdict.
   const handleResponseChange = useCallback((value) => {
     setResponse(value);
-    setResponseMetrics({ stats: null, timing: null });
+    // Editing code invalidates token-rate metrics, but does not erase the charge.
+    setResponseMetrics(current => ({ ...current, stats: null, timing: null }));
     setCreateRunStatus(null);
   }, []);
 
   const handleSelectGalleryItem = useCallback((id, folderId = '') => {
     setGalleryReturnFolder(folderId || '');
-    navigate('view/' + id);
+    navigate(generationRoute(id));
   }, [navigate]);
 
   const handleOpenGalleryProject = useCallback((folderId) => {
@@ -925,7 +932,7 @@ function App() {
       if (gen) {
         setPrompt(gen.prompt || '');
         setResponse(gen.response || '');
-        setResponseMetrics({ stats: null, timing: null });
+        setResponseMetrics({ stats: null, timing: null, billing:gen.metadata?.billing || null });
         setModel(gen.metadata?.model || '');
         setEditingId(gen.folderId || id);
         navigate('create');
@@ -1086,12 +1093,10 @@ function App() {
       return;
     }
     try {
-      for (const item of selected) {
-        await library.addPrompt(rootHandle, item);
-      }
+      const imported = await library.importPrompts(rootHandle, selected);
       setImportItems(null);
       await refreshLibrary();
-      addToast(`${selected.length} prompt${selected.length === 1 ? '' : 's'} importé${selected.length === 1 ? '' : 's'}`, 'success');
+      addToast(`${imported.length} prompt${imported.length === 1 ? '' : 's'} importé${imported.length === 1 ? '' : 's'}`, 'success');
     } catch (e) {
       addToast('Échec de l’importation : ' + e.message, 'error');
     }
@@ -1102,10 +1107,16 @@ function App() {
   // Start a refine session from any source (Create view, saved generation).
   // Confirms before discarding an existing session with unsaved steps.
   const handleOpenRefine = useCallback((source) => {
+    if (refineSession?.busy) {
+      addToast('Une amélioration est en cours. Attendez sa fin avant de changer de projet.', 'info');
+      navigate('refine');
+      return;
+    }
     if (refineSession && refineSession.steps.length > 1) {
       if (!confirm('Abandonner la session d’amélioration actuelle ? Ses étapes non enregistrées seront perdues.')) return;
     }
     setRefineSession({
+      id: globalThis.crypto?.randomUUID?.() || `refine-${Date.now()}`,
       sourceId: source.sourceId || '',
       title: source.title || 'untitled',
       folderId: source.folderId || '',
@@ -1124,7 +1135,7 @@ function App() {
       streamBytes: 0,
     });
     navigate('refine');
-  }, [refineSession, navigate]);
+  }, [refineSession, navigate, addToast]);
 
   const handleRefineCurrent = useCallback(() => {
     if (!response) {
@@ -1215,7 +1226,9 @@ function App() {
       const folder = sess.folderId || safeFolderName(sess.title);
       const suffix = step.kind === 'heal' ? ' (healed)' : step.kind === 'improve' ? ' (improved)' : '';
       const metadata = {
-        ...meta.createMetadata((sess.model || 'unknown') + suffix, [], step.summary || ''),
+        ...meta.createMetadata((step.model || sess.model || 'unknown') + suffix, [], step.summary || ''),
+        ...(step.billing ? {billing:step.billing} : {}),
+        ...(step.providerId ? {providerId:step.providerId, modelId:step.modelId} : {}),
         derivedFrom: sess.variantKey || '',
         refine: { kind: step.kind, savedAt: new Date().toISOString() },
       };
@@ -1522,7 +1535,7 @@ function App() {
           loadHtml=${loadHtml}
           compareIds=${compareIds}
           onCompareIdsChange=${setCompareIds}
-          onOpen=${(id) => navigate('view/' + id)}
+          onOpen=${(id) => navigate(generationRoute(id))}
         />`;
 
       case 'runs':
@@ -1531,7 +1544,7 @@ function App() {
           loadHtml=${loadHtml}
           hasDirectory=${!!rootHandle}
           onPickDirectory=${handlePickDirectory}
-          onOpen=${(id) => window.open('#/view/' + id, '_blank', 'noopener')}
+          onOpen=${(id) => window.open('#/' + generationRoute(id), '_blank', 'noopener')}
           onRefresh=${refreshGenerations}
           onMerge=${handleMergeRuns}
           onRate=${handleRateGeneration}
@@ -1553,6 +1566,7 @@ function App() {
               onResponseChange=${handleResponseChange}
               responseStats=${responseMetrics.stats}
               responseTiming=${responseMetrics.timing}
+              responseCosts=${responseMetrics.call ? [responseMetrics.call] : responseMetrics.billing?.calls || []}
               isGenerating=${isGenerating}
               theme=${theme}
               onMorph=${crossAppHandoffsEnabled(undefined, 'code-morph-lab-v3') ? handleMorphCurrent : null}

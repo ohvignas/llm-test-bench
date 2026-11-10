@@ -5,6 +5,7 @@ import { ratingOf, withRating } from '../services/rating.js';
 import { sendToCodeMorphLab } from '../../shared/services/code-morph-handoff.js';
 import { sendToBugfixBench } from '../../shared/services/bugfix-bench-handoff.js';
 import { VerificationDetails } from './VerificationBadge.js';
+import { BatchCosts } from './BatchCosts.js';
 import { sanitizeRichHtml } from '../../shared/services/content-sanitizer.js';
 
 export function MetadataPanel({ generation, response, onUpdateMetadata, onSavePromptToLibrary, onRefine, onEdit, onDelete, onCompare, onClose, allowHandoffs = true, allowMorph = allowHandoffs }) {
@@ -85,6 +86,7 @@ export function MetadataPanel({ generation, response, onUpdateMetadata, onSavePr
         </div>
 
         <!-- Date -->
+        ${meta.billing?.calls?.length > 0 && html`<${BatchCosts} calls=${meta.billing.calls} done=${true} />`}
         <div class="metadata-field">
           <span class="metadata-label">Création</span>
           <span class="metadata-value">${formatDate(meta.createdAt)}</span>

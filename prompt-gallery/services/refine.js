@@ -110,7 +110,7 @@ export async function healHtml({ providerId, modelId, prompt, html, errors, onCh
  * Ask for a numbered list of improvement ideas. Streams the list so the UI can
  * fill the editor live. onChunk receives the accumulated text so far (not deltas).
  */
-export async function suggestImprovements({ providerId, modelId, prompt, html, onChunk, signal }) {
+export async function suggestImprovements({ providerId, modelId, prompt, html, onChunk, onStats, signal }) {
   const parts = buildContext(prompt, html);
   parts.push('Suggest improvements for this page as a numbered list.');
   let accumulated = '';
@@ -121,6 +121,7 @@ export async function suggestImprovements({ providerId, modelId, prompt, html, o
     userPrompt: parts.join('\n\n'),
     appTitle: 'Prompt Gallery',
     ...callLimits(signal),
+    onStats,
     onChunk: (text) => {
       accumulated = text || '';
       onChunk?.(accumulated);
@@ -133,7 +134,7 @@ export async function suggestImprovements({ providerId, modelId, prompt, html, o
  * Apply (possibly user-edited) improvement instructions. Streams the
  * updated document. onChunk receives accumulated text.
  */
-export async function applyImprovements({ providerId, modelId, prompt, html, instructions, onChunk, signal }) {
+export async function applyImprovements({ providerId, modelId, prompt, html, instructions, onChunk, onStats, signal }) {
   const parts = buildContext(prompt, html);
   parts.push(`IMPROVEMENT INSTRUCTIONS:\n${instructions.trim()}`);
   parts.push('Implement these improvements and return the complete updated HTML document.');
@@ -146,6 +147,7 @@ export async function applyImprovements({ providerId, modelId, prompt, html, ins
     userPrompt: parts.join('\n\n'),
     appTitle: 'Prompt Gallery',
     ...callLimits(signal),
+    onStats,
     onChunk: (text) => {
       accumulated = text || '';
       onChunk?.(stripCodeFences(accumulated));

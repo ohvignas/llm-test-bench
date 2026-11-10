@@ -232,7 +232,11 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
       }
     }
 
-    if (stop()) { summary.stopped = true; emit({ type: 'item', index: i, status: 'stopped' }); break; }
+    // A response can finish just as Stop is clicked. Keep a completed paid result;
+    // stopping prevents further calls, not the local save of work already received.
+    if (stop() && (genError || !genHtml || !genHtml.trim())) {
+      summary.stopped = true; emit({ type: 'item', index: i, status: 'stopped' }); break;
+    }
     if (genError || !genHtml || !genHtml.trim()) {
       summary.failed++;
       emit({ type: 'item', index: i, status: 'error', message: genError?.message || 'Empty response' });
@@ -250,7 +254,7 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
     let healFailed = false;
 
     // ── Sandbox check + self-heal ──
-    if (mode === 'runtime-heal') {
+    if (mode === 'runtime-heal' && !stop()) {
       emit({ type: 'item', index: i, status: 'checking' });
       try { runStatus = await deps.runSandbox(finalHtml); } catch (e) { runStatus = null; }
       while (hasRuntimeErrors(runStatus) && healUsed < opts.healAttempts) {
@@ -285,43 +289,43 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
       if (healed) summary.healed++;
     }
 
-    if (stop()) { summary.stopped = true; emit({ type: 'item', index: i, status: 'stopped' }); break; }
-
     // ── Save ──
     const baseTags = ['ai-gen', 'batch', ...((p.tags || []).filter(Boolean))];
     const savedIds = [];
+    const confirmedSave = async args => {
+      const saved = await deps.save(args);
+      if (!saved?.id) throw new Error('La sauvegarde de la génération n’a pas été confirmée.');
+      savedIds.push(saved.id);
+      summary.saved++;
+    };
     try {
       if (mode === 'runtime-heal' && healed && opts.saveBothOnHeal) {
         // Preserve the raw model output as its own variant, then the healed one.
-        const orig = await deps.save({
+        await confirmedSave({
           prompt: p, promptText: p.prompt, response: originalHtml,
           model, tags: baseTags, kind: 'original', healed: false, healAttempts: 0, runStatus: null,
         });
-        if (orig?.id) savedIds.push(orig.id);
-        const heal = await deps.save({
+        await confirmedSave({
           prompt: p, promptText: p.prompt, response: finalHtml,
           model, tags: [...baseTags, 'healed'], kind: 'healed', healed: true, healAttempts: healUsed, runStatus,
         });
-        if (heal?.id) savedIds.push(heal.id);
-        summary.saved += 2;
       } else {
-        const res = await deps.save({
+        await confirmedSave({
           prompt: p, promptText: p.prompt, response: finalHtml,
           model, tags: healed ? [...baseTags, 'healed'] : baseTags,
           kind: healed ? 'healed' : 'original', healed, healAttempts: healUsed, runStatus,
         });
-        if (res?.id) savedIds.push(res.id);
-        summary.saved += 1;
       }
       emit({ type: 'preview', index: i, html: finalHtml });
       emit({ type: 'item', index: i, status: 'saved', savedIds, healed, healAttempts: healUsed, runStatus });
     } catch (e) {
       summary.failed++;
-      emit({ type: 'item', index: i, status: 'error', message: 'Échec de l’enregistrement : ' + e.message });
+      emit({ type: 'preview', index: i, html: finalHtml });
+      emit({ type: 'item', index: i, status: 'error', savedIds, message: 'Échec de l’enregistrement : ' + e.message });
       if(opts.stopOnFailure){summary.stopped=true;break;}
     }
 
-    if(opts.stopOnFailure && healFailed){summary.stopped=true;break;}
+    if(stop() || (opts.stopOnFailure && healFailed)){summary.stopped=true;break;}
     await interruptibleDelay(opts.delayMs, stop, pause);
   }
 

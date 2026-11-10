@@ -8,6 +8,7 @@
 // (seeds are hidden, user prompts go to trash) so no prompt text is ever lost.
 import * as fs from '../../shared/services/fs.js';
 import { ratingOf } from './rating.js';
+import { crossAppHandoffsEnabled } from '../../shared/services/distribution.js';
 
 export const CATEGORIES = [
   { id: 'threejs', label: 'Three.js', icon: 'fa-cube' },
@@ -123,13 +124,23 @@ function emptyUserLibrary() {
 
 export async function loadUserLibrary(rootHandle) {
   if (!rootHandle) return emptyUserLibrary();
+  let text;
   try {
-    const text = await fs.readFile(rootHandle, LIBRARY_DIR, LIBRARY_FILE);
-    const data = JSON.parse(text);
-    return { ...emptyUserLibrary(), ...data };
+    text = await fs.readFile(rootHandle, LIBRARY_DIR, LIBRARY_FILE);
   } catch (e) {
-    return emptyUserLibrary();
+    if (e.name === 'NotFoundError' || e.code === 'ENOENT') return emptyUserLibrary();
+    throw new Error('Lecture de la bibliothèque impossible. Aucun changement enregistré : ' + (e.message || e), {cause:e});
   }
+  let data;
+  try { data = JSON.parse(text); }
+  catch (error) { throw new Error('La bibliothèque contient un JSON invalide. Restaurez ou corrigez _library/library.json avant de la modifier.', {cause:error}); }
+  const object = value => value && typeof value === 'object' && !Array.isArray(value);
+  const arrayFields = ['prompts', 'hiddenSeedIds', 'trash'];
+  if (!object(data) || arrayFields.some(key => data[key] !== undefined && !Array.isArray(data[key]))
+    || (data.seedOverrides !== undefined && !object(data.seedOverrides))) {
+    throw new Error('Le format de _library/library.json est invalide. Aucun changement enregistré.');
+  }
+  return { ...emptyUserLibrary(), ...data };
 }
 
 async function saveUserLibrary(rootHandle, data) {
@@ -157,9 +168,8 @@ export async function getLibrary(rootHandle) {
   return merged;
 }
 
-export async function addPrompt(rootHandle, data) {
-  const user = await loadUserLibrary(rootHandle);
-  const entry = {
+function promptEntry(data) {
+  return {
     id: `user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
     title: data.title || 'Sans titre',
     description: data.description || '',
@@ -172,9 +182,32 @@ export async function addPrompt(rootHandle, data) {
     revisions: [],
     importedFrom: data.importedFrom || undefined,
   };
+}
+
+export async function addPrompt(rootHandle, data) {
+  const user = await loadUserLibrary(rootHandle);
+  const entry = promptEntry(data);
   user.prompts.push(entry);
   await saveUserLibrary(rootHandle, user);
   return entry;
+}
+
+/** Import the chosen prompts in one file replacement, never a partially saved loop. */
+export async function importPrompts(rootHandle, items) {
+  const user = await loadUserLibrary(rootHandle);
+  const seen = new Set(user.prompts.map(p => normalizeText(p.prompt)));
+  const added = [];
+  for (const item of items) {
+    const text = normalizeText(item.prompt);
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    added.push(promptEntry(item));
+  }
+  if (added.length) {
+    user.prompts.push(...added);
+    await saveUserLibrary(rootHandle, user);
+  }
+  return added;
 }
 
 /**
@@ -278,6 +311,7 @@ function guessCategory(promptText) {
  * fetch — read-only, that app is untouched).
  */
 export async function scanThreePromptLab() {
+  if (!crossAppHandoffsEnabled(undefined, 'three-prompt-lab')) return [];
   try {
     const res = await fetch('../three-prompt-lab/data/prompts.json');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

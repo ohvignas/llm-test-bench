@@ -3,7 +3,7 @@ const EFFORTS=['max','xhigh','high','medium','low','minimal','none'];
 const rankedEfforts=efforts=>EFFORTS.filter(e=>Array.isArray(efforts)&&efforts.includes(e));
 const positive=value=>Number.isSafeInteger(value)&&value>0?value:null;
 const own=(object,key)=>Object.prototype.hasOwnProperty.call(object||{},key);
-function invalid(message) { return Object.assign(new Error(message),{code:'MODEL_SETTINGS',retryable:false}); }
+function invalid(message) { return Object.assign(new Error(message),{code:'MODEL_SETTINGS',retryable:false,requestSent:false}); }
 export function normalizeOpenRouterModel(model, fetchedAt=Date.now()) {
   const reasoning=model.reasoning&&typeof model.reasoning==='object'?{
     mandatory:model.reasoning.mandatory===true,

@@ -4,6 +4,8 @@ import { PlayOverlay } from '../../shared/components/PlayOverlay.js';
 import { refineDisplayTitle, refineVersions } from '../services/refineVersions.js';
 import { runHtmlSandbox, runStatusLabel } from '../services/sandboxRunner.js';
 import * as refine from '../services/refine.js';
+import { createRefineBilling } from '../services/refineBilling.js';
+import { BatchCosts } from './BatchCosts.js';
 
 // The Refine call in flight. Module-level rather than a ref: the session (and
 // its `busy` flag) outlives this view when the user switches tabs mid-call, and
@@ -101,28 +103,34 @@ export function RefineView({
   // ── session update helpers (always functional — async ops outlive renders) ──
 
   const patchSession = useCallback((patch) => {
-    onSessionChange(prev => prev ? { ...prev, ...patch } : prev);
-  }, [onSessionChange]);
+    onSessionChange(prev => prev && prev.id === session?.id ? { ...prev, ...patch } : prev);
+  }, [onSessionChange, session?.id]);
 
   const patchStep = useCallback((index, patch) => {
     onSessionChange(prev => {
-      if (!prev) return prev;
+      if (!prev || prev.id !== session?.id) return prev;
       const next = [...prev.steps];
       if (!next[index]) return prev;
       next[index] = { ...next[index], ...patch };
       return { ...prev, steps: next };
     });
-  }, [onSessionChange]);
+  }, [onSessionChange, session?.id]);
 
   // Append a step and make it active. The caller computes the new step's
   // index itself (busy-guarding means only the running operation appends, so
   // indices are deterministic — state updaters may not run synchronously).
   const appendStep = useCallback((step) => {
     onSessionChange(prev => {
-      if (!prev) return prev;
+      if (!prev || prev.id !== session?.id) return prev;
       return { ...prev, steps: [...prev.steps, step], activeIndex: prev.steps.length };
     });
-  }, [onSessionChange]);
+  }, [onSessionChange, session?.id]);
+
+  const billingTracker = useCallback(() => createRefineBilling({
+    calls: session?.billing?.calls || [],
+    details: { providerId, modelId, modelLabel: `${providerId} / ${modelId}`, promptTitle: refineDisplayTitle(session) },
+    onBilling: billing => patchSession({ billing }),
+  }), [session, providerId, modelId, patchSession]);
 
   // ── sandbox runs ──
 
@@ -142,7 +150,7 @@ export function RefineView({
   // ── heal ──
 
   const handleHeal = useCallback(async () => {
-    if (!activeStep || busy) return;
+    if (!activeStep || busy || refineAbort) return;
     if (!hasModel) { addToast('Sélectionnez d’abord un modèle', 'error'); return; }
     const startStatus = activeStep.runStatus;
     if (!startStatus || startStatus.errors.length === 0) {
@@ -151,20 +159,25 @@ export function RefineView({
     }
     patchSession({ busy: 'heal', streamBytes: 0 });
     const abort = beginRefineCall();
+    const billing = billingTracker();
     try {
       const baseLen = steps.length;
       let currentHtml = activeStep.html;
       let currentErrors = startStatus.errors;
       for (let n = 1; n <= attempts; n++) {
-        const healed = await refine.healHtml({
-          providerId, modelId,
-          prompt: session.prompt,
-          html: currentHtml,
-          errors: currentErrors,
-          onChunk: (text) => patchSession({ streamBytes: text.length }),
-          signal: abort.signal,
+        const healed = await billing.run('heal', async onStats => {
+          const output = await refine.healHtml({
+            providerId, modelId,
+            prompt: session.prompt,
+            html: currentHtml,
+            errors: currentErrors,
+            onChunk: (text) => patchSession({ streamBytes: text.length }),
+            signal: abort.signal,
+            onStats,
+          });
+          if (!output || !output.trim()) throw new Error('Le modèle a renvoyé un document vide');
+          return output;
         });
-        if (!healed || !healed.trim()) throw new Error('Le modèle a renvoyé un document vide');
         const stepIndex = baseLen + (n - 1);
         appendStep({
           kind: 'heal',
@@ -172,6 +185,8 @@ export function RefineView({
           summary: `Correction : ${currentErrors.length} erreur${currentErrors.length === 1 ? '' : 's'} traitée${currentErrors.length === 1 ? '' : 's'}`,
           html: healed,
           runStatus: null,
+          billing: billing.snapshot(),
+          providerId, modelId, model: `${providerId} / ${modelId}`,
         });
         const status = await runStep(stepIndex, healed);
         if (status.ok) {
@@ -190,24 +205,29 @@ export function RefineView({
       endRefineCall(abort);
       patchSession({ busy: null, streamBytes: 0 });
     }
-  }, [activeStep, busy, hasModel, attempts, providerId, modelId, session?.prompt, steps.length, patchSession, patchStep, appendStep, runStep, addToast]);
+  }, [activeStep, busy, hasModel, attempts, providerId, modelId, session?.prompt, steps.length, patchSession, patchStep, appendStep, runStep, addToast, billingTracker]);
 
   // ── suggest / apply ──
 
   const handleSuggest = useCallback(async () => {
-    if (!activeStep || busy) return;
+    if (!activeStep || busy || refineAbort) return;
     if (!hasModel) { addToast('Sélectionnez d’abord un modèle', 'error'); return; }
     patchSession({ busy: 'suggest', suggestions: '' });
     const abort = beginRefineCall();
+    const billing = billingTracker();
     try {
-      const out = await refine.suggestImprovements({
-        providerId, modelId,
-        prompt: session.prompt,
-        html: activeStep.html,
-        onChunk: (text) => patchSession({ suggestions: text }),
-        signal: abort.signal,
+      const out = await billing.run('suggest', async onStats => {
+        const output = await refine.suggestImprovements({
+          providerId, modelId,
+          prompt: session.prompt,
+          html: activeStep.html,
+          onChunk: (text) => patchSession({ suggestions: text }),
+          signal: abort.signal,
+          onStats,
+        });
+        if (!output) throw new Error('Le modèle n’a renvoyé aucune suggestion');
+        return output;
       });
-      if (!out) throw new Error('Le modèle n’a renvoyé aucune suggestion');
       patchSession({ suggestions: out });
       addToast('Suggestions prêtes : modifiez la liste puis appliquez-la', 'success');
     } catch (e) {
@@ -217,25 +237,30 @@ export function RefineView({
       endRefineCall(abort);
       patchSession({ busy: null });
     }
-  }, [activeStep, busy, hasModel, providerId, modelId, session?.prompt, patchSession, addToast]);
+  }, [activeStep, busy, hasModel, providerId, modelId, session?.prompt, patchSession, addToast, billingTracker]);
 
   const handleApply = useCallback(async () => {
-    if (!activeStep || busy) return;
+    if (!activeStep || busy || refineAbort) return;
     if (!hasModel) { addToast('Sélectionnez d’abord un modèle', 'error'); return; }
     const instructions = (session.suggestions || '').trim();
     if (!instructions) { addToast('Aucune instruction d’amélioration à appliquer', 'error'); return; }
     patchSession({ busy: 'apply', streamBytes: 0 });
     const abort = beginRefineCall();
+    const billing = billingTracker();
     try {
-      const improved = await refine.applyImprovements({
-        providerId, modelId,
-        prompt: session.prompt,
-        html: activeStep.html,
-        instructions,
-        onChunk: (text) => patchSession({ streamBytes: text.length }),
-        signal: abort.signal,
+      const improved = await billing.run('improve', async onStats => {
+        const output = await refine.applyImprovements({
+          providerId, modelId,
+          prompt: session.prompt,
+          html: activeStep.html,
+          instructions,
+          onChunk: (text) => patchSession({ streamBytes: text.length }),
+          signal: abort.signal,
+          onStats,
+        });
+        if (!output || !output.trim()) throw new Error('Le modèle a renvoyé un document vide');
+        return output;
       });
-      if (!improved || !improved.trim()) throw new Error('Le modèle a renvoyé un document vide');
       const stepIndex = steps.length;
       appendStep({
         kind: 'improve',
@@ -243,6 +268,8 @@ export function RefineView({
         summary: `Amélioration : ${instructions.split('\n').filter(l => l.trim()).length} instruction(s)\n${instructions}`,
         html: improved,
         runStatus: null,
+        billing: billing.snapshot(),
+        providerId, modelId, model: `${providerId} / ${modelId}`,
       });
       patchSession({ suggestions: '' });
       await runStep(stepIndex, improved);
@@ -254,7 +281,7 @@ export function RefineView({
       endRefineCall(abort);
       patchSession({ busy: null, streamBytes: 0 });
     }
-  }, [activeStep, busy, hasModel, providerId, modelId, session?.prompt, session?.suggestions, steps.length, patchSession, appendStep, runStep, addToast]);
+  }, [activeStep, busy, hasModel, providerId, modelId, session?.prompt, session?.suggestions, steps.length, patchSession, appendStep, runStep, addToast, billingTracker]);
 
   // ── empty state ──
 
@@ -290,6 +317,9 @@ export function RefineView({
             ${session.folderId && html`<span class="refine-source-folder">${session.folderId}</span>`}
           </div>
         </div>
+
+        <p>Coûts de cette session d’amélioration, hors génération initiale.</p>
+        <${BatchCosts} calls=${session.billing?.calls || []} done=${!busy} />
 
         <!-- Play: the active step full window, with every step to choose from -->
         ${versions.length > 0 && html`

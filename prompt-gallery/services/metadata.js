@@ -75,7 +75,7 @@ export async function saveGeneration(rootHandle, folderName, prompt, response, m
     try {
       const pf = await dirHandle.getFileHandle('prompt.md');
       existingPrompt = await (await pf.getFile()).text();
-    } catch (e) { /* no prompt yet */ }
+    } catch (e) { if (e.name !== 'NotFoundError') throw e; }
 
     if (existingPrompt !== null && existingPrompt.trim() !== prompt.trim()) {
       // Prompt differs — find an available folder name
@@ -86,12 +86,14 @@ export async function saveGeneration(rootHandle, folderName, prompt, response, m
           await rootHandle.getDirectoryHandle(actualFolder);
           suffix++;
         } catch (e) {
+          if (e.name !== 'NotFoundError') throw e;
           break; // folder doesn't exist, we can use it
         }
       }
       dirHandle = await rootHandle.getDirectoryHandle(actualFolder, { create: true });
     }
   } catch (e) {
+    if (e.name !== 'NotFoundError') throw e;
     // Folder doesn't exist — create it
     dirHandle = await rootHandle.getDirectoryHandle(folderName, { create: true });
     actualFolder = folderName;
@@ -203,15 +205,23 @@ export async function updateMetadata(rootHandle, id, metadata) {
 // and is anything but over the network (the Quest), so the scan reads metadata
 // only and the page is fetched when something actually shows it. Keyed by
 // `${folderId}/${variantKey}`, dropped whenever that generation is written.
-const responseCache = new Map();
+let responseCaches = new WeakMap();
 
-export function forgetResponse(id) {
-  if (id === undefined) responseCache.clear();
-  else responseCache.delete(id);
+function responseCacheFor(rootHandle) {
+  let cache = responseCaches.get(rootHandle);
+  if (!cache) { cache = new Map(); responseCaches.set(rootHandle, cache); }
+  return cache;
+}
+
+export function forgetResponse(id, rootHandle) {
+  if (!rootHandle) responseCaches = new WeakMap();
+  else if (id === undefined) responseCaches.delete(rootHandle);
+  else responseCaches.get(rootHandle)?.delete(id);
 }
 
 /** The page for one generation, from cache or disk. '' when it has none. */
 export async function loadResponse(rootHandle, id) {
+  const responseCache = responseCacheFor(rootHandle);
   if (responseCache.has(id)) return responseCache.get(id);
   const { folderId, variantKey } = parseId(id);
   let html = '';
@@ -219,7 +229,7 @@ export async function loadResponse(rootHandle, id) {
     const dirHandle = await rootHandle.getDirectoryHandle(folderId);
     const fileName = variantKey ? `${variantKey}.html` : 'response.html';
     html = await (await (await dirHandle.getFileHandle(fileName)).getFile()).text();
-  } catch (e) { /* no page saved for this one */ }
+  } catch (e) { if (e.name !== 'NotFoundError') throw e; }
   responseCache.set(id, html);
   return html;
 }
@@ -245,6 +255,7 @@ export async function ensureResponses(rootHandle, generations = []) {
  */
 export async function listGenerations(rootHandle) {
   const generations = [];
+  const responseCache = responseCacheFor(rootHandle);
 
   // Folders are independent, so they are read a few at a time. Serially, one
   // round trip per file over the server data root added up to minutes.
@@ -309,7 +320,8 @@ export async function listGenerations(rootHandle) {
           });
         } catch (e) { /* skip invalid */ }
       }
-    } else if (hasLegacyMeta) {
+    }
+    if (hasLegacyMeta) {
       // Legacy format — single response.html + metadata.json
       try {
         const mf = await handle.getFileHandle('metadata.json');
@@ -339,19 +351,17 @@ export async function listGenerations(rootHandle) {
  */
 export async function deleteGeneration(rootHandle, id) {
   const { folderId, variantKey } = parseId(id);
-  forgetResponse(id);
-
-  if (!variantKey) {
-    // Legacy — delete entire folder
-    await rootHandle.removeEntry(folderId, { recursive: true });
-    return;
-  }
+  forgetResponse(id, rootHandle);
 
   const dirHandle = await rootHandle.getDirectoryHandle(folderId);
-  // Remove variant files
-  try { await dirHandle.removeEntry(`${variantKey}.html`); } catch (e) { /* ok */ }
-  try { await dirHandle.removeEntry(`${variantKey}.json`); } catch (e) { /* ok */ }
-  try { await dirHandle.removeEntry(thumbnailFileName(variantKey)); } catch (e) { /* none */ }
+  // Legacy and newer variants may coexist. Remove only the chosen result.
+  const files = variantKey
+    ? [`${variantKey}.html`, `${variantKey}.json`, thumbnailFileName(variantKey)]
+    : ['response.html', 'metadata.json', thumbnailFileName(null)];
+  for (const file of files) {
+    try { await dirHandle.removeEntry(file); }
+    catch (error) { if (error.name !== 'NotFoundError') throw error; }
+  }
 
   // Check if any variants remain (anything besides prompt.md)
   let remaining = 0;

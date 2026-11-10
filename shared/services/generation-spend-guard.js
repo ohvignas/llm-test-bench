@@ -18,12 +18,14 @@ export function createSpendGuard(storage) {
   async run({modelId,systemPrompt,userPrompt,params},operation) {
    const base=await digest({modelId,systemPrompt,userPrompt});
    const exact=await digest({base,params});
-   if(pending.has(exact))throw failure('GENERATION_IN_FLIGHT','Cet appel est déjà en cours. Aucun second appel envoyé.');
-   const records=read();
-   if(records.some(r=>r.exact===exact||(r.filtered&&r.base===base)))throw failure('PAID_RETRY_BLOCKED','Relance bloquée : cet appel a déjà échoué et peut avoir été facturé. Modifiez le prompt ou les réglages. Après un filtrage, changer le budget ne suffit pas. Pour réessayer volontairement, utilisez « Autoriser les relances » dans les options du lot.');
-   // Check persistence before sending a paid request.
-   try {storage.setItem(KEY,JSON.stringify([...records,{base,exact,pending:true,at:Date.now()}].slice(-100)));}
-   catch {throw failure('SPEND_GUARD_UNAVAILABLE','Stockage de protection indisponible : aucun appel envoyé.');}
+   try {
+    if(pending.has(exact))throw failure('GENERATION_IN_FLIGHT','Cet appel est déjà en cours. Aucun second appel envoyé.');
+    const records=read();
+    if(records.some(r=>r.exact===exact||(r.filtered&&r.base===base)))throw failure('PAID_RETRY_BLOCKED','Relance bloquée : cet appel a déjà échoué et peut avoir été facturé. Modifiez le prompt ou les réglages. Après un filtrage, changer le budget ne suffit pas. Pour réessayer volontairement, utilisez « Autoriser les relances » dans les options du lot.');
+    // Check persistence before sending a paid request.
+    try {storage.setItem(KEY,JSON.stringify([...records,{base,exact,pending:true,at:Date.now()}].slice(-100)));}
+    catch {throw failure('SPEND_GUARD_UNAVAILABLE','Stockage de protection indisponible : aucun appel envoyé.');}
+   } catch (error) {error.requestSent=false;throw error;}
    pending.add(exact);
    try {const result=await operation();storage.setItem(KEY,JSON.stringify(read().filter(r=>r.exact!==exact)));return result;}
    catch(error) {

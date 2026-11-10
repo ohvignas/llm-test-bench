@@ -184,7 +184,7 @@ export function PromptLibraryView({
           </div>
         `}
         <span class="library-bar-spacer"></span>
-        <button class="btn" onClick=${onImport} disabled=${importScanning} title="Rechercher des prompts à conserver dans les générations et Three Prompt Lab">
+        <button class="btn" onClick=${onImport} disabled=${importScanning} title="Rechercher des prompts à conserver dans les générations et les sources disponibles">
           <i class=${`fa-solid ${importScanning ? 'fa-spinner fa-spin' : 'fa-file-import'}`}></i>
           <span class="btn-label">Importer…</span>
         </button>

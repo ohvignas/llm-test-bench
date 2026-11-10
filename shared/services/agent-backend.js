@@ -5,6 +5,7 @@
 // path jailing, budgets, cancellation, and event normalization.
 
 import { applyModelVisibility } from './cli-agent-model-visibility.js';
+import { secureMode } from './secure-session.js';
 import {
   startGeneration, telemetryEnabled, observeAgentEvent, observeAgentLive,
 } from './generation-telemetry.js';
@@ -63,6 +64,7 @@ const STALL_CHECK_MS = 10000;
  * Cached per page load; pass `{ refresh: true }` to re-probe.
  */
 export function isAgentBridgeReachable({ refresh = false } = {}) {
+  if (secureMode()) return Promise.resolve(false);
   if (!bridgeProbe || refresh) {
     bridgeProbe = fetch('/__agent/runs')
       .then(async (res) => {
@@ -112,6 +114,7 @@ let featureProbe = null;
  * exactly the signal we need. Cached per page load.
  */
 export function agentBridgeFeatures({ refresh = false } = {}) {
+  if (secureMode()) return Promise.resolve([]);
   if (!featureProbe || refresh) {
     featureProbe = fetch('/__agent/runs')
       .then(async (res) => {
@@ -169,6 +172,7 @@ export function budgetsForBridge(budgets = {}, features = []) {
 }
 
 export async function listAgentRuns() {
+  if (secureMode()) return { runs: [], activeCount: 0, reachable: false };
   try {
     const res = await fetch('/__agent/runs');
     if (!res.ok) return { runs: [], activeCount: 0, reachable: true };

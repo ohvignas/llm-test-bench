@@ -27,6 +27,7 @@ function resultStats(result, captured) { return result?.stats || result?.usage |
 
 function compactSandbox(status) {
   return {
+    executed: status != null,
     ok: !!status?.ok,
     timedOut: !!status?.timedOut,
     errorCount: (status?.errors || []).length,
@@ -93,14 +94,19 @@ export async function runVerifiedGeneration({ promptItem, model, options, deps, 
           },
           outcome: 'ok', attempt,
         });
-        if (checkStop(`${role}_after`)) return { stopped: true };
+        if (checkStop(`${role}_after`)) return { stopped: true, value };
         return { value };
       } catch (error) {
         lastError = error;
+        const stats = resultStats(error, capturedStats) || {};
         calls.push({
           role, providerId: model?.providerId || '', modelId: model?.modelId || '',
           startedAt: new Date(began).toISOString(), finishedAt: nowIso(), durationMs: Date.now() - began,
-          usage: { promptTokens: null, responseTokens: null, estimatedCost: null },
+          usage: {
+            promptTokens: nullableNumber(stats.promptTokens),
+            responseTokens: nullableNumber(stats.responseTokens ?? stats.completionTokens),
+            estimatedCost: nullableNumber(stats.estimatedCost ?? stats.cost),
+          },
           outcome: 'error', attempt,
         });
         emit({ type: 'retry', role, attempt, message: error?.message || String(error) });
@@ -145,11 +151,12 @@ export async function runVerifiedGeneration({ promptItem, model, options, deps, 
   }
 
   async function saveCandidate(candidate, stopReason) {
-    if (checkStop(`saving_${candidate.candidate}_${candidate.round}_before`)) return null;
+    // Saving a completed response is local work: Stop must not discard it.
     emit({ type: 'state', status: 'saving', phase: `saving_${candidate.candidate}_${candidate.round}`, round: candidate.round });
     const telemetry = telemetryTotals(calls, startedAt);
     const statusTag = candidate.verdict.status === 'passed' ? 'verified-pass'
-      : candidate.verdict.status === 'warned' ? 'verified-warn' : 'verified-fail';
+      : candidate.verdict.status === 'warned' ? 'verified-warn'
+        : candidate.verdict.status === 'stopped' ? 'verified-stopped' : 'verified-fail';
     const verification = {
       schemaVersion: 1,
       mode: 'verified',
@@ -164,7 +171,8 @@ export async function runVerifiedGeneration({ promptItem, model, options, deps, 
       sandbox: compactSandbox(candidate.sandbox),
       telemetry,
     };
-    const saved = await deps.save({
+    let saved;
+    try { saved = await deps.save({
       prompt: promptItem,
       promptText: promptItem.prompt,
       response: candidate.html,
@@ -175,12 +183,28 @@ export async function runVerifiedGeneration({ promptItem, model, options, deps, 
       derivedFrom: previousSaved?.variantKey || '',
       repairRound: candidate.round,
     });
-    previousSaved = saved || null;
-    if (saved?.id) savedIds.push(saved.id);
+      if (!saved?.id) throw new Error('La sauvegarde de la génération n’a pas été confirmée.');
+    } catch (error) {
+      candidates.push({ ...candidate, saved: null });
+      throw error;
+    }
+    previousSaved = saved;
+    savedIds.push(saved.id);
     candidates.push({ ...candidate, saved });
     emit({ type: 'candidate', candidate: candidate.candidate, round: candidate.round, status: candidate.verdict.status, saved, verification });
     if (checkStop(`saving_${candidate.candidate}_${candidate.round}_after`)) return saved;
     return saved;
+  }
+
+  async function preserveInterrupted(html, round) {
+    if (html?.trim()) {
+      const audit = normalizeAudit({checks:[],notes:'Vérification interrompue. Document conservé sans déclarer les exigences satisfaites.'},checklist);
+      const candidate = {candidate:round === 0 ? 'original' : 'repair',round,html,sandbox:null,audit,
+        verdict:{status:'stopped',completionRatio:null},auditError:null};
+      try { await saveCandidate(candidate,'stopped'); }
+      catch (error) { return {status:'save_error',stopReason:'save_error',error,savedIds,candidates,checklist,telemetry:telemetryTotals(calls,startedAt)}; }
+    }
+    return {status:'stopped',stopReason:'stopped',savedIds,candidates,checklist,telemetry:telemetryTotals(calls,startedAt)};
   }
 
   emit({ type: 'state', status: 'planning', phase: 'planning', checklist });
@@ -193,15 +217,15 @@ export async function runVerifiedGeneration({ promptItem, model, options, deps, 
       prompt: promptItem.prompt, promptItem, checklist, model,
       onChunk: html => emit({ type: 'chunk', html }),
     });
-    if (response.stopped) return { status: 'stopped', stopReason: 'stopped', savedIds, candidates, checklist, telemetry: telemetryTotals(calls, startedAt) };
     generated = resultValue(response.value, ['html', 'text', 'content', 'response']);
+    if (response.stopped) return preserveInterrupted(generated,0);
   } catch (error) {
     return { status: 'generation_error', stopReason: 'generation_error', error, savedIds, candidates, checklist, telemetry: telemetryTotals(calls, startedAt) };
   }
   if (!generated.trim()) return { status: 'generation_error', stopReason: 'generation_error', error: new Error('Model returned an empty response'), savedIds, candidates, checklist, telemetry: telemetryTotals(calls, startedAt) };
 
   let current = await verifyCandidate(generated, 0);
-  if (!current) return { status: 'stopped', stopReason: 'stopped', savedIds, candidates, checklist, telemetry: telemetryTotals(calls, startedAt) };
+  if (!current) return preserveInterrupted(generated,0);
   const originalStopReason = current.verdict.status === 'failed' && opts.maxRepairRounds === 0
     ? 'budget' : current.verdict.status;
   try { await saveCandidate(current, originalStopReason); }
@@ -227,8 +251,8 @@ export async function runVerifiedGeneration({ promptItem, model, options, deps, 
         repairTasks: current.audit.repairTasks || [], model,
         onChunk: html => emit({ type: 'chunk', html }),
       });
-      if (response.stopped) return { status: 'stopped', stopReason: 'stopped', savedIds, candidates, checklist, telemetry: telemetryTotals(calls, startedAt) };
       repaired = resultValue(response.value, ['html', 'text', 'content', 'response']);
+      if (response.stopped) return preserveInterrupted(repaired,round);
     } catch (error) {
       return { status: 'repair_error', stopReason: 'repair_error', error, savedIds, candidates, checklist, telemetry: telemetryTotals(calls, startedAt) };
     }
@@ -236,7 +260,7 @@ export async function runVerifiedGeneration({ promptItem, model, options, deps, 
 
     const identical = htmlHash(repaired) === previousHash;
     current = await verifyCandidate(repaired, round);
-    if (!current) return { status: 'stopped', stopReason: 'stopped', savedIds, candidates, checklist, telemetry: telemetryTotals(calls, startedAt) };
+    if (!current) return preserveInterrupted(repaired,round);
     const failedIds = unresolvedMustChecks(checklist, current.audit).map(check => check.id).sort();
     const sandboxFailed = !!(current.sandbox?.timedOut || current.sandbox?.errors?.length);
     const unchangedFailures = failedIds.join('|') === previousFailedIds.join('|') && !(previousSandboxFailed && !sandboxFailed);

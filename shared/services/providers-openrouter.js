@@ -74,13 +74,19 @@ export async function fetchModels(provider, { freeOnly = false, refresh = false 
 export async function streamChat({ provider, modelId, systemPrompt, userPrompt, onChunk, appTitle, params, onStats, telemetry, signal, generationOptions }) {
   let settings = null;
   if (appTitle === 'Prompt Gallery' || generationOptions) {
-    signal?.throwIfAborted();
-    const model = await getModelCapabilities(modelId,{signal});
-    settings = resolveModelSettings({...generationOptions,model,params});
-    params = settings.params;
-    // Only numeric capabilities and sent settings, never prompts or credentials.
-    if (telemetry) telemetry.meta.params = params;
-    onStats?.({settings});
+    try {
+      signal?.throwIfAborted();
+      const model = await getModelCapabilities(modelId,{signal});
+      settings = resolveModelSettings({...generationOptions,model,params});
+      params = settings.params;
+      // Only numeric capabilities and sent settings, never prompts or credentials.
+      if (telemetry) telemetry.meta.params = params;
+      onStats?.({settings});
+    } catch (error) {
+      // Capability discovery and validation precede the billable completion.
+      error.requestSent = false;
+      throw error;
+    }
   }
   const invoke = async () => {const result=await openRouterStreamChat({
     systemPrompt,

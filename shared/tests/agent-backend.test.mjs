@@ -5,6 +5,9 @@ import {
   getAgentModelEffort,
   groupAgentModelOptions,
   isAgentRunsPayload,
+  isAgentBridgeReachable,
+  agentBridgeFeatures,
+  listAgentRuns,
   resolveAgentModelSelection,
   saveAgentModelEffort,
 } from '../services/agent-backend.js';
@@ -20,6 +23,19 @@ test('agent bridge detection rejects a static host HTML fallback', () => {
   assert.equal(isAgentRunsPayload('<!doctype html>'), false);
   assert.equal(isAgentRunsPayload({}), false);
   assert.equal(isAgentRunsPayload({ runs: [] }), false);
+});
+
+test('secure server never polls or probes the unavailable CLI bridge', async () => {
+  const previousDocument = globalThis.document, previousFetch = globalThis.fetch;
+  globalThis.document = { documentElement: { dataset: { secureVault: 'on' } } };
+  let fetches = 0;
+  globalThis.fetch = async () => { fetches++; throw new Error('Unexpected network request'); };
+  try {
+    assert.equal(await isAgentBridgeReachable({ refresh: true }), false);
+    assert.deepEqual(await agentBridgeFeatures({ refresh: true }), []);
+    assert.deepEqual(await listAgentRuns(), { runs: [], activeCount: 0, reachable: false });
+    assert.equal(fetches, 0);
+  } finally { globalThis.document = previousDocument; globalThis.fetch = previousFetch; }
 });
 
 const catalogue = [

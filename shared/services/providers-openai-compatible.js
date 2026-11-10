@@ -40,11 +40,12 @@ export function encodeProxyTarget(baseUrl) {
 
 /**
  * True when this provider's traffic goes through the hub proxy (the default).
- * The public static build has no serve.py behind it, so `/__llm` would only
- * 404 there — always call the endpoint directly, whatever the saved flag says.
+ * Neither the public static build nor the authenticated Docker server exposes
+ * serve.py's generic proxy. Call the endpoint directly on these hosts, even
+ * when an older provider configuration still has the proxy flag enabled.
  */
 export function usesProxy(provider, documentRef = globalThis.document) {
-  if (isPublicDistribution(documentRef)) return false;
+  if (isPublicDistribution(documentRef) || documentRef?.documentElement?.dataset?.secureVault === 'on') return false;
   return provider?.useProxy !== false;
 }
 
@@ -318,7 +319,7 @@ async function postChat(provider, body, { stream = false, signal, timeouts = {},
 }
 
 /** Stream a standard system/user completion. */
-export async function streamChat({ provider, modelId, systemPrompt, userPrompt, onChunk, params, onStats, telemetry }) {
+export async function streamChat({ provider, modelId, systemPrompt, userPrompt, onChunk, params, onStats, telemetry, signal }) {
   const stats = createRunStats(undefined, telemetry);
   let body = applyParams({
     model: modelId,
@@ -327,7 +328,7 @@ export async function streamChat({ provider, modelId, systemPrompt, userPrompt, 
   }, params, PROVIDER_TYPE);
   if (onChunk) body = withUsageReporting(body, PROVIDER_TYPE);
 
-  const call = await postChat(provider, body, { stream: !!onChunk, telemetry });
+  const call = await postChat(provider, body, { stream: !!onChunk, telemetry, signal });
   const { res } = call;
   if (!res.ok) {
     call.release();
