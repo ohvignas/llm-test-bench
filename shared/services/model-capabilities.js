@@ -21,14 +21,14 @@ export function normalizeOpenRouterModel(model, fetchedAt=Date.now()) {
       defaultParameters:Object.fromEntries(Object.entries(model.default_parameters||{}).filter(([key,value])=>['temperature','top_p','top_k','frequency_penalty','presence_penalty','repetition_penalty'].includes(key)&&Number.isFinite(value))),
       reasoning}};
 }
-export function resolveModelSettings({model,profile='benchmark',params={},budget={},reviewedMaxTokens}={}) {
+export function resolveModelSettings({model,profile='benchmark',params={},budget={},reviewedMaxTokens,recoveryLevel=0}={}) {
   const caps=model?.capabilities||model?.raw?.capabilities;
   if (!caps || caps.source!=='openrouter-api'||!Array.isArray(caps.supportedParameters)) throw invalid('Capacités API indisponibles : actualisez les modèles avant de lancer.');
-  if (!['benchmark','maximum','code','manual'].includes(profile)) throw invalid('Profil de génération inconnu.');
+  if (!['automatic','benchmark','maximum','code','manual'].includes(profile)) throw invalid('Profil de génération inconnu.');
   if (caps.outputModalities&&!caps.outputModalities.includes('text')) throw invalid('Ce modèle ne produit pas de texte ; il ne peut pas générer une page HTML.');
   const supported=new Set(caps.supportedParameters),adjustments=[];
   const limit=positive(caps.maxOutputTokens);
-  const fullOutput = profile==='maximum'||profile==='benchmark';
+  const fullOutput = ['automatic','maximum','benchmark'].includes(profile);
   if(fullOutput&&!limit) throw invalid('La limite de sortie n’est pas communiquée par l’API : choisissez un budget manuel.');
   const requested=fullOutput?limit:Number(budget.totalTokens??params.max_tokens??32768);
   if(!positive(requested)) throw invalid('Le budget total doit être un entier positif.');
@@ -50,15 +50,16 @@ export function resolveModelSettings({model,profile='benchmark',params={},budget
     const efforts=reasoning.supported_efforts===null?EFFORTS:rankedEfforts(reasoning.supported_efforts);
     if(reasoning.mandatory&&(requestedReasoning?.enabled===false||requestedReasoning?.effort==='none'||budget.reasoningEffort==='none'))throw invalid('Le raisonnement est obligatoire pour ce modèle.');
     const manualNone=profile==='manual'&&(budget.reasoningEffort==='none'||requestedReasoning?.effort==='none'||requestedReasoning?.enabled===false);
-    const fixedBudget=reasoning.supports_max_tokens&&supported.has('reasoning')&&(!efforts.length||(['code','manual'].includes(profile)&&!manualNone));
+    const fixedBudget=reasoning.supports_max_tokens&&supported.has('reasoning')&&(!efforts.length||(['automatic','code','manual'].includes(profile)&&!manualNone));
     if(fixedBudget) {
-      const amount=Number(budget.reasoningTokens??requestedReasoning?.max_tokens??Math.min(4096,Math.floor(total/4)));
+      const amount=profile==='automatic'?Math.min(recoveryLevel?4096:16384,Math.floor(total/3)):Number(budget.reasoningTokens??requestedReasoning?.max_tokens??Math.min(4096,Math.floor(total/4)));
       if(!positive(amount)||amount>=total)throw invalid('Le budget de raisonnement doit être positif et inférieur au total.');
       out.reasoning={max_tokens:amount};
       adjustments.push('Budget de raisonnement explicite utilisé selon les capacités annoncées par l’API.');
     } else if(efforts.length) {
       const enabled=efforts.filter(e=>e!=='none');
-      const chosen=profile==='manual'?(budget.reasoningEffort||(requestedReasoning?.enabled===false?'none':requestedReasoning?.effort)||reasoning.default_effort||enabled.at(-1))
+      const automaticEffort=recoveryLevel>=2?enabled.at(-1):recoveryLevel===1?(enabled.includes('medium')?'medium':enabled.at(-1)):(enabled.includes('xhigh')?'xhigh':enabled.includes('high')?'high':enabled[0]);
+      const chosen=profile==='automatic'?automaticEffort:profile==='manual'?(budget.reasoningEffort||(requestedReasoning?.enabled===false?'none':requestedReasoning?.effort)||reasoning.default_effort||enabled.at(-1))
         :profile==='maximum'?enabled[0]:profile==='benchmark'?(enabled.includes('xhigh')?'xhigh':enabled.includes('high')?'high':enabled[0]):enabled.at(-1);
       if(!efforts.includes(chosen))throw invalid(`Effort non accepté par l’API : ${chosen}. Valeurs : ${efforts.join(', ')}.`);
       if(supported.has('reasoning'))out.reasoning={effort:chosen};else out.reasoning_effort=chosen;
@@ -69,6 +70,7 @@ export function resolveModelSettings({model,profile='benchmark',params={},budget
   } else if(requestedReasoning)adjustments.push('Raisonnement non configurable selon l’API ; paramètre retiré.');
   if(profile==='maximum'&&reasoning)adjustments.push('Effort maximal : le raisonnement peut consommer toute la sortie. Aucun résultat ni coût fixe garanti.');
   if(profile==='benchmark')adjustments.push('Comparaison : sortie maximale annoncée par l’API ; effort très élevé, élevé ou le plus élevé disponible. Le plafond inclut le raisonnement.');
+  if(profile==='automatic')adjustments.push('Automatique : sortie maximale annoncée, effort puissant au départ ; raisonnement réduit seulement si une reprise le nécessite. Trois appels maximum, corrections comprises.');
   // Preserve caller routing constraints while requiring support for every sent parameter.
   out.provider={...(params.provider||{}),require_parameters:true};
   return {profile,modelId:model.modelId||model.id,source:caps.source,fetchedAt:caps.fetchedAt,
@@ -86,7 +88,7 @@ export function generationFeedback(stats={},settings=stats.settings) {
     const effort=settings?.params?.reasoning?.effort??settings?.params?.reasoning_effort;
     const minimum=effort&&efforts.length&&effort===efforts.at(-1)?` L’effort « ${effort} » est déjà le minimum annoncé pour ce modèle.`:'';
     const detail=reasoningOnly?` (${stats.reasoningTokens} tokens de raisonnement)`:'';
-    return {kind:reasoningOnly?'reasoning-exhausted':'empty-output-limit',message:`Budget de sortie épuisé sans contenu${detail}.${minimum} Utilisez une construction par étapes ou un prompt plus ciblé. Aucun nouvel appel automatique.`};
+    return {kind:reasoningOnly?'reasoning-exhausted':'empty-output-limit',message:`Budget de sortie épuisé sans contenu${detail}.${minimum} ${settings?.profile==='automatic'?'Le mode Automatique peut adapter une reprise dans son enveloppe de trois appels.':'Utilisez une construction par étapes ou un prompt plus ciblé. Aucun nouvel appel automatique.'}`};
   }
-  return {kind:'truncated',message:'Réponse incomplète : limite de sortie atteinte. Découpez la construction en étapes ou utilisez un prompt plus ciblé ; aucun appel automatique.'};
+  return {kind:'truncated',message:settings?.profile==='automatic'?'Réponse incomplète : limite de sortie atteinte. Le mode Automatique conserve le code et peut le compléter dans son enveloppe de trois appels.':'Réponse incomplète : limite de sortie atteinte. Découpez la construction en étapes ou utilisez un prompt plus ciblé ; aucun appel automatique.'};
 }

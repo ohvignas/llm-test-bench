@@ -440,14 +440,14 @@ function requireCompletionContent(content, stats, settings) {
   const feedback = exhausted ? generationFeedback({...stats,responseChars:0},settings) : null;
   const error = new Error(exhausted
     ? feedback.message
-    : 'Le modèle a terminé sans renvoyer de contenu. Aucun nouvel appel automatique.');
+    : settings?.profile==='automatic'?'Le modèle a terminé sans renvoyer de contenu. Reprise possible dans l’enveloppe automatique.':'Le modèle a terminé sans renvoyer de contenu. Aucun nouvel appel automatique.');
   Object.assign(error, { code: exhausted ? 'OUTPUT_TOKEN_LIMIT' : 'EMPTY_RESPONSE', retryable: false, stats, feedback });
   throw error;
 }
 
 // ── Generic streaming chat completion ──
 
-async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onChunk, params, onStats, telemetry, signal, settings }) {
+async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onChunk, params, onStats, telemetry, signal, settings, automatic }) {
   signal?.throwIfAborted();
   const apiKey = await getApiKeyForRequest();
   if (!apiKey) throw Object.assign(new Error('OpenRouter API key not set'), {requestSent:false});
@@ -473,6 +473,7 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
       ...(!SERVER_VAULT ? { 'Authorization': `Bearer ${apiKey}` } : {}),
       'HTTP-Referer': window.location.origin,
       'X-Title': appTitle || 'DevTools Hub',
+      ...(SERVER_VAULT && automatic ? {'X-Bench-Automatic':JSON.stringify(automatic)} : {}),
     },
     body: JSON.stringify(body),
   });
@@ -500,7 +501,12 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
       // Surface it instead of leaving the batch looking successful or idle.
       if (parsed.usage) stats.setUsage(parsed.usage);
       const error = parsed.error || parsed.choices?.[0]?.error;
-      if (error) throw new Error(typeof error === 'string' ? error : error.message || 'Le fournisseur a interrompu la génération.');
+      if (error) {
+        const failure=new Error(typeof error === 'string' ? error : error.message || 'Le fournisseur a interrompu la génération.');
+        if(Number.isInteger(Number(error.code))&&Number(error.code)>=400)failure.status=Number(error.code);
+        if(error.code==='content_filter'||error.code==='content_policy_violation')failure.code='CONTENT_FILTERED';
+        throw failure;
+      }
       const choice = parsed.choices?.[0];
       if (choice?.delta?.reasoning || choice?.delta?.reasoning_content || choice?.delta?.reasoning_details?.length) {
         telemetry?.activity?.('reasoning');

@@ -38,6 +38,64 @@ class LocalIntegrationTests(unittest.TestCase):
         return self.client.post('/api/openrouter/chat/completions',
                                 headers=self.headers, json=payload, **options)
 
+    def test_automatic_recovery_is_scoped_and_capped_and_preserves_retry_after(self):
+        headers = {**self.headers, 'X-Bench-Automatic': json.dumps({'id':'auto-run-1234567890', 'limit':3})}
+        upstream = Mock(status_code=429, headers={'Retry-After':'15'})
+        upstream.json.return_value = {'error': {'message':'Busy', 'code':429}}
+        with patch('server.proxy.requests.request', return_value=upstream) as call:
+            for _ in range(3):
+                response = self.client.post('/api/openrouter/chat/completions', headers=headers, json=self.chat())
+                self.assertEqual(response.status_code,429)
+                self.assertEqual(response.headers['Retry-After'],'15')
+            blocked = self.client.post('/api/openrouter/chat/completions', headers=headers, json=self.chat())
+            self.assertEqual(blocked.status_code,409)
+            self.assertFalse(blocked.json['requestSent'])
+            self.assertEqual(call.call_count,3)
+            self.assertNotIn('X-Bench-Automatic',call.call_args.kwargs['headers'])
+
+    def test_automatic_allowance_covers_repairs_and_cannot_switch_models(self):
+        from server.spend_guard import reserve,finish
+        run={'id':'auto-run-1234567890','limit':3}
+        with self.app.app_context():
+            for i in range(3):
+                payload=self.chat(messages=[{'role':'user','content':f'new repair {i}'}])
+                identity=reserve(payload,run)
+                self.assertIsNotNone(identity)
+                self.assertIsNone(reserve(self.chat(messages=[]),run),'No concurrent request in same allowance')
+                finish(identity,True)
+            self.assertIsNone(reserve(self.chat(),run))
+            self.assertIsNone(reserve(self.chat(model='another/model'),run))
+            self.assertIsNotNone(reserve(self.chat(model='another/model'),{'id':'second-model-run-12345','limit':3}))
+
+    def test_automatic_cannot_release_filtered_or_running_fingerprint(self):
+        from server.spend_guard import reserve,finish
+        with self.app.app_context():
+            identity=reserve(self.chat())
+            self.assertIsNone(reserve(self.chat(),{'id':'auto-run-1234567890','limit':3}))
+            finish(identity,False,filtered=True)
+            self.assertIsNone(reserve(self.chat(),{'id':'auto-run-1234567890','limit':3}))
+
+    def test_stream_filter_error_stays_blocked_for_new_automatic_runs(self):
+        upstream = Mock(status_code=200)
+        upstream.iter_content.return_value = [b'data: {"error":{"code":"content_filter","message":"Filtered"}}\n\n']
+        with patch('server.proxy.requests.request', return_value=upstream) as call:
+            response = self.post_chat(self.chat(stream=True), buffered=True)
+            self.assertIn(b'content_filter', response.data)
+            retry = self.client.post('/api/openrouter/chat/completions',
+                headers={**self.headers,'X-Bench-Automatic':json.dumps({'id':'new-automatic-run-12345','limit':3})},
+                json=self.chat(stream=True))
+            self.assertEqual(retry.status_code,409)
+            self.assertFalse(retry.json['requestSent'])
+            self.assertEqual(call.call_count,1)
+
+    def test_invalid_automatic_policy_is_unsent(self):
+        with patch('server.proxy.requests.request') as call:
+            for value in ['invalid',json.dumps({'id':'auto-run-1234567890','limit':100})]:
+                response=self.client.post('/api/openrouter/chat/completions',headers={**self.headers,'X-Bench-Automatic':value},json=self.chat())
+                self.assertEqual(response.status_code,400)
+                self.assertFalse(response.json['requestSent'])
+            call.assert_not_called()
+
     def test_project_bytes_and_vault_survive_restart_and_backup_restore(self):
         contents = {
             'prompt-gallery/projects/échantillon/site.html': b'<html>local project</html>',

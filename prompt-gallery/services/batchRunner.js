@@ -16,6 +16,7 @@ import { withPromptCosts } from './batchCosts.js';
 import { progressivePlan, runProgressiveGeneration } from './progressiveGeneration.js';
 
 import { runVerifiedGeneration } from './verifiedGeneration.js';
+import { runAutomaticGeneration } from './automaticGeneration.js';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -67,8 +68,8 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
     ...(options || {}),
   };
   if(opts.stopOnFailure) opts.apiRetries=0;
-  if (opts.resumeFrom && (prompts.length !== 1 || opts.mode !== 'verified')) {
-    throw new Error('La reprise doit cibler un seul résultat en mode Vérifié.');
+  if (opts.resumeFrom && (prompts.length !== 1 || !['automatic','verified'].includes(opts.mode))) {
+    throw new Error('La reprise doit cibler un seul résultat en mode Automatique ou Vérifié.');
   }
   const mode = opts.mode || (opts.heal ? 'runtime-heal' : 'quick');
   const emit = (event) => { try { onEvent?.(event); } catch (e) { /* never let a listener break the run */ } };
@@ -115,6 +116,21 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
         emit({ type: 'item', index: i, status: 'skipped' });
         continue;
       }
+    }
+
+    if (mode === 'automatic') {
+      const result=await runAutomaticGeneration({prompt:p,model,deps,initialCandidate:opts.resumeFrom,
+        shouldStop:stop,waitIfPaused:context=>pauseGate({...context,index:i,prompt:p}),onEvent:event=>emit({...event,index:i})});
+      summary.saved+=result.savedIds.length;
+      summary.healed+=result.repairs?1:0;
+      summary.resumed+=opts.resumeFrom?1:0;
+      summary.generated+=!opts.resumeFrom&&result.html?1:0;
+      summary.failed+=result.status==='error'?1:0;
+      emit({type:'item',index:i,status:result.status,savedIds:result.savedIds,runStatus:result.runtime,
+        message:result.error?.message || (result.status==='saved'?'Code enregistré et vérifié dans le bac à sable.':''),
+        automatic:true,attempts:result.calls});
+      if(result.status==='stopped'||(opts.stopOnFailure&&result.status==='error')){summary.stopped=true;break;}
+      await interruptibleDelay(opts.delayMs,stop,pause);continue;
     }
 
     if (mode === 'quick' && opts.progressive && progressivePlan(p).length) {

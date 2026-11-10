@@ -1331,7 +1331,7 @@ function App() {
       });
     },
     load: (id) => meta.loadGeneration(rootHandle, id),
-    save: async ({ prompt, promptText, response, model: mdl, tags, kind, healAttempts, verification, derivedFrom, billing, progressive, runStatus }) => {
+    save: async ({ prompt, promptText, response, model: mdl, tags, kind, healAttempts, verification, derivedFrom, billing, progressive, runStatus, automatic }) => {
       const derivedTitle = prompt.title
         || (promptText.split('\n').find(l => l.trim()) || 'untitled').trim().slice(0, 60);
       const folder = library.promptFolderId({ ...prompt, title: derivedTitle });
@@ -1350,6 +1350,7 @@ function App() {
         providerId: mdl.providerId,
         aiGenerated: true,
         ...(billing ? {billing} : {}),
+        ...(automatic ? {automatic,runStatus,derivedFrom:derivedFrom || ''} : {}),
         ...(progressive ? {progressive, runStatus} : {}),
         batch: {
           // A multi-model batch gives each model its own run (lane) id and ties

@@ -3,6 +3,28 @@ import assert from 'node:assert/strict';
 import {createSpendGuard} from '../services/generation-spend-guard.js';
 const storage=()=>{const data=new Map();return {getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k),data};};
 const input={modelId:'vendor/model',systemPrompt:'HTML',userPrompt:'private prompt',params:{max_tokens:32768,reasoning:{effort:'low'}}};
+const automatic={id:'auto-test-1234567890',limit:3};
+test('automatic launch can recover a failed fingerprint but cannot send a fourth call across guard instances',async()=>{
+ const store=storage();let sent=0;
+ for(let i=0;i<3;i++)await assert.rejects(createSpendGuard(store).run({...input,automatic},async()=>{sent++;throw new Error('network');}));
+ await assert.rejects(createSpendGuard(store).run({...input,automatic},async()=>{sent++;}),e=>e.code==='AUTOMATIC_LIMIT'&&e.requestSent===false);
+ assert.equal(sent,3);
+});
+test('automatic launch never clears filtered or in-flight requests, including across a reload',async()=>{
+ const store=storage(),guard=createSpendGuard(store);let release;
+ const first=guard.run({...input,automatic},async()=>{await new Promise(r=>release=r);return 'ok';});
+ while(!release)await new Promise(r=>setTimeout(r,1));
+ await assert.rejects(createSpendGuard(store).run({...input,automatic:{...automatic,id:'another-auto-123456789'}},async()=>assert.fail('duplicate')),e=>e.code==='PAID_RETRY_BLOCKED');
+ release();await first;
+ await assert.rejects(guard.run(input,async()=>{throw Object.assign(new Error('filter'),{code:'CONTENT_FILTERED'});}));
+ await assert.rejects(guard.run({...input,automatic},async()=>assert.fail('filtered retry')),e=>e.code==='PAID_RETRY_BLOCKED');
+});
+test('automatic allowance includes changed repair prompts and is bound to one model',async()=>{
+ const guard=createSpendGuard(storage());
+ for(let i=0;i<3;i++)await guard.run({...input,userPrompt:'repair '+i,automatic},async()=>'ok');
+ await assert.rejects(guard.run({...input,userPrompt:'another repair',automatic},async()=>assert.fail('fourth call')),e=>e.code==='AUTOMATIC_LIMIT');
+ await assert.rejects(guard.run({...input,modelId:'other/model',automatic},async()=>assert.fail('model changed')),e=>e.code==='AUTOMATIC_LIMIT');
+});
 test('paid failure blocks an identical manual restart across guard instances without storing prompts',async()=>{
  const store=storage();let paid=0;
  await assert.rejects(createSpendGuard(store).run(input,async()=>{paid++;throw Object.assign(new Error('empty'),{code:'OUTPUT_TOKEN_LIMIT'});}));

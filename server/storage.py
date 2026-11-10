@@ -52,6 +52,9 @@ def initialize(app):
                 name TEXT PRIMARY KEY, value BLOB NOT NULL);
             CREATE TABLE IF NOT EXISTS generation_guard (
                 fingerprint TEXT PRIMARY KEY, state TEXT NOT NULL, created_at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS automatic_runs (
+                id TEXT PRIMARY KEY, model_hash TEXT NOT NULL, calls INTEGER NOT NULL,
+                pending TEXT, created_at INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS login_attempts (
                 address TEXT NOT NULL, attempted_at INTEGER NOT NULL);
             CREATE INDEX IF NOT EXISTS login_attempt_time ON login_attempts(attempted_at);

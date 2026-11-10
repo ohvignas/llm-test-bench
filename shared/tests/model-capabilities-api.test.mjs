@@ -84,3 +84,26 @@ test('invalid final HTML is inside the guard and cannot be automatically billed 
   assert.equal(posts,1);
  }finally{globalThis.fetch=previous;}
 });
+
+test('automatic mode carries its bounded allowance to the actual local proxy and adapts the real request',async()=>{
+ const {runAutomaticGeneration}=await import('../../prompt-gallery/services/automaticGeneration.js');
+ const previous=globalThis.fetch;const sent=[],saved=[];
+ globalThis.fetch=async(url,init)=>{
+  if(url==='/api/openrouter/chat/completions') {
+   sent.push({body:JSON.parse(init.body),automatic:JSON.parse(new Headers(init.headers).get('X-Bench-Automatic'))});
+   return sent.length===1 ? Response.json({choices:[{message:{content:''},finish_reason:'length'}],usage:{cost:.1,completion_tokens:64000,completion_tokens_details:{reasoning_tokens:64000}}})
+    : Response.json({choices:[{message:{content:'<html><body>recovered</body></html>'},finish_reason:'stop'}],usage:{cost:.02}});
+  }
+  return previous(url,init);
+ };
+ try {
+  const result=await runAutomaticGeneration({prompt:{id:'site',prompt:'automatic-fixture',tags:[]},model:{providerId:'openrouter',modelId:'vendor/model'},deps:{
+   generate:async(userPrompt,options)=>adapter.streamChat({modelId:'vendor/model',appTitle:'Prompt Gallery',userPrompt,generationOptions:options.model.generationOptions,onStats:options.onStats}),
+   runSandbox:async()=>({errors:[],timedOut:false}),save:async data=>{saved.push(data);return{id:'recovered'};},
+  }});
+  assert.equal(result.status,'saved');assert.equal(sent.length,2);
+  assert.deepEqual(sent.map(r=>r.body.reasoning.effort),['max','low']);
+  assert.equal(sent[0].automatic.id,sent[1].automatic.id);assert.equal(sent[0].automatic.limit,3);
+  assert.ok(sent.every(r=>r.body.max_tokens===64000));assert.equal(saved.length,1);
+ } finally {globalThis.fetch=previous;}
+});

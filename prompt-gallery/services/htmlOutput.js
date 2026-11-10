@@ -42,7 +42,7 @@ export async function streamHtmlDocument(stream, { onChunk, ...options }) {
 export function requireHtmlDocument(value) {
   const document=extractHtmlDocument(value);
   if(!document || !/<html(?:\s|>)/i.test(document) || !/<\/html\s*>\s*$/i.test(document)) {
-    throw Object.assign(new Error('Le modèle n’a pas renvoyé de document HTML complet. Aucun nouvel appel automatique ; vérifiez le budget avant de relancer.'),{code:'INCOMPLETE_HTML',retryable:false});
+    throw Object.assign(new Error('Le modèle n’a pas renvoyé de document HTML complet. Une reprise doit compléter le document.'),{code:'INCOMPLETE_HTML',retryable:false});
   }
   return document;
 }

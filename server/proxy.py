@@ -32,7 +32,17 @@ def relay():
         return unsent_error(error.code, error.description)
     if chat and (not isinstance(payload.get('model'), str) or not isinstance(payload.get('messages'), list)):
         return unsent_error(400, 'Un modèle et une liste de messages sont requis.')
-    identity = reserve(payload) if chat else None
+    automatic = None
+    if chat and request.headers.get('X-Bench-Automatic'):
+        try:
+            automatic = json.loads(request.headers['X-Bench-Automatic'])
+            if (not isinstance(automatic, dict) or automatic.get('limit') != 3
+                    or not isinstance(automatic.get('id'), str)
+                    or not re.fullmatch(r'[a-zA-Z0-9-]{16,80}', automatic['id'])):
+                raise ValueError('Invalid automatic run')
+        except (ValueError, TypeError):
+            return unsent_error(400, 'Configuration automatique invalide.')
+    identity = reserve(payload, automatic) if chat else None
     if chat and identity is None:
         return unsent_error(409, 'Appel bloqué : ce prompt et ce modèle sont déjà en cours ou ont échoué. Aucun nouvel appel envoyé. Modifiez le prompt, ou autorisez volontairement les relances dans les options du lot.')
     stream = bool(chat and payload.get('stream'))
@@ -51,7 +61,7 @@ def relay():
         abort(502, description='OpenRouter est injoignable. Réessayez plus tard.')
     if not 200 <= upstream.status_code < 300:
         if identity:
-            finish(identity, False)
+            finish(identity, False, filtered=upstream.status_code == 403)
         status = upstream.status_code
         try:
             error_body = upstream.json()
@@ -70,14 +80,18 @@ def relay():
             upstream.close()
         response = jsonify({'error': {'message': message[:2000], 'code': status}, 'upstreamStatus': status})
         response.status_code = status if 400 <= status < 600 else 502
+        retry_after = upstream.headers.get('Retry-After', '')
+        if isinstance(retry_after, str) and retry_after and len(retry_after) <= 128:
+            response.headers['Retry-After'] = retry_after
         return response
     if stream:
         def chunks():
             received = False
             stop_reason = None
             failed = False
+            filtered = False
             def observe(line):
-                nonlocal received, stop_reason, failed
+                nonlocal received, stop_reason, failed, filtered
                 if not line.startswith(b'data:'):
                     return
                 try:
@@ -87,6 +101,9 @@ def relay():
                 if not isinstance(event, dict):
                     raise ValueError('Invalid event')
                 failed = failed or bool(event.get('error'))
+                error = event.get('error')
+                if isinstance(error, dict):
+                    filtered = filtered or str(error.get('code')) in ('403', 'content_filter', 'content_policy_violation')
                 choices = event.get('choices', [])
                 if not isinstance(choices, list):
                     raise ValueError('Invalid choices')
@@ -122,7 +139,7 @@ def relay():
                 yield b'data: {"error":"Flux OpenRouter illisible."}\n\n'
             finally:
                 upstream.close()
-                finish(identity, not failed and ((received and stop_reason == 'stop') or stop_reason == 'tool_calls'))
+                finish(identity, not failed and ((received and stop_reason == 'stop') or stop_reason == 'tool_calls'), filtered=filtered or stop_reason == 'content_filter')
         return Response(stream_with_context(chunks()), mimetype='text/event-stream',
                         headers={'X-Accel-Buffering': 'no', 'Cache-Control': 'no-store'})
     try:
@@ -136,7 +153,7 @@ def relay():
                 raise ValueError('Invalid completion')
             successful = bool(choices) and all(choice.get('finish_reason') in ('stop', 'tool_calls') and
                 bool((choice.get('message') or {}).get('content') or (choice.get('message') or {}).get('tool_calls')) for choice in choices)
-            finish(identity, successful)
+            finish(identity, successful, filtered=any(choice.get('finish_reason') == 'content_filter' for choice in choices))
         encoded = json.dumps(result, ensure_ascii=False)
         if key:
             encoded = encoded.replace(key, '[redacted]')

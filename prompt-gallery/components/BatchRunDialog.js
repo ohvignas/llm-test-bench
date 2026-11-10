@@ -144,7 +144,7 @@ export function BatchRunDialog({
   const selectedPrompts = useMemo(() => resumeFrom ? [resumeFrom.prompt] : promptChoices.selected, [resumeFrom, promptChoices]);
 
   // Options
-  const [mode, setMode] = useState(resumeSource ? 'verified' : 'quick');
+  const [mode, setMode] = useState('automatic');
   const [progressive, setProgressive] = useState(true);
   const [healAttempts, setHealAttempts] = useState(1);
   const [maxRepairRounds, setMaxRepairRounds] = useState(1);
@@ -227,8 +227,8 @@ export function BatchRunDialog({
     const isOpenRouter=isOpenRouterModel(selected);
     if(!isOpenRouter)return {model:selected,isOpenRouter:false};
     const api=catalogue.find(m=>(m.modelId||m.id)===selected.modelId)||original;
-    const override=settingsOverrides[batchModelKey(selected)]||{};
-    try {return {model:selected,isOpenRouter:true,settings:resolveModelSettings({model:api,profile:settingsProfile,...override,budget:{totalTokens,reasoningTokens,...override}})};}
+    const override=mode==='automatic'?{}:settingsOverrides[batchModelKey(selected)]||{};
+    try {return {model:selected,isOpenRouter:true,settings:resolveModelSettings({model:api,profile:mode==='automatic'?'automatic':settingsProfile,...override,budget:{totalTokens,reasoningTokens,...override}})};}
     catch(error) {return {model:selected,isOpenRouter:true,error:error.message};}
   });
   const previewReports=settingsReports();
@@ -413,9 +413,9 @@ export function BatchRunDialog({
     } catch(error) {startingRef.current=false;if(mountedRef.current)addToast(error.message,'error');return;}
     const configured=reports.map(report=>{
       if(!report.isOpenRouter)return report.model;
-      const override=settingsOverrides[batchModelKey(report.model)]||{};
+      const override=mode==='automatic'?{}:settingsOverrides[batchModelKey(report.model)]||{};
       const shown=previewReports.find(r=>batchModelKey(r.model)===batchModelKey(report.model))?.settings;
-      return {...report.model,generationOptions:{profile:settingsProfile,...override,budget:{totalTokens,reasoningTokens,...override},
+      return {...report.model,generationOptions:{profile:mode==='automatic'?'automatic':settingsProfile,...override,budget:{totalTokens,reasoningTokens,...override},
         reviewedMaxTokens:shown?.params.max_tokens??shown?.params.max_completion_tokens??report.settings.params.max_tokens??report.settings.params.max_completion_tokens}};
     });
     const plan = planBatchLanes({ prompts: list, models: configured, runId });
@@ -460,7 +460,7 @@ export function BatchRunDialog({
           prompts: lane.prompts,
           model: lane.model,
           options: {
-            mode: resumeFrom ? 'verified' : mode,
+            mode,
             resumeFrom,
             progressive,
             heal: mode === 'runtime-heal',
@@ -664,7 +664,7 @@ export function BatchRunDialog({
     try {
       const saved = await deps.load(items[index]?.savedIds?.at(-1));
       setResumeFrom(prepareGenerationResume(saved, prompts));
-      setMode('verified'); setPhase('config'); onRestore?.();
+      setMode('automatic'); setPhase('config'); onRestore?.();
     } catch (error) { addToast(error.message, 'error'); }
   };
   const prepareRetry = index => {
@@ -682,7 +682,7 @@ export function BatchRunDialog({
       ${resumeFrom && html`<section class="batch-prompt-selection" aria-label="Reprise du résultat enregistré">
         <strong>Reprendre : ${resumeFrom.prompt.title}</strong>
         <p>${resumeFrom.model.label} · ${resumeFrom.html.length.toLocaleString('fr-FR')} caractères conservés.</p>
-        <p>La vérification repart du code enregistré, sans nouvelle génération initiale. Les audits et corrections peuvent être facturés. L’original reste disponible ; chaque résultat corrigé est une nouvelle version.</p>
+        <p>La reprise utilise le code enregistré, sans nouvelle génération initiale. Les corrections peuvent être facturées. L’original reste disponible ; chaque résultat corrigé est une nouvelle version.</p>
       </section>`}
       ${!resumeFrom && html`
       <div class=${`batch-model-row ${hasModel ? '' : 'warn'}`}>
@@ -826,6 +826,16 @@ export function BatchRunDialog({
       <div class="batch-section">
         <div class="batch-section-head"><span><i class="fa-solid fa-wand-magic-sparkles"></i> Mode de génération</span></div>
         <div class="batch-options">
+          <label class="batch-opt batch-mode-opt">
+            <input type="radio" name="batch-mode" value="automatic" checked=${mode === 'automatic'} onChange=${() => setMode('automatic')} />
+            <span><strong>Automatique — puissance et reprise</strong><small>Réglages puissants adaptés à l’API, vérification du code et reprises selon l’erreur. Pour tous les prompts.</small></span>
+          </label>
+          ${mode === 'automatic' && html`<section class="batch-prompt-selection" aria-label="Fonctionnement automatique">
+            <strong>Choisis tes modèles et tes prompts, puis lance le lot.</strong>
+            <p>Sortie maximale annoncée par OpenRouter et effort très élevé lorsque disponible. Si le raisonnement épuise la sortie, l’effort est réduit pour la reprise. Si du code existe, il sert de point de départ aux corrections.</p>
+            <p><strong>Maximum 3 appels par prompt et modèle, corrections et relances comprises.</strong> Chaque appel peut être facturé. Saturation ou coupure : attente et reprise. Erreur de clé, crédit insuffisant ou filtrage : arrêt expliqué. Aucun changement de modèle. Les autres modèles continuent.</p>
+            <p>La vérification automatique détecte les erreurs du bac à sable ; elle ne certifie pas toutes les fonctionnalités ni la qualité visuelle. Chaque adaptation et son coût sont consignés dans le journal.</p>
+          </section>`}
           ${!resumeFrom && html`
           <label class="batch-opt batch-mode-opt">
             <input type="radio" name="batch-mode" value="quick" checked=${mode === 'quick'} onChange=${() => setMode('quick')} />
@@ -854,7 +864,7 @@ export function BatchRunDialog({
               <ol>${stages.map(stage => html`<li key=${stage.id}>${stage.title} · plafond OpenRouter ${stage.maxTokens.toLocaleString('fr-FR')} tokens</li>`)}</ol>
             </div>`)}
             <p>Sur OpenRouter, ces plafonds incluent raisonnement et code. Une limite API ou un réglage individuel plus bas reste prioritaire. Les autres fournisseurs conservent leurs réglages natifs : les plafonds du plan ne leur sont pas appliqués.</p>
-            <p>Sur OpenRouter, les étapes utilisent le profil Génération de code : raisonnement réduit selon les capacités API, même si vous avez choisi un effort supérieur pour les générations en un appel.</p>
+            <p>Sur OpenRouter, les étapes respectent le profil choisi. Seul le profil Économe réduit le plafond de sortie et le raisonnement.</p>
             <ul>${previewReports.map(report => html`<li key=${batchModelKey(report.model)}>${report.model.label || report.model.modelId} : ${report.error ? 'réglages à corriger avant le lancement' : report.isOpenRouter ? `jusqu’à ${stageTokenLimit({maxTokens:Math.max(...selectedPlans.flatMap(plan => plan.stages.map(stage => stage.maxTokens)))}, report).toLocaleString('fr-FR')} tokens par étape` : 'réglages natifs du fournisseur ; plafonds du plan non appliqués'}</li>`)}</ul>
           </section>`}
           ${mode === 'runtime-heal' && html`
@@ -890,6 +900,7 @@ export function BatchRunDialog({
             <span>Afficher la génération en direct dans cette fenêtre</span>
             <span class="batch-opt-hint">Désactiver pour réduire la mémoire utilisée lors des grands lots.</span>
           </label>
+          ${mode !== 'automatic' && html`
           <label class="batch-opt">
             <span>Nouvelles tentatives après erreur de connexion</span>
             <select class="form-input batch-num" disabled=${spendProtection} value=${spendProtection?0:apiRetries} onChange=${(e) => setApiRetries(Number(e.target.value))}>
@@ -911,6 +922,10 @@ export function BatchRunDialog({
           ${progressiveActive && html`<p class="batch-opt-hint">Les étapes GTA VI respectent le profil Comparaison, Effort maximal ou les réglages personnalisés ci-dessous. Le plafond réduit par étape s’applique uniquement au profil Économe. La construction par étapes change le protocole : utilisez le même mode pour tous les modèles comparés.</p>`}
           <${ModelSettingsPanel} reports=${previewReports} loading=${settingsLoading} error=${settingsError}
             onRefresh=${()=>refreshCapabilities().catch(()=>{})} onOverride=${overrideSettings} onReset=${()=>setSettingsOverrides({})}/>
+          `}
+          ${mode === 'automatic' && html`<details><summary>Réglages initiaux des modèles</summary>
+            ${previewReports.map(report=>html`<p>${report.model.label || report.model.modelId} : ${report.error || (report.settings ? `${(report.settings.params.max_tokens??report.settings.params.max_completion_tokens).toLocaleString('fr-FR')} tokens de sortie maximum · effort ${report.settings.params.reasoning?.effort || report.settings.params.reasoning_effort || 'budget adapté'}` : 'paramètres natifs du fournisseur')}</p>`)}
+          </details>`}
           <label class="batch-opt">
             <span>Délai entre les prompts</span>
             <input class="form-input batch-num" type="number" min="0" max="120" step="1"
@@ -924,7 +939,7 @@ export function BatchRunDialog({
     <div class="modal-footer">
       <button class="btn" onClick=${onClose}>Annuler</button>
       <button class="btn btn-primary btn-generate" onClick=${start} disabled=${!canRun || !hasDirectory || selectedCount === 0 || settingsLoading || previewReports.some(r=>r.error)}>
-        <i class="fa-solid fa-play"></i> ${resumeFrom ? 'Reprendre la vérification de' : 'Lancer'} ${selectedCount} prompt${selectedCount === 1 ? '' : 's'}${isMulti ? ` × ${runModels.length} modèles` : ''}${plannedCalls !== null ? ` · ${plannedCalls} appel${plannedCalls === 1 ? '' : 's'} prévu${plannedCalls === 1 ? '' : 's'}` : ''}
+        <i class="fa-solid fa-play"></i> ${resumeFrom ? 'Reprendre' : 'Lancer'} ${selectedCount} prompt${selectedCount === 1 ? '' : 's'}${isMulti ? ` × ${runModels.length} modèles` : ''}${mode==='automatic'?` · jusqu’à ${selectedCount*runModels.length*3} appels`:plannedCalls !== null ? ` · ${plannedCalls} appel${plannedCalls === 1 ? '' : 's'} prévu${plannedCalls === 1 ? '' : 's'}` : ''}
       </button>
     </div>
   `;
