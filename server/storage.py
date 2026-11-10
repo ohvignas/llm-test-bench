@@ -77,6 +77,12 @@ def initialize(app):
         ''')
         if 'error' not in {row[1] for row in connection.execute('PRAGMA table_info(generation_activity)')}:
             connection.execute("ALTER TABLE generation_activity ADD COLUMN error TEXT NOT NULL DEFAULT '{}'")
+        columns = {row[1] for row in connection.execute('PRAGMA table_info(browser_executions)')}
+        if 'request_payload' not in columns:
+            connection.execute('ALTER TABLE browser_executions ADD COLUMN request_payload BLOB')
+        if 'parent_id' not in columns:
+            connection.execute('ALTER TABLE browser_executions ADD COLUMN parent_id TEXT')
+        connection.execute('CREATE UNIQUE INDEX IF NOT EXISTS one_execution_recovery ON browser_executions(parent_id) WHERE parent_id IS NOT NULL')
     database.chmod(0o600)
     @app.teardown_appcontext
     def close_connection(_error):

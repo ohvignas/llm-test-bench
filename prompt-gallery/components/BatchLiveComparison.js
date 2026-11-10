@@ -55,7 +55,7 @@ function LiveModelPane({card, liveCalls, entries, now, done, paused, theme, onFu
       <div class="bench-model-metrics"><span><${BenchIcon} name="clock" size=${14}/>${formatDuration(timing.elapsedMs)}</span><span>${timing.requestCount} appel(s)</span><strong>${cost}</strong></div>
       ${item.stage && html`<small>Étape ${item.stage.index}/${item.stage.total} · ${item.stage.title}</small>`}
       ${item.message&&['error','no_progress','stopped'].includes(item.status)&&html`<p class=${item.status==='stopped'?'bench-inline-notice':'bench-inline-error'}>${item.status==='stopped'&&item.message.startsWith('Appel arrete depuis la CLI')?'Génération arrêtée à votre demande.':item.message}</p>`}
-      ${onRetry&&!item.savedIds?.length&&['error','stopped','not-started'].includes(item.status)&&html`<button class="btn btn-sm" onClick=${()=>onRetry(index)}>Relancer ce modèle</button>`}
+      ${onRetry&&!item.savedIds?.length&&['error','stopped','not-started'].includes(item.status)&&html`<button class="btn btn-sm bench-recover-model" onClick=${()=>onRetry(index)}><${BenchIcon} name="refresh" size=${14}/>${output.trim()?'Reprendre':'Réessayer'}</button>`}
     </header>
     ${displayMode==='activity' ? html`<${BatchActivity} model=${model} index=${index} calls=${calls} liveCalls=${liveCalls} entries=${entries} now=${now} statusLabel=${status}/>` : html`
       <div class="bench-signal" title=${signal?.label || status}><span class=${`bench-live-dot ${active?'':'is-idle'}`}/><span>${signal?.label || status}</span><small>${(telemetry?.reasoningChunks ?? current?.reasoningSignals ?? 0).toLocaleString('fr-FR')} signaux</small></div>

@@ -1,5 +1,5 @@
 import {html} from 'htm/preact';
-import {useEffect, useMemo, useState} from 'preact/hooks';
+import {useEffect, useMemo, useRef, useState} from 'preact/hooks';
 import {secureFetch} from '../../shared/services/secure-session.js';
 import {BatchLiveComparison} from './BatchLiveComparison.js';
 import {BatchGenerationLog} from './BatchGenerationLog.js';
@@ -8,6 +8,8 @@ import {HtmlLightbox} from './BatchReview.js';
 import {BenchBadge, BenchIcon, BenchMetric} from './BenchUi.js';
 import {costTotals,formatUsd} from '../services/batchCosts.js';
 import {executionMetrics,formatDuration} from '../services/executionMetrics.js';
+import {recoveryCandidates,recoveryFallback} from '../services/executionRecovery.js';
+import {ExecutionRecoveryDialog} from './ExecutionRecoveryDialog.js';
 import {executionActive, executionProjects, executionProjectKey, executionStatus, executionCost, executionDuration, executionBatchSnapshot} from '../services/executions.js';
 
 const when=seconds=>new Date(seconds*1000).toLocaleString('fr-FR');
@@ -15,11 +17,13 @@ const groupOf=call=>call.context?.groupId || call.context?.runId || 'individuel'
 
 // Reuses the batch's actual comparison, activity, journal and cost components.
 // Only the data source changes, so navigating/reloading never starts a call.
-export function ExecutionBrowser({view='runs', selectedProject='', onProjectChange, onBrowseSaved, theme='dark'}) {
+export function ExecutionBrowser({view='runs', selectedProject='', onProjectChange, onBrowseSaved, theme='dark',prompts=[]}) {
   const [calls,setCalls]=useState([]), [loaded,setLoaded]=useState(false), [error,setError]=useState('');
   const [revision,setRevision]=useState(0), [pages,setPages]=useState({}), [zoom,setZoom]=useState(-1);
   const [displayMode,setDisplayMode]=useState('split'), [filter,setFilter]=useState('all');
   const [search,setSearch]=useState(''),[statusFilter,setStatusFilter]=useState('all');
+  const [recovery,setRecovery]=useState(null);
+  const recoveryRevision=useRef(0);
   useEffect(()=>{
     let live=true,timer;const controller=new AbortController();
     async function poll(){
@@ -67,6 +71,38 @@ export function ExecutionBrowser({view='runs', selectedProject='', onProjectChan
       setRevision(n=>n+1);
     }catch(e){setError(e.message);}
   }
+  async function prepareRecovery(selected){
+    const revision=++recoveryRevision.current;
+    setRecovery({loading:true,rows:[],busy:false});
+    try{
+      const rows=await Promise.all(selected.map(async call=>{
+        const fallback=recoveryFallback(call,prompts);
+        const response=await secureFetch(`/api/executions/${call.id}/recovery-plan`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fallback})});
+        const plan=await response.json();if(!response.ok)throw new Error(plan.error||'Reprise indisponible.');
+        return {call,plan,fallback,id:crypto.randomUUID().replaceAll('-','')};
+      }));
+      if(revision===recoveryRevision.current)setRecovery({loading:false,rows,busy:false});
+    }catch(e){if(revision===recoveryRevision.current)setRecovery({loading:false,rows:[],busy:false,error:e.message});}
+  }
+  async function startRecovery(){
+    if(!recovery||recovery.busy)return;
+    setRecovery(previous=>({...previous,busy:true,error:''}));
+    try{
+      const results=await Promise.allSettled(recovery.rows.map(async row=>{
+        const response=await secureFetch(`/api/executions/${row.call.id}/recover`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:row.id,confirmed:true,fallback:row.fallback})});
+        const data=await response.json();if(!response.ok)throw new Error(data.error||'Lancement non confirmé.');
+      }));
+      setRevision(n=>n+1);
+      const failed=results.find(r=>r.status==='rejected');
+      if(failed)throw failed.reason;
+      const key=executionProjectKey(recovery.rows[0].call);setRecovery(null);select(key);
+    }catch(e){setRecovery(previous=>({...previous,busy:false,error:e.message}));}
+  }
+  const retryIndex=index=>{
+    const call=calls.find(c=>c.id===snapshot.runList[index]?.executionId);
+    if(call)prepareRecovery([call]);
+  };
+  const recoveryDialog=recovery&&html`<${ExecutionRecoveryDialog} state=${recovery} onClose=${()=>{recoveryRevision.current++;setRecovery(null);}} onStart=${startRecovery}/>`;
   const history=calls.filter(c=>!executionProjectKey(c)&&!executionActive(c));
   const totals=costTotals(snapshot.costCalls),timing=executionMetrics(snapshot.costCalls,{now:snapshot.now,done:snapshot.done});
   const costLabel=totals.confirmedUsd===null ? snapshot.done?'Non communiqué':'En attente' : formatUsd(totals.confirmedUsd);
@@ -88,11 +124,13 @@ export function ExecutionBrowser({view='runs', selectedProject='', onProjectChan
         <ul class="bench-project-models">${models.map(c=>html`<li key=${c.model}><span>${(c.context?.modelLabel||c.model).split(' / ').at(-1).replace(/^(Anthropic|OpenAI|Google):\s*/,'')}</span><small>${executionStatus(c)}</small></li>`)}</ul>
         <div class="bench-project-bottom"><span>${models.length} modèle(s)</span><strong>${executionCost(project.calls).label}</strong></div>
         <button class="btn bench-open-project" onClick=${()=>select(project.key)}>Ouvrir la comparaison<${BenchIcon} name="arrow" size=${16}/></button>
+        ${recoveryCandidates(project.calls).length>0&&html`<button class="btn" onClick=${()=>prepareRecovery(recoveryCandidates(project.calls))}><${BenchIcon} name="refresh" size=${15}/>Reprendre / réessayer ${recoveryCandidates(project.calls).length} modèle(s)</button>`}
       </article>`;
     })}</div>
     ${!matched.length&&html`<div class="bench-empty"><${BenchIcon} name="layers" size=${32}/><h2>${loaded?'Aucun projet à afficher':'Chargement des projets…'}</h2><p>${search?'Essayez un autre nom de projet.':'Les projets apparaissent dès le lancement, avant le premier code.'}</p></div>`}
     ${active.filter(c=>!executionProjectKey(c)).map(c=>html`<p key=${c.id}>${c.model} · Appel sans titre conservé · ${executionStatus(c)}</p>`)}
     ${history.length>0&&html`<details class="bench-legacy"><summary>Historique de l’ancienne version · ${history.length} appel(s)</summary>${history.map(c=>html`<div key=${c.id}><span>${c.model}</span><span>${executionStatus(c)}</span><strong>${executionCost([c]).label}</strong></div>`)}</details>`}
+    ${recoveryDialog}
   </section>`;
   return html`<section class="bench-workspace" aria-label="Suivi du lot en direct">
     <aside class="bench-project-sidebar"><header><span class="bench-eyebrow">COMPARAISON</span><h2>Vos projets <span>${projects.length}</span></h2></header>${renderSearch()}
@@ -107,9 +145,10 @@ export function ExecutionBrowser({view='runs', selectedProject='', onProjectChan
       ${error&&html`<p class="bench-inline-error" role="alert">${error}</p>`}
       ${visibleCalls.length?html`<div class="bench-overview"><${BenchMetric} label="Durée du lot" value=${formatDuration(timing.elapsedMs)} icon="clock"/><${BenchMetric} label="Appels API" value=${totals.requestCount} note=${`${snapshot.items.filter(i=>!['generating','queued'].includes(i.status)).length} / ${snapshot.runList.length} terminés`} icon="activity"/><${BenchMetric} label="Coût confirmé du lot" value=${costLabel} note=${totals.missingCosts?`${totals.missingCosts} coût(s) ${snapshot.done?'non communiqué(s)':'en attente'}`:'Tous les coûts reçus'}/></div>
         <div class="bench-view-toolbar"><div class="bench-segmented" aria-label="Affichage de la comparaison">${[['split','screen','Aperçu et code'],['preview','screen','Aperçu'],['code','code','Code'],['activity','activity','Activité'],['journal','journal','Journal']].map(([id,icon,label])=>html`<button class=${displayMode===id?'is-selected':''} aria-pressed=${displayMode===id} key=${id} onClick=${()=>setDisplayMode(id)}><${BenchIcon} name=${icon} size=${15}/>${label}</button>`)}</div><details class="bench-billing"><summary>Détail des coûts</summary><${BatchCosts} calls=${snapshot.costCalls} done=${snapshot.done} startedAt=${snapshot.startedAt}/></details></div>
-        ${displayMode==='journal'?html`<${BatchGenerationLog} entries=${snapshot.entries} models=${snapshot.models} calls=${snapshot.liveCalls} startedAt=${snapshot.startedAt} now=${snapshot.now} filter=${filter} onFilterChange=${setFilter} done=${snapshot.done} costCalls=${snapshot.costCalls}/>`:html`<${BatchLiveComparison} ...${snapshot} selectedPromptId=${chosen?.key||''} onPromptChange=${select} paused=${false} theme=${theme} onFullscreen=${setZoom} onStop=${stop} showLiveOutput=${true} hidePromptSelector=${true} displayMode=${displayMode}/>`}`
+        ${displayMode==='journal'?html`<${BatchGenerationLog} entries=${snapshot.entries} models=${snapshot.models} calls=${snapshot.liveCalls} startedAt=${snapshot.startedAt} now=${snapshot.now} filter=${filter} onFilterChange=${setFilter} done=${snapshot.done} costCalls=${snapshot.costCalls}/>`:html`<${BatchLiveComparison} ...${snapshot} selectedPromptId=${chosen?.key||''} onPromptChange=${select} paused=${false} theme=${theme} onFullscreen=${setZoom} onStop=${stop} onRetry=${retryIndex} showLiveOutput=${true} hidePromptSelector=${true} displayMode=${displayMode}/>`}`
         :html`<div class="bench-empty"><${BenchIcon} name="screen" size=${36}/><h2>${loaded?'Prêt pour votre prochaine comparaison':'Chargement du lot…'}</h2><p>Lancez un lot. Chaque modèle sera visible ici, même pendant le raisonnement et avant la première page.</p></div>`}
     </main>
     ${zoom>=0&&snapshot.outputs[zoom]&&html`<${HtmlLightbox} html=${snapshot.outputs[zoom]} title=${snapshot.runList[zoom]?.title} onClose=${()=>setZoom(-1)}/>`}
+    ${recoveryDialog}
   </section>`;
 }

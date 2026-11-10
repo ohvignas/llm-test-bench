@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import time
 
 from flask import Blueprint, abort, current_app, g, jsonify, request
@@ -17,7 +18,7 @@ from werkzeug.exceptions import HTTPException
 from .auth import json_object
 from .diagnostics import ACTIVE, redact
 from .proxy import relay
-from .spend_guard import active_worker, process_marker
+from .spend_guard import active_worker, process_marker, fingerprint
 from .storage import db
 
 executions = Blueprint('executions', __name__)
@@ -58,6 +59,7 @@ def record(row, include_output=False):
     result = dict(id=row['id'], model=row['model'], context=json.loads(row['context']),
                   started=started, updated=updated, state=state, durable=True,
                   activity_id=row['activity_id'], output_chars=len(row['output']),
+                  parent_id=row.get('parent_id'), request_saved=bool(row.get('request_payload')),
                   has_output=bool(row['output']), summary=row['summary'],
                   reasoning_events=activity['reasoning_events'] if activity else 0,
                   finish_reason=activity['finish_reason'] if activity else None,
@@ -143,7 +145,11 @@ def start_execution():
         headers['X-Bench-Automatic'] = json.dumps(body['automatic'])
     if body.get('explicitRetry') is not None:
         headers['X-Bench-Retry'] = str(body['explicitRetry'])
-    digest = hashlib.sha256(json.dumps([payload, context, headers], sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    return enqueue(call_id, payload, context, headers)
+
+
+def enqueue(call_id, payload, context, headers, seed='', parent_id=None, original_request=None):
+    digest = hashlib.sha256(json.dumps([payload, context, headers, seed, parent_id], sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     con = db()
     con.execute('BEGIN IMMEDIATE')
     existing = con.execute('SELECT * FROM browser_executions WHERE id=?', (call_id,)).fetchone()
@@ -153,13 +159,90 @@ def start_execution():
             return jsonify({'error': 'Identifiant déjà utilisé pour une autre requête.', 'requestSent': False}), 409
         return jsonify({'id': call_id}), 200
     now = time.time()
-    con.execute('''INSERT INTO browser_executions (id,request_hash,model,created,updated,worker,state,context)
-        VALUES (?,?,?,?,?,?,?,?)''', (call_id, digest, redact(payload['model'], 240), now, now,
-        f'pending:{os.getpid()}:{process_marker(os.getpid())}', 'queued', json.dumps(context)))
+    encrypted = current_app.extensions['vault'].encrypt(json.dumps(original_request or payload, ensure_ascii=False).encode())
+    try:
+        con.execute('''INSERT INTO browser_executions
+            (id,request_hash,model,created,updated,worker,state,context,output,request_payload,parent_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)''', (call_id, digest, redact(payload['model'], 240), now, now,
+            f'pending:{os.getpid()}:{process_marker(os.getpid())}', 'queued', json.dumps(context), seed, encrypted, parent_id))
+    except sqlite3.IntegrityError:
+        con.rollback()
+        return jsonify({'error':'Une reprise existe déjà pour cet appel. Retrouvez-la dans Comparer.', 'requestSent':False}), 409
     con.commit()
     app = current_app._get_current_object()
     POOL.submit(run_execution, app, call_id, payload, headers)
     return jsonify({'id': call_id}), 202
+
+
+def recovery_source(call_id, fallback=None):
+    row = db().execute('SELECT * FROM browser_executions WHERE id=?', (identifier(call_id),)).fetchone()
+    if row is None:
+        abort(404, description='Cet ancien appel ne contient pas de point de reprise.')
+    info = record(row)
+    if info['state'] in LIVE or info['state'] == 'ok':
+        abort(409, description='Seul un appel interrompu ou en échec peut être repris.')
+    if info['finish_reason'] == 'content_filter' or info['error'].get('status') == 403:
+        abort(409, description='Appel filtré par le fournisseur : modifiez la consigne avant un nouvel essai.')
+    if db().execute('SELECT 1 FROM browser_executions WHERE parent_id=?', (call_id,)).fetchone():
+        abort(409, description='Une reprise existe déjà. Ouvrez la dernière tentative de ce modèle.')
+    payload = json.loads(current_app.extensions['vault'].decrypt(row['request_payload'])) if row['request_payload'] else fallback
+    if (not isinstance(payload, dict) or payload.get('model') != row['model']
+            or not isinstance(payload.get('messages'), list) or not payload['messages']):
+        abort(409, description='Consigne d’origine non conservée. Retrouvez ce prompt dans la bibliothèque pour préparer un nouvel essai.')
+    guard = db().execute('SELECT state FROM generation_guard WHERE fingerprint=?', (fingerprint(payload),)).fetchone()
+    if guard and guard['state'] == 'filtered':
+        abort(409, description='Appel filtré par le fournisseur : modifiez la consigne avant un nouvel essai.')
+    if len(row['output']) >= MAX_OUTPUT:
+        abort(409, description='Le code conservé atteint la limite de taille. Exportez-le avant de le modifier.')
+    return row, info, payload
+
+
+@executions.post('/api/executions/<call_id>/recovery-plan')
+def recovery_plan(call_id):
+    row, info, payload = recovery_source(call_id, json_object().get('fallback'))
+    return jsonify({'source_id':call_id, 'mode':'continue' if row['output'] else 'retry',
+                    'title':info['context'].get('title', 'Création'), 'model':row['model'],
+                    'model_label':info['context'].get('modelLabel',row['model']),
+                    'output_chars':len(row['output']), 'request_saved':bool(row['request_payload']),
+                    'max_tokens':payload.get('max_tokens') or payload.get('max_completion_tokens'),
+                    'reasoning_effort':(payload.get('reasoning') or {}).get('effort') or payload.get('reasoning_effort'),
+                    'previous_cost':info['usage'].get('cost')})
+
+
+@executions.post('/api/executions/<call_id>/recover')
+def recover_execution(call_id):
+    body = json_object()
+    if body.get('confirmed') is not True:
+        abort(400, description='Confirmez le nouvel appel payant dans la fenêtre de reprise.')
+    new_id = identifier(body.get('id'))
+    # An identical confirmed click is idempotent, including after a lost reply.
+    existing = db().execute('SELECT parent_id FROM browser_executions WHERE id=?', (new_id,)).fetchone()
+    if existing:
+        if existing['parent_id'] == call_id:
+            return jsonify({'id':new_id}), 200
+        abort(409, description='Identifiant déjà utilisé.')
+    row, info, original = recovery_source(call_id, body.get('fallback'))
+    payload = {**original, 'stream':True}
+    seed = row['output']
+    if seed:
+        continuation = {'role':'system','content':('RECOVERY MODE: this request continues an interrupted HTML answer. '
+            'Exception to the initial full-document formatting rule: return ONLY the suffix missing after the '
+            'provided assistant prefix. Do not start a new document, repeat existing code or add Markdown fences. '
+            'The application prepends the exact saved prefix to your output.')}
+        payload['messages'] = [*[m for m in original['messages'] if m.get('role') == 'system'], continuation,
+            *[m for m in original['messages'] if m.get('role') != 'system'], {'role':'assistant','content':seed},
+            {'role':'user','content':('Continue the interrupted HTML document immediately after its last character. '
+                'Keep the existing code unchanged. Return ONLY the missing suffix, without repeating the document, '
+                'without Markdown fences and without explanations. Complete the original requested functionality '
+                'and close the document. The application already has the exact prefix shown above.')}]
+    # Only a confirmed recovery may release its own dead process reservation.
+    # Never clear another active request or any content-filter block.
+    identity = fingerprint(payload)
+    guard = db().execute('SELECT state FROM generation_guard WHERE fingerprint=?', (identity,)).fetchone()
+    if guard and guard['state'].startswith('pending:') and not active_worker(guard['state']):
+        db().execute("UPDATE generation_guard SET state='failed' WHERE fingerprint=?", (identity,))
+        db().commit()
+    return enqueue(new_id, payload, info['context'], {'X-Bench-Retry':new_id}, seed=seed, parent_id=call_id, original_request=original)
 
 
 def run_execution(app, call_id, payload, headers):
@@ -167,7 +250,7 @@ def run_execution(app, call_id, payload, headers):
     # existing proxy, reservation, parameter and spend checks inside the worker.
     with app.test_request_context('/api/openrouter/chat/completions', method='POST', json=payload, headers=headers):
         response = None
-        output = ''
+        output = db().execute('SELECT output FROM browser_executions WHERE id=?', (call_id,)).fetchone()[0]
         summary = ''
         last_flush = 0
         failure = None

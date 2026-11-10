@@ -83,3 +83,16 @@ test('a partial failure, its cost and successful peer stay available in the orig
   assert.equal(snapshot.outputs[0],'<html>partiel');assert.equal(snapshot.items[0].message,'Limite atteinte');
   assert.equal(snapshot.costCalls.reduce((total,c)=>total+c.usd,0),3);
 });
+
+test('recovery only targets the latest failed model attempt and preserves successful peers',async()=>{
+  const {recoveryCandidates,recoveryFallback}=await import('../../prompt-gallery/services/executionRecovery.js');
+  const calls=[{id:'old',model:'a',state:'error',durable:true,started:1},{id:'new',model:'a',state:'reasoning',durable:true,started:2},
+    {id:'done',model:'b',state:'ok',durable:true,started:1},{id:'stop',model:'c',state:'cancelled',durable:true,started:1}];
+  assert.deepEqual(recoveryCandidates(calls).map(c=>c.id),['stop']);
+  const call={model:'c',context:{promptId:'p'},settings:{max_tokens:128000,reasoning_effort:'max'}};
+  const fallback=recoveryFallback(call,[{id:'p',prompt:'Original exact prompt'}]);
+  assert.equal(fallback.messages[1].content,'Original exact prompt');
+  assert.equal(fallback.max_tokens,128000);assert.deepEqual(fallback.reasoning,{effort:'max'});
+  assert.equal(recoveryFallback({...call,request_saved:true},[]),undefined);
+  assert.equal(recoveryFallback(call,[]),undefined);
+});

@@ -109,3 +109,9 @@
 
 .bench-inline-notice{margin:0;padding:9px 11px;border:1px solid var(--bench-border);border-radius:6px;color:var(--bench-muted);background:var(--bench-inset);font-size:11px}
 .bench-project-sidebar{padding-bottom:58px}.bench-stage,.bench-runs{padding-bottom:74px}
+.bench-recover-model{align-self:flex-start;display:inline-flex;align-items:center;gap:7px}
+.bench-recovery-dialog{max-width:min(600px,calc(100vw - 32px));max-height:calc(100dvh - 40px);overflow:auto;border:1px solid var(--bench-border,var(--border-color));border-radius:14px;background:var(--bench-panel,var(--bg-secondary));color:var(--bench-fg,var(--text-primary));padding:24px;font:14px/1.6 var(--font-family);box-shadow:0 20px 80px #0005}
+.bench-recovery-dialog::backdrop{background:#0009;backdrop-filter:blur(3px)}
+.bench-recovery-dialog>header{display:flex;align-items:flex-start;gap:14px}.bench-recovery-dialog h2{font-size:20px;line-height:1.4;margin:0 0 7px}.bench-recovery-dialog p{margin:0;font-size:13px;color:var(--bench-muted,var(--text-secondary))}
+.bench-recovery-dialog ul{list-style:none;padding:0;margin:22px 0}.bench-recovery-dialog li{padding:14px 0;border-top:1px solid var(--bench-border,var(--border-color));display:flex;flex-direction:column;gap:5px}.bench-recovery-dialog li>strong{font-size:14px}.bench-recovery-dialog li>span{font-size:12px;color:var(--bench-muted,var(--text-secondary))}.bench-recovery-dialog small{font-size:11px;color:var(--bench-muted,var(--text-secondary))}
+.bench-recovery-dialog .bench-recovery-cost{padding:12px;border:1px solid var(--bench-border,var(--border-color));border-radius:7px;margin:12px 0 20px}.bench-recovery-dialog>footer{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;flex-wrap:wrap}.bench-recovery-dialog .btn-primary{background:var(--accent);color:white}.bench-recovery-dialog .btn{white-space:normal;min-height:40px}.bench-recovery-dialog .bench-inline-error{margin:12px 0}

@@ -43,7 +43,7 @@ function ComparePane({ generation, loadHtml }) {
   ></iframe>`;
 }
 
-export function CompareView({ generations, compareIds, onCompareIdsChange, onOpen, loadHtml, executionProject, onExecutionProjectChange }) {
+export function CompareView({ generations, compareIds, onCompareIdsChange, onOpen, loadHtml, executionProject, onExecutionProjectChange,prompts }) {
   const [selecting, setSelecting] = useState(true);
   const [search, setSearch] = useState('');
   const [filterModel, setFilterModel] = useState('');
@@ -103,7 +103,7 @@ export function CompareView({ generations, compareIds, onCompareIdsChange, onOpe
     setSelecting(true);
   };
 
-  if (secureMode() && !browseSaved) return html`<${ExecutionBrowser} view="compare" selectedProject=${executionProject} onProjectChange=${onExecutionProjectChange} onBrowseSaved=${()=>setBrowseSaved(true)} />`;
+  if (secureMode() && !browseSaved) return html`<${ExecutionBrowser} view="compare" selectedProject=${executionProject} onProjectChange=${onExecutionProjectChange} onBrowseSaved=${()=>setBrowseSaved(true)} prompts=${prompts} />`;
   if (selecting || compareIds.length < 2) {
     return html`
       <div class="compare-view">

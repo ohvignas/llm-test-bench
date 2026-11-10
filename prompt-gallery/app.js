@@ -1558,6 +1558,7 @@ function App() {
       case 'compare':
         return html`<${CompareView}
           generations=${generations}
+          prompts=${libraryPrompts}
           loadHtml=${loadHtml}
           compareIds=${compareIds}
           executionProject=${decodeRouteParam(route.param)}
@@ -1569,6 +1570,7 @@ function App() {
       case 'runs':
         return html`<${RunsView}
           generations=${generations}
+          prompts=${libraryPrompts}
           loadHtml=${loadHtml}
           hasDirectory=${!!rootHandle}
           onPickDirectory=${handlePickDirectory}

@@ -38,7 +38,7 @@ export function gridShape(n) {
 // Full-page Past Runs browser. Every batch run is rebuilt from the generations
 // already loaded in the gallery, listed here, and can be opened on its own
 // (single review) or checked to compare side by side, one prompt at a time.
-export function RunsView({ generations, hasDirectory, onPickDirectory, onOpen, onRefresh, onMerge, onRate, addToast, initialRunId, onRouteRun, loadHtml }) {
+export function RunsView({ generations, hasDirectory, onPickDirectory, onOpen, onRefresh, onMerge, onRate, addToast, initialRunId, onRouteRun, loadHtml,prompts }) {
   const [mode, setMode] = useState('list');               // list | single | compare
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [singleId, setSingleId] = useState(null);
@@ -224,7 +224,7 @@ export function RunsView({ generations, hasDirectory, onPickDirectory, onOpen, o
     rating: it.rating,
   })), [singleRun, pageOf]);
 
-  if (secureMode() && !browseSaved && !initialRunId) return html`<${ExecutionBrowser} view="runs" onBrowseSaved=${()=>setBrowseSaved(true)} />`;
+  if (secureMode() && !browseSaved && !initialRunId) return html`<${ExecutionBrowser} view="runs" onBrowseSaved=${()=>setBrowseSaved(true)} prompts=${prompts} />`;
   if (!hasDirectory) {
     return html`
       <div class="runs-view">

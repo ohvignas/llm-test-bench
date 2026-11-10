@@ -143,4 +143,83 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(second['state'],'ok');self.assertEqual(second['output'],'<html>partial</html>')
 
 
+    def stopped_source(self, output=''):
+        body=self.body()
+        with patch('server.executions.POOL.submit'):
+            self.assertEqual(self.start(body).status_code,202)
+        with self.app.app_context():
+            db().execute("UPDATE browser_executions SET state='cancelled',output=? WHERE id=?",(output,body['id']))
+            db().commit()
+        return body
+
+    def test_recovery_plan_is_free_and_request_is_encrypted(self):
+        source=self.stopped_source('<html>preserved')
+        with patch('server.proxy.requests.request') as api,patch('server.executions.POOL.submit') as submit:
+            plan=self.client.post('/api/executions/'+source['id']+'/recovery-plan',headers=self.headers,json={})
+            self.assertEqual(plan.status_code,200)
+            self.assertEqual(plan.json['mode'],'continue')
+            self.assertEqual(plan.json['max_tokens'],128000)
+            self.assertEqual(plan.json['reasoning_effort'],'max')
+            api.assert_not_called();submit.assert_not_called()
+        with self.app.app_context():
+            stored=db().execute('SELECT request_payload FROM browser_executions WHERE id=?',(source['id'],)).fetchone()[0]
+            self.assertNotIn(b'prompt 0',stored)
+            self.assertEqual(json.loads(self.app.extensions['vault'].decrypt(stored)),source['request'])
+        public=self.client.get('/api/executions/'+source['id']).json
+        self.assertNotIn('messages',json.dumps(public));self.assertTrue(public['request_saved'])
+        self.assertEqual(self.client.post('/api/executions/'+source['id']+'/recover',headers=self.headers,json={'id':'a'*32}).status_code,400)
+        self.assertEqual(self.client.post('/api/executions/'+source['id']+'/recovery-plan',json={}).status_code,403)
+
+    def test_resume_keeps_exact_prefix_and_original_and_only_adds_new_usage(self):
+        prefix='<!doctype html><html><body>✅'
+        source=self.stopped_source(prefix)
+        new_id='a'*32
+        with patch('server.executions.POOL.submit') as submit:
+            response=self.client.post('/api/executions/'+source['id']+'/recover',headers=self.headers,json={'id':new_id,'confirmed':True})
+            self.assertEqual(response.status_code,202)
+            worker=submit.call_args.args
+            self.assertEqual(worker[0],run_execution)
+        payload=worker[3]
+        self.assertEqual(payload['messages'][-2],{'role':'assistant','content':prefix})
+        self.assertTrue(any(m['role']=='system' and m['content'].startswith('RECOVERY MODE:') for m in payload['messages']))
+        self.assertEqual(payload['max_tokens'],128000);self.assertEqual(payload['reasoning'],{'effort':'max'})
+        upstream=Mock(status_code=200)
+        upstream.iter_content.return_value=[b'data: {"choices":[{"delta":{"content":"continued</body></html>"},"finish_reason":"stop"}],"usage":{"cost":0.03}}\n\n']
+        with patch('server.proxy.requests.request',return_value=upstream) as api:
+            run_execution(*worker[1:])
+        result=self.client.get('/api/executions/'+new_id).json
+        self.assertEqual(result['output'],prefix+'continued</body></html>')
+        self.assertEqual(result['parent_id'],source['id']);self.assertEqual(result['usage']['cost'],.03)
+        self.assertEqual(api.call_count,1)
+        with self.app.app_context():
+            saved=db().execute('SELECT request_payload FROM browser_executions WHERE id=?',(new_id,)).fetchone()[0]
+            self.assertEqual(json.loads(self.app.extensions['vault'].decrypt(saved)),source['request'])
+        self.assertEqual(self.client.get('/api/executions/'+source['id']).json['output'],prefix)
+
+    def test_recovery_click_is_idempotent_and_only_one_child_is_allowed(self):
+        source=self.stopped_source()
+        path='/api/executions/'+source['id']+'/recover'
+        with patch('server.executions.POOL.submit') as submit:
+            body={'id':'a'*32,'confirmed':True}
+            self.assertEqual(self.client.post(path,headers=self.headers,json=body).status_code,202)
+            self.assertEqual(self.client.post(path,headers=self.headers,json=body).status_code,200)
+            self.assertEqual(self.client.post(path,headers=self.headers,json={'id':'b'*32,'confirmed':True}).status_code,409)
+            self.assertEqual(submit.call_count,1)
+
+    def test_legacy_fallback_is_explicit_and_active_successful_or_filtered_calls_are_not_recovered(self):
+        source=self.stopped_source()
+        path='/api/executions/'+source['id']+'/recovery-plan'
+        with self.app.app_context():
+            db().execute('UPDATE browser_executions SET request_payload=NULL WHERE id=?',(source['id'],));db().commit()
+        self.assertEqual(self.client.post(path,headers=self.headers,json={}).status_code,409)
+        plan=self.client.post(path,headers=self.headers,json={'fallback':source['request']})
+        self.assertEqual(plan.status_code,200);self.assertEqual(plan.json['mode'],'retry');self.assertFalse(plan.json['request_saved'])
+        for state,error in [('running','{}'),('ok','{}'),('error','{"status":403}')]:
+            with self.app.app_context():
+                db().execute('UPDATE browser_executions SET state=?,error=? WHERE id=?',(state,error,source['id']));db().commit()
+            with patch('server.executions.POOL.submit') as submit:
+                self.assertEqual(self.client.post('/api/executions/'+source['id']+'/recover',headers=self.headers,json={'id':'a'*32,'confirmed':True,'fallback':source['request']}).status_code,409)
+                submit.assert_not_called()
+
+
 if __name__ == '__main__': unittest.main()
