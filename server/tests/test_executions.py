@@ -128,6 +128,22 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(public_summary_parts(delta,'other/model'),[])
         self.assertEqual(public_summary_parts({'reasoning_details':[{'type':'reasoning.encrypted','data':'OPAQUE'}], 'reasoning':'UNKNOWN'},'anthropic/claude-fable-5.2'),[])
 
+    def test_claude_compatibility_summary_stream_is_saved_redacted_without_opaque_blocks(self):
+        body=self.body();body['request']['model']='anthropic/claude-opus-5.5'
+        with patch('server.executions.POOL.submit'):self.start(body)
+        upstream=Mock(status_code=200)
+        parts=[{'reasoning_details':[{'type':'reasoning.text','format':'anthropic-claude-v1','text':'Résumé public. sk-or-'}]},
+               {'reasoning_details':[{'type':'reasoning.text','format':'anthropic-claude-v1','text':'v1-not-a-real-key'}]},
+               {'reasoning_details':[{'type':'reasoning.encrypted','data':'OPAQUE-PRIVATE'}]}]
+        upstream.iter_content.return_value=[('data: '+json.dumps({'choices':[{'delta':part}]})+'\n\n').encode() for part in parts]+[
+            b'data: {"choices":[{"delta":{"content":"<html>ok</html>"},"finish_reason":"stop"}]}\n\n']
+        with patch('server.proxy.requests.request',return_value=upstream):run_execution(self.app,body['id'],body['request'],{})
+        result=self.client.get('/api/executions/'+body['id']).json
+        self.assertIn('Résumé public.',result['summary'])
+        self.assertNotIn('not-a-real-key',result['summary'])
+        self.assertNotIn('OPAQUE-PRIVATE',json.dumps(result))
+        self.assertEqual(result['output'],'<html>ok</html>')
+
     def test_chat_adjustment_preserves_code_and_settings_and_launches_once(self):
         source=self.stopped_source('<html>initial</html>')
         path='/api/executions/'+source['id']+'/adjust'
