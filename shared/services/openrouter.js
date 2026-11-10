@@ -14,6 +14,7 @@
 // preserve that behaviour while we work through the wider settings migration.
 import { normalizeOpenRouterModel, generationFeedback } from './model-capabilities.js';
 import { withHttpDetails } from './provider-errors.js';
+import { createReasoningSummary } from './reasoning-summary.js';
 import './settings-sync.js';
 import { applyParams, withUsageReporting, createRunStats } from './gen-params.js';
 import { withTelemetry, messagesText } from './generation-telemetry.js';
@@ -454,6 +455,8 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
   if (!userPrompt) throw Object.assign(new Error('Prompt is empty'), {requestSent:false});
 
   const stats = createRunStats(undefined, telemetry);
+  const reasoningSummary = createReasoningSummary();
+  let lastSummaryAt = 0, reasoningSignals = 0;
   let body = applyParams({
     model: modelId,
     messages: [
@@ -510,8 +513,13 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
       }
       const choice = parsed.choices?.[0];
       if (choice?.delta?.reasoning || choice?.delta?.reasoning_content || choice?.delta?.reasoning_details?.length) {
+        reasoningSignals++;
         telemetry?.activity?.('reasoning');
         stats.markReasoning();
+      }
+      if (reasoningSummary.add(choice?.delta?.reasoning_details) && Date.now() - lastSummaryAt >= 300) {
+        lastSummaryAt = Date.now();
+        onStats?.({reasoningSummary:reasoningSummary.snapshot(), reasoningSignals});
       }
       if (choice?.finish_reason) stats.setFinishReason(choice.finish_reason);
       const delta = choice?.delta?.content;
@@ -544,7 +552,8 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
       }
     } finally {
       try { await reader.cancel(); } catch { /* already closed */ }
-      resultStats = {...stats.finish(),responseChars:full.length};
+      resultStats = {...stats.finish(),responseChars:full.length,reasoningSignals,
+        ...(reasoningSummary.snapshot() ? {reasoningSummary:reasoningSummary.snapshot()} : {})};
       onStats?.(resultStats);
     }
     requireCompletionContent(full, resultStats, settings);
@@ -554,10 +563,12 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
   // Non-streaming response
   const data = await res.json();
   const content = data.choices?.[0]?.message?.content || '';
+  reasoningSummary.add(data.choices?.[0]?.message?.reasoning_details);
   if (data.choices?.[0]?.message?.reasoning) stats.markReasoning();
   stats.setFinishReason(data.choices?.[0]?.finish_reason);
   stats.setUsage(data.usage);
-  const resultStats = {...stats.finish(),responseChars:content.length};
+  const resultStats = {...stats.finish(),responseChars:content.length,
+    ...(reasoningSummary.snapshot() ? {reasoningSummary:reasoningSummary.snapshot()} : {})};
   onStats?.(resultStats);
   requireCompletionContent(content, resultStats, settings);
   return content;

@@ -47,6 +47,7 @@ export function createBatchJournal({ models = [], startedAt = Date.now(), limit 
   function append(context, stage, message, at, level = 'info') {
     const model = context?.model || {};
     rows.push({ id: ++sequence, at, level, modelKey: logModelKey(model),
+      promptIndex: Number.isInteger(context?.index) ? context.index : null,
       modelLabel: safeLogText(model.label || model.modelId || 'Lot', 200),
       promptTitle: safeLogText(context?.title || '', 200), stage, message: safeLogText(message) });
     if (rows.length > limit) rows = rows.slice(-limit);
@@ -69,7 +70,7 @@ export function createBatchJournal({ models = [], startedAt = Date.now(), limit 
         }
       } else if (type === 'stats' && event.stats) {
         const stats = event.stats, parts = [];
-        if (Object.keys(stats).every(key => key === 'telemetryId')) return;
+        if (Object.keys(stats).every(key => ['telemetryId','reasoningSummary','reasoningSignals'].includes(key))) return;
         if(stats.settings) {
           const settings=stats.settings,p=settings.params||{},signature=`settings:${logModelKey(context.model)}:${context.index}:${JSON.stringify([p.max_tokens??p.max_completion_tokens,p.reasoning?.effort||p.reasoning_effort,p.reasoning?.max_tokens])}`;
           if(!seen.has(signature)) {seen.add(signature);append(context,'settings',`Réglages API · profil ${({automatic:'automatique — reprise adaptée',benchmark:'comparaison — effort très élevé',maximum:'qualité maximale',code:'génération de code',manual:'personnalisé'})[settings.profile]||'personnalisé'} · sortie ${p.max_tokens??p.max_completion_tokens} tokens · ${p.reasoning?.effort||p.reasoning_effort?`effort ${p.reasoning?.effort||p.reasoning_effort}`:p.reasoning?.max_tokens?`raisonnement demandé : ${p.reasoning.max_tokens} tokens`:'contrôle du raisonnement non annoncé'}`,at);}

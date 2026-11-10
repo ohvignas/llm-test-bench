@@ -12,6 +12,8 @@ export function createCostCall(role, details = {}) {
 export function updateCostCall(call, stats) {
   const next = {...call};
   if (typeof stats?.telemetryId === 'string') next.telemetryId = stats.telemetryId;
+  if (stats?.reasoningSummary?.source === 'provider-summary') next.reasoningSummary = stats.reasoningSummary;
+  if (Number.isSafeInteger(stats?.reasoningSignals) && stats.reasoningSignals >= 0) next.reasoningSignals = stats.reasoningSignals;
   if (Number.isFinite(stats?.cost) && stats.cost >= 0) next.usd = stats.cost;
   if (stats?.settings) {
     const {profile, source, params = {}} = stats.settings;

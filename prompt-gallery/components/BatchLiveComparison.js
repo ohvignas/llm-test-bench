@@ -6,6 +6,7 @@ import {liveComparisonCards, liveComparisonPrompts} from '../services/batchLiveC
 import {batchItemRunning, batchLiveStatus} from '../services/batchLiveProgress.js';
 import {costTotals, formatUsd} from '../services/batchCosts.js';
 import {executionMetrics, formatDuration} from '../services/executionMetrics.js';
+import {BatchActivity} from './BatchActivity.js';
 
 const LABELS = {queued:'En attente', 'not-started':'Non lancé', saved:'Enregistré', error:'Échec',
   'saved-unverified':'Enregistré — vérification interrompue', stopped:'Arrêté', skipped:'Ignoré', verified:'Vérifié', warned:'À vérifier', no_progress:'Aucun progrès',
@@ -27,7 +28,7 @@ function usePreviewDocument(output, active, identity) {
   return preview;
 }
 
-function LiveModelPane({card, liveCalls, now, done, paused, theme, onFullscreen, onRetry, showLiveOutput}) {
+function LiveModelPane({card, liveCalls, entries, now, done, paused, theme, onFullscreen, onRetry, showLiveOutput}) {
   const {model, index, prompt, item, output, calls} = card;
   const active = !done && batchItemRunning(item);
   const live = active ? batchLiveStatus(liveCalls, model, now, calls.map(call => call.telemetryId).filter(Boolean)) : null;
@@ -50,6 +51,7 @@ function LiveModelPane({card, liveCalls, now, done, paused, theme, onFullscreen,
       ${item.message && ['error','no_progress','stopped'].includes(item.status) && html`<p class="live-model-error">${item.message}</p>`}
       ${onRetry && !item.savedIds?.length && ['error','stopped','not-started'].includes(item.status) && html`<button class="btn btn-sm" onClick=${()=>onRetry(index)}>Relancer ce modèle</button>`}
     </header>
+    <${BatchActivity} model=${model} index=${index} calls=${calls} liveCalls=${liveCalls} entries=${entries} now=${now} statusLabel=${status}/>
     ${showLiveOutput ? html`<div class="live-model-preview-head"><strong>Aperçu ${active ? 'en direct' : 'du résultat'}</strong>
       <button class="btn btn-sm" disabled=${!output && !item.savedIds?.length} onClick=${() => onFullscreen(index)}>Plein écran</button>
     </div>
@@ -62,7 +64,7 @@ function LiveModelPane({card, liveCalls, now, done, paused, theme, onFullscreen,
   </article>`;
 }
 
-export function BatchLiveComparison({models, runList, items, outputs, costCalls, liveCalls, now, done, paused, theme, onFullscreen, onRetry, showLiveOutput}) {
+export function BatchLiveComparison({models, runList, items, outputs, costCalls, liveCalls, entries = [], now, done, paused, theme, onFullscreen, onRetry, showLiveOutput}) {
   const [promptId, setPromptId] = useState('');
   const prompts = useMemo(() => liveComparisonPrompts(runList), [runList]);
   const cards = liveComparisonCards({models, runList, items, outputs, calls:costCalls, promptId});
@@ -76,7 +78,7 @@ export function BatchLiveComparison({models, runList, items, outputs, costCalls,
         : 'L’affichage du code et des aperçus a été désactivé au lancement. Les états, durées et coûts restent visibles.'}</p>
     </div>
     <div class="live-comparison-grid" style=${{'--live-columns':Math.max(1, Math.min(cards.length, 3))}}>
-      ${cards.map(card => html`<${LiveModelPane} key=${card.laneIndex} card=${card} liveCalls=${liveCalls} now=${now}
+      ${cards.map(card => html`<${LiveModelPane} key=${card.laneIndex} card=${card} liveCalls=${liveCalls} entries=${entries} now=${now}
         done=${done} paused=${paused} theme=${theme} onFullscreen=${onFullscreen} onRetry=${onRetry} showLiveOutput=${showLiveOutput}/>`)}
     </div>
   </section>`;

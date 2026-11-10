@@ -2472,6 +2472,20 @@ button.create-run-label:hover { text-decoration: underline; }
 .live-model-preview, .live-model-empty { width: 100%; height: clamp(180px, 25vh, 360px); border: 0; display: block; background: white; }
 .live-model-empty { display: grid; place-content: center; padding: 20px; background: var(--bg-secondary); color: var(--text-muted); text-align: center; }
 .live-model-code { min-height: 135px; }
+.batch-activity { border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; min-width: 0; }
+.live-model-pane > .batch-activity { border-width: 1px 0; border-radius: 0; }
+.batch-activity-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 9px 12px; background: var(--bg-tertiary); font-size: 12px; }
+.batch-activity-head > span { color: var(--accent); }
+.batch-activity-body { padding: 10px 12px; font-size: 12px; }
+.batch-activity-body p { margin: 0 0 8px; color: var(--text-muted); line-height: 1.5; }
+.batch-activity-summary-label { display: block; margin-bottom: 6px; }
+.batch-activity-summary { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto; line-height: 1.6; margin-bottom: 10px; }
+.batch-activity-events { list-style: none; padding: 0; margin: 8px 0 0; max-height: 150px; overflow: auto; }
+.batch-activity-events li { display: flex; align-items: baseline; gap: 8px; padding: 5px 0; border-top: 1px solid var(--border-color); }
+.batch-activity-events time { color: var(--text-muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.batch-activity-events span { overflow-wrap: anywhere; }
+.batch-activity-body .batch-activity-warning { color: var(--warning, #dba64d); }
+.batch-activity-body .batch-activity-error { color: var(--danger, #e45454); }
 @media (max-width: 900px) { .live-comparison-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) {
   .live-comparison-grid { grid-template-columns: minmax(0, 1fr); }

@@ -6,6 +6,7 @@ import { ExecutorModelSelector } from '../../shared/components/ExecutorModelSele
 import { CellEditor } from '../../shared/components/CellEditor.js';
 import { BatchCosts } from './BatchCosts.js';
 import { BatchLiveComparison } from './BatchLiveComparison.js';
+import { BatchActivity } from './BatchActivity.js';
 import { costTotals, formatUsd } from '../services/batchCosts.js';
 import { executionMetrics, formatDuration } from '../services/executionMetrics.js';
 import { BatchGenerationLog } from './BatchGenerationLog.js';
@@ -1205,6 +1206,9 @@ export function BatchRunDialog({
       </div>
 
       ${outputView === 'preview' && showLiveOutput && html`
+        <${BatchActivity} model=${runModels[runList[inspectedIndex]?.laneIndex ?? 0]} index=${inspectedIndex}
+          calls=${costCalls.filter(call => call.index === inspectedIndex)} liveCalls=${liveCalls} entries=${logEntries} now=${rateClock}
+          statusLabel=${liveStatus?.label || STATUS_META[items[inspectedIndex]?.status]?.label || 'En attente'}/>
         <section class="batch-code-stream" aria-label="Sortie HTML en direct">
           <div class="batch-code-stream-head">
             <span><i class="fa-solid fa-code"></i> ${viewingActive && pauseState === 'running' ? 'Flux HTML en direct' : 'HTML généré'}${inspectedTitle ? ` · ${inspectedTitle}` : ''}</span>
@@ -1319,7 +1323,7 @@ export function BatchRunDialog({
       </details>
       ${renderRetryReview()}
       <${BatchLiveComparison} models=${logModels} runList=${runList} items=${items} outputs=${outputs} costCalls=${costCalls}
-        liveCalls=${liveCalls} now=${rateClock} done=${phase === 'done'} paused=${pauseState === 'paused'} theme=${theme}
+        liveCalls=${liveCalls} entries=${logEntries} now=${rateClock} done=${phase === 'done'} paused=${pauseState === 'paused'} theme=${theme}
         onFullscreen=${openFullscreen} onRetry=${reviewRetry} showLiveOutput=${showLiveOutput}/>
       ${phase === 'running' ? renderRunControls() : html`<div class="modal-footer"><button class="btn" onClick=${prepareNewRun}>Nouvelle exécution</button><button class="btn" onClick=${() => {onOpenGallery?.();onClose();}}>Voir dans la galerie</button></div>`}
     </section>`;
