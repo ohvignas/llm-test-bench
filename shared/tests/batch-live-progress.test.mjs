@@ -31,3 +31,10 @@ test('every parallel running lane can be inspected before it produces HTML',()=>
   assert.equal(batchItemRunning({status:'queued'}),false);
   assert.equal(batchItemRunning({status:'saved'}),false);
 });
+
+test('concurrent projects of the same model keep separate progress, including a queued project', () => {
+  const calls = [{...call, id:'game'}, {...call, id:'site', startedAt:2000, phase:'firstToken', outputChars:150}];
+  assert.equal(batchLiveStatus(calls, model, 6000, ['game']).label, 'Raisonnement en cours');
+  assert.equal(batchLiveStatus(calls, model, 6000, ['site']).outputChars, 150);
+  assert.equal(batchLiveStatus(calls, model, 6000, []), null);
+});

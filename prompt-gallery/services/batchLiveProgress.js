@@ -10,10 +10,11 @@ export function batchItemRunning(item) {
   return ['planning', 'generating', 'checking', 'healing', 'auditing', 'repairing'].includes(item?.status);
 }
 
-export function batchLiveStatus(calls, model, now = Date.now()) {
+export function batchLiveStatus(calls, model, now = Date.now(), telemetryIds = null) {
   if (!model) return null;
   const call = calls.filter(c => c.app === 'prompt-gallery'
-    && c.providerId === model.providerId && c.modelId === model.modelId)
+    && c.providerId === model.providerId && c.modelId === model.modelId
+    && (telemetryIds === null || telemetryIds.includes(c.id)))
     .sort((a, b) => b.startedAt - a.startedAt)[0];
   if (!call) return null;
   const seconds = Math.max(0, Math.floor((now - call.startedAt) / 1000));

@@ -28,6 +28,7 @@ import {
   addBatchModel,
   batchModelKey,
   combineSummaries,
+  restoreLaneMode,
   planBatchLanes,
   runLanes,
   snapshotModel,
@@ -36,7 +37,7 @@ import {
 // The multi-model list and lane mode outlive the dialog, so a rerun of the same
 // comparison is one click.
 const MODELS_KEY = 'prompt-gallery-batch-models';
-const LANE_MODE_KEY = 'prompt-gallery-batch-lane-mode';
+const LANE_MODE_KEY = 'prompt-gallery-batch-lane-mode-v2';
 // Keep saved per-model choices; versioned defaults migrate the old economy profile once.
 const SETTINGS_KEY = 'prompt-gallery-model-adaptation-v2';
 
@@ -170,7 +171,7 @@ export function BatchRunDialog({
     const stored = readStored(MODELS_KEY, []);
     return Array.isArray(stored) ? stored.filter(m => m?.providerId && m?.modelId) : [];
   });
-  const [laneMode, setLaneMode] = useState(() => (readStored(LANE_MODE_KEY, 'parallel') === 'sequential' ? 'sequential' : 'parallel'));
+  const [laneMode, setLaneMode] = useState(() => restoreLaneMode(readStored(LANE_MODE_KEY, null)));
   useEffect(() => writeStored(MODELS_KEY, batchModels), [batchModels]);
   useEffect(() => writeStored(LANE_MODE_KEY, laneMode), [laneMode]);
 
@@ -296,9 +297,11 @@ export function BatchRunDialog({
 
   useEffect(() => {
     if (phase !== 'running') return;
-    journalRef.current?.observeCalls(liveCalls, rateClock);
+    const contexts = new Map(costCalls.filter(call => call.telemetryId).map(call =>
+      [call.telemetryId, {index:call.index, title:journalRunListRef.current[call.index]?.title}]));
+    journalRef.current?.observeCalls(liveCalls, rateClock, contexts);
     syncJournal();
-  }, [liveCalls, rateClock, phase, syncJournal]);
+  }, [liveCalls, rateClock, phase, syncJournal, costCalls]);
 
   const handleEvent = useCallback((event) => {
     journalRef.current?.event(event, {model:event.model, index:event.index, title:journalRunListRef.current[event.index]?.title});
@@ -462,8 +465,8 @@ export function BatchRunDialog({
     setPauseContext(null);
     setPhase('running');
 
-    // Each lane is one model over the whole list, reporting into its own slice
-    // of the run list. Its 'done' is held back: the summary covers every lane.
+    // A task is one prompt or a model's whole list, depending on concurrency.
+    // Its events retain their absolute positions in the model-grouped list.
     let safetyTripped=false;
     const runOne = async (lane, { shouldStop, onFailure }) => {
       runningLanesRef.current += 1;
@@ -519,7 +522,10 @@ export function BatchRunDialog({
         shouldStop: () => stopRef.current, stopOnFailure: spendProtection,
         onFailure: (lane) => {
           safetyTripped = true;
-          journalRef.current?.event({type:'control',message:`Protection des dépenses : arrêt des nouveaux appels pour ${lane.model.label || lane.model.modelId}. Les autres modèles continuent. Les résultats enregistrés peuvent être repris.`});
+          const scope = laneMode === 'all-parallel'
+            ? `${lane.prompts[0].title} · ${lane.model.label || lane.model.modelId}. Les autres projets et modèles continuent.`
+            : `${lane.model.label || lane.model.modelId}. Les autres modèles continuent.`;
+          journalRef.current?.event({type:'control',message:`Protection des dépenses : arrêt des nouveaux appels pour ${scope} Les résultats enregistrés peuvent être repris.`});
           syncJournal();
         },
       });
@@ -598,7 +604,8 @@ export function BatchRunDialog({
   const rowTitle = (p) => (p ? (runIsMulti && p.modelLabel ? `${p.title} · ${p.modelLabel}` : p.title) : '');
   const inspectedTitle = inspectedIndex >= 0 ? rowTitle(runList[inspectedIndex]) : '';
   const liveStatus = inspectedIndex >= 0
-    ? batchLiveStatus(liveCalls, runModels[runList[inspectedIndex]?.laneIndex ?? 0], rateClock) : null;
+    ? batchLiveStatus(liveCalls, runModels[runList[inspectedIndex]?.laneIndex ?? 0], rateClock,
+      costCalls.filter(call => call.index === inspectedIndex).map(call => call.telemetryId).filter(Boolean)) : null;
   const fullscreenHtml = fullscreenIndex >= 0 ? (outputs[fullscreenIndex] || '') : '';
   const fullscreenTitle = fullscreenIndex >= 0 ? (rowTitle(runList[fullscreenIndex]) || 'Generation') : '';
   const fullscreenIsActive = phase === 'running' && batchItemRunning(items[fullscreenIndex]);
@@ -818,18 +825,21 @@ export function BatchRunDialog({
               `)}
             </div>
           `}
-        ${isMulti && html`
-          <div class="batch-options batch-lane-modes" role="radiogroup" aria-label="Mode d’exécution des modèles">
+          <div class="batch-options batch-lane-modes" role="radiogroup" aria-label="Mode d’exécution des projets et modèles">
+            <label class="batch-opt batch-mode-opt">
+              <input type="radio" name="batch-lane-mode" value="all-parallel" checked=${laneMode === 'all-parallel'} onChange=${() => setLaneMode('all-parallel')} />
+              <span><strong>Tous les projets et modèles simultanément</strong><small>Chaque prompt démarre sur chaque modèle sans attendre les autres projets. Les réglages de qualité restent identiques.</small></span>
+            </label>
             <label class="batch-opt batch-mode-opt">
               <input type="radio" name="batch-lane-mode" value="parallel" checked=${laneMode === 'parallel'} onChange=${() => setLaneMode('parallel')} />
-              <span><strong>Simultanément</strong><small>Tous les modèles traitent la liste en parallèle. Plus rapide pour les agents CLI et les modèles hébergés.</small></span>
+              <span><strong>Modèles simultanés, projets successifs</strong><small>Chaque modèle traite un seul prompt à la fois, puis passe au suivant.</small></span>
             </label>
             <label class="batch-opt batch-mode-opt">
               <input type="radio" name="batch-lane-mode" value="sequential" checked=${laneMode === 'sequential'} onChange=${() => setLaneMode('sequential')} />
               <span><strong>L’un après l’autre</strong><small>Terminer un modèle avant le suivant. Utile lorsque les modèles partagent le même GPU local.</small></span>
             </label>
           </div>
-        `}
+          ${laneMode === 'all-parallel' && html`<div class="batch-note">${selectedPrompts.length * runModels.length} génération(s) prévue(s) en parallèle. Les limites de connexion du navigateur et du fournisseur peuvent mettre des requêtes en attente.</div>`}
         ${isMulti && html`<div class="batch-note"><i class="fa-solid fa-layer-group"></i> Chaque modèle est enregistré dans une exécution distincte, regroupée dans Exécutions pour la comparaison.</div>`}
       </div>
 
@@ -874,7 +884,7 @@ export function BatchRunDialog({
           <div class="batch-search-summary" role="status">${promptSearch.trim()
             ? `${visiblePrompts.length} résultat(s) dans toute la bibliothèque (${prompts.length} prompts).`
             : `${visiblePrompts.length} prompt(s) affiché(s) sur ${prompts.length} dans la bibliothèque${promptChoices.effectiveSet === 'all' ? '.' : ` · filtre : ${activeSetMeta?.label || promptSet}.`}`}
-            La sélection du lot est conservée quand vous changez de filtre.</div>
+            ${' '}La sélection du lot est conservée quand vous changez de filtre.</div>
         </div>
         <div class="batch-prompt-list">
           ${visiblePrompts.length === 0
@@ -915,7 +925,7 @@ export function BatchRunDialog({
           ${mode === 'comparison' && html`<section class="batch-prompt-selection" aria-label="Protocole de comparaison">
             <strong>Évaluer le résultat initial de chaque modèle à son effort maximal.</strong>
             <p>Les anciens réglages économes et les réductions apprises après un échec ne sont pas appliqués. Le prompt reste complet : aucune construction par étapes, correction ou relance automatique. Le code reçu est enregistré pour être évalué.</p>
-            <p>Les modèles peuvent traiter les mêmes prompts en parallèle ; chacun termine un prompt avant le suivant. Le nombre de générations simultanées ne modifie pas l’effort demandé.</p>
+            <p>${laneMode === 'all-parallel' ? 'Tous les prompts démarrent sur tous les modèles sans attendre la fin des autres projets.' : laneMode === 'parallel' ? 'Les modèles démarrent ensemble ; chaque modèle termine un prompt avant le suivant.' : 'Les modèles et leurs prompts passent l’un après l’autre.'} Le nombre de générations simultanées ne modifie pas l’effort demandé.</p>
           </section>`}
           <label class="batch-opt batch-mode-opt">
             <input type="radio" name="batch-mode" value="automatic" checked=${mode === 'automatic'} onChange=${() => setMode('automatic')} />
@@ -999,8 +1009,8 @@ export function BatchRunDialog({
             </select>
           </label>
           <div class="batch-opt-hint">Les nouvelles tentatives sont désactivées par défaut. Une réponse vide ou incomplète ne sera jamais relancée automatiquement.</div>
-          <label class="batch-opt"><input type="checkbox" checked=${spendProtection} onChange=${e=>setSpendProtection(e.target.checked)}/><span>Protection des dépenses : arrêter uniquement le modèle en échec, sans nouvelle tentative automatique</span></label>
-          ${spendProtection && isMulti && laneMode === 'parallel' && html`<div class="batch-note">Les autres modèles continuent leurs générations, vérifications et corrections. Les versions déjà enregistrées sont conservées.</div>`}
+          <label class="batch-opt"><input type="checkbox" checked=${spendProtection} onChange=${e=>setSpendProtection(e.target.checked)}/><span>Protection des dépenses : arrêter uniquement ${laneMode === 'all-parallel' ? 'le projet du modèle' : 'le modèle'} en échec, sans nouvelle tentative automatique</span></label>
+          ${spendProtection && laneMode !== 'sequential' && html`<div class="batch-note">Les autres ${laneMode === 'all-parallel' ? 'projets et modèles' : 'modèles'} continuent leurs générations, vérifications et corrections. Les versions déjà enregistrées sont conservées.</div>`}
           <p class="batch-opt-hint">Un appel interrompu, vide ou filtré peut rester facturé. Les coûts affichés viennent de l’API. Les relances après un échec sont bloquées dans ce navigateur et dans le serveur local, même après actualisation.</p>
           <button class="btn btn-sm" onClick=${async()=>{try{await clearFailedGenerationBlocks();addToast('Relances autorisées : un nouvel appel pourra être facturé.','info');}catch(error){addToast(error.message,'error');}}}>Autoriser les relances après échec (nouveau coût possible)</button>
           ${mode !== 'comparison' && html`<label class="batch-opt"><span>Adaptation aux capacités API</span>
@@ -1090,7 +1100,7 @@ export function BatchRunDialog({
 
       <${BatchCosts} calls=${costCalls} startedAt=${journalStartedAtRef.current} />
       ${renderRetryReview()}
-      ${runIsMulti && html`<div class="batch-note">${laneMode==='sequential'?'Les modèles passent l’un après l’autre.':'Les modèles tournent en parallèle.'} Sélectionnez une ligne pour changer l’aperçu et le flux HTML affichés.</div>`}
+      <div class="batch-note">${laneMode === 'all-parallel' ? 'Les projets et les modèles tournent en parallèle.' : laneMode === 'sequential' ? 'Les modèles passent l’un après l’autre.' : 'Les modèles tournent en parallèle ; leurs projets passent l’un après l’autre.'} Sélectionnez une ligne pour changer l’aperçu et le flux HTML affichés.</div>
 
       ${pauseState !== 'running' && html`
         <div class=${`batch-pause-state ${pauseState}`} role="status" aria-live="polite">
@@ -1118,7 +1128,8 @@ export function BatchRunDialog({
             const canInspect = it.status === 'error' || showLiveOutput && (!!outputs[idx] || isActive);
             const canOpenFullscreen = isActive || !!outputs[idx] || !!it.savedIds?.length;
             const rowLive = it.status === 'generating'
-              ? batchLiveStatus(liveCalls, runModels[p.laneIndex ?? 0], rateClock) : null;
+              ? batchLiveStatus(liveCalls, runModels[p.laneIndex ?? 0], rateClock,
+                costCalls.filter(call => call.index === idx).map(call => call.telemetryId).filter(Boolean)) : null;
             return html`
               <div
                 class=${`batch-run-item ${m.cls} ${isActive ? 'is-active' : ''} ${isInspected ? 'is-inspected' : ''} ${canInspect ? 'is-inspectable' : ''}`}
@@ -1239,7 +1250,7 @@ export function BatchRunDialog({
             <span><strong>${summary?.repairRounds || 0}</strong> cycles de correction</span>
           </div>
         ` : null}
-        ${summary?.stopped ? html`<div class="batch-note"><i class="fa-solid fa-hand"></i> ${summary.protectionStopped?'Protection des dépenses : les modèles en échec ont été arrêtés indépendamment. Les autres ont pu continuer. Les résultats enregistrés restent disponibles.':'Exécution interrompue.'}</div>` : null}
+        ${summary?.stopped ? html`<div class="batch-note"><i class="fa-solid fa-hand"></i> ${summary.protectionStopped?'Protection des dépenses : les tâches en échec ont été arrêtées indépendamment. Les autres ont pu continuer. Les résultats enregistrés restent disponibles.':'Exécution interrompue.'}</div>` : null}
       </div>
 
       <${BatchCosts} calls=${costCalls} done=${true} startedAt=${journalStartedAtRef.current} finishedAt=${batchFinishedAt} />

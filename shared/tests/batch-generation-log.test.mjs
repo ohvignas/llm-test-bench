@@ -4,6 +4,20 @@ import {createBatchJournal, generationActivity, logModelKey} from '../../prompt-
 const model={providerId:'router',modelId:'claude',label:'Claude de test'};
 const call={id:'call-1',app:'prompt-gallery',...model,startedAt:1000,phase:'firstThought',phases:{queued:0,dispatched:10,sessionReady:100,firstThought:200},lastActivityAt:1200,lastReceivedAt:1200,reasoningChunks:1,outputChars:0};
 
+test('telemetry for concurrent projects is labelled by the exact call, not just the model', () => {
+ const journal=createBatchJournal({models:[model],startedAt:1000});
+ const contexts=new Map([['call-1',{index:0,title:'Game'}],['call-2',{index:1,title:'Site'}]]);
+ journal.observeCalls([call,{...call,id:'call-2',reasoningChunks:25},{...call,id:'unrelated'}],2000,contexts);
+ const progress=journal.entries().filter(row=>row.stage==='progress');
+ assert.equal(progress.length,2);
+ assert.equal(progress[0].promptTitle,'Game');assert.match(progress[0].message,/1 signaux/);
+ assert.equal(progress[1].promptTitle,'Site');assert.match(progress[1].message,/25 signaux/);
+ assert.ok(journal.entries().every(row=>['Game','Site'].includes(row.promptTitle)));
+ const count=journal.entries().length;
+ journal.event({type:'stats',stats:{telemetryId:'call-1'}},{model,title:'Game'});
+ assert.equal(journal.entries().length,count, 'Correlation metadata does not invent usage');
+});
+
 test('the journal reconstructs observed phases without keeping private reasoning or request bodies',()=>{
  const journal=createBatchJournal({models:[model],startedAt:1000});
  journal.observeCalls([{...call,reasoning:'PRIVATE THOUGHT',request:{key:'SECRET KEY'}}],1500);

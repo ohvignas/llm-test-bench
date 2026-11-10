@@ -69,6 +69,7 @@ export function createBatchJournal({ models = [], startedAt = Date.now(), limit 
         }
       } else if (type === 'stats' && event.stats) {
         const stats = event.stats, parts = [];
+        if (Object.keys(stats).every(key => key === 'telemetryId')) return;
         if(stats.settings) {
           const settings=stats.settings,p=settings.params||{},signature=`settings:${logModelKey(context.model)}:${context.index}:${JSON.stringify([p.max_tokens??p.max_completion_tokens,p.reasoning?.effort||p.reasoning_effort,p.reasoning?.max_tokens])}`;
           if(!seen.has(signature)) {seen.add(signature);append(context,'settings',`Réglages API · profil ${({automatic:'automatique — reprise adaptée',benchmark:'comparaison — effort très élevé',maximum:'qualité maximale',code:'génération de code',manual:'personnalisé'})[settings.profile]||'personnalisé'} · sortie ${p.max_tokens??p.max_completion_tokens} tokens · ${p.reasoning?.effort||p.reasoning_effort?`effort ${p.reasoning?.effort||p.reasoning_effort}`:p.reasoning?.max_tokens?`raisonnement demandé : ${p.reasoning.max_tokens} tokens`:'contrôle du raisonnement non annoncé'}`,at);}
@@ -82,11 +83,12 @@ export function createBatchJournal({ models = [], startedAt = Date.now(), limit 
         append(context, 'stats', parts.length ? parts.join(' · ') : 'Mesures reçues ; tokens et coût non communiqués', at);
       } else if (type === 'control') append(context, 'control', event.message, at);
     },
-    observeCalls(calls, now = Date.now()) {
+    observeCalls(calls, now = Date.now(), contexts = null) {
       for (const call of calls) {
         const model = allowed.get(logModelKey(call));
         if (!model || call.app !== 'prompt-gallery' || call.startedAt < startedAt) continue;
-        const context = {model};
+        if (contexts && !contexts.has(call.id)) continue;
+        const context = {...contexts?.get(call.id), model};
         const phases = call.phases || {[call.phase]: Math.max(0, now - call.startedAt)};
         for (const [phase, offset] of Object.entries(phases)) {
           const key = `${call.id}:${phase}`;

@@ -11,6 +11,7 @@ export function createCostCall(role, details = {}) {
 /** Provider-reported USD only. Token counts/pricing are never used to estimate. */
 export function updateCostCall(call, stats) {
   const next = {...call};
+  if (typeof stats?.telemetryId === 'string') next.telemetryId = stats.telemetryId;
   if (Number.isFinite(stats?.cost) && stats.cost >= 0) next.usd = stats.cost;
   if (stats?.settings) {
     const {profile, source, params = {}} = stats.settings;

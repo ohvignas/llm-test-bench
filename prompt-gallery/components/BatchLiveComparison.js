@@ -30,7 +30,7 @@ function usePreviewDocument(output, active, identity) {
 function LiveModelPane({card, liveCalls, now, done, paused, theme, onFullscreen, onRetry, showLiveOutput}) {
   const {model, index, prompt, item, output, calls} = card;
   const active = !done && batchItemRunning(item);
-  const live = active ? batchLiveStatus(liveCalls, model, now) : null;
+  const live = active ? batchLiveStatus(liveCalls, model, now, calls.map(call => call.telemetryId).filter(Boolean)) : null;
   const status = paused && active ? 'En pause' : live?.label || LABELS[item.status] || 'En attente';
   const costs = costTotals(calls);
   const timing = executionMetrics(calls, {now, done});

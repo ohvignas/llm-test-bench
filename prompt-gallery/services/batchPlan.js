@@ -18,6 +18,11 @@ export function snapshotModel(model) {
   return Object.fromEntries(keep.filter(k => model[k] != null && model[k] !== '').map(k => [k, model[k]]));
 }
 
+export const DEFAULT_LANE_MODE = 'all-parallel';
+export function restoreLaneMode(value) {
+  return ['all-parallel', 'parallel', 'sequential'].includes(value) ? value : DEFAULT_LANE_MODE;
+}
+
 /** Add a model to the list unless it is already there. Returns a new list. */
 export function addBatchModel(list, model) {
   const snap = snapshotModel(model);
@@ -67,13 +72,15 @@ export function combineSummaries(summaries) {
 }
 
 /**
- * Run every lane, side by side ('parallel') or one after another
- * ('sequential'). A user stop affects every lane. Failure protection belongs
- * to the failing model only; other models may finish their prompts and audits.
+ * 'all-parallel' starts every prompt/model pair independently. 'parallel'
+ * starts the models together but keeps each model's prompts sequential.
+ * 'sequential' runs both in order. A user stop affects all work; a failure
+ * affects only its task (one prompt in all-parallel, one lane otherwise).
  * Resolves to the lanes' results in lane order.
  */
 export async function runLanes({ lanes, mode = 'parallel', runOne, shouldStop = () => false, stopOnFailure = false, onFailure = () => {} }) {
   const run = async lane => {
+    if (shouldStop()) return null;
     let failed = false;
     const fail = () => {
       if (!stopOnFailure || failed) return;
@@ -89,6 +96,17 @@ export async function runLanes({ lanes, mode = 'parallel', runOne, shouldStop = 
       throw error;
     }
   };
+  if (mode === 'all-parallel') {
+    // Preserve each model's run id and the flat list's absolute offsets. Each
+    // task owns its failure gate, costs, output and pause boundary. Group the
+    // results back by model so the summary still counts models, not tasks.
+    return Promise.all(lanes.map(async lane => {
+      const results = await Promise.all(lane.prompts.map((prompt, index) =>
+        run({...lane, offset:lane.offset + index, prompts:[prompt]})));
+      const {lanes: _count, ...summary} = combineSummaries(results);
+      return summary;
+    }));
+  }
   if (mode === 'parallel') return Promise.all(lanes.map(run));
   const results = [];
   for (const lane of lanes) {
