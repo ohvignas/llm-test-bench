@@ -4,7 +4,11 @@
 
 Give several AI models the same prompt, run generations in parallel, preview their websites side by side, and keep results and available timing/token/cost metrics. Bring your own OpenRouter API key.
 
-Batches default to **Automatique — puissance et reprise**. Select your models and prompts, then launch. OpenRouter settings come from the API: maximum advertised output and `xhigh` reasoning when supported, otherwise `high` or the strongest accepted effort. Models with a fixed reasoning budget use up to 16,384 tokens, capped at one third of output. Other providers keep native settings.
+Batches default to **Comparaison — capacité maximale**: one call per prompt/model, the same full prompt, maximum advertised output and the highest supported reasoning effort (`max`, then `xhigh`, then the remaining accepted levels). Saved economy overrides and learned low-effort recovery policies do not affect this comparison. There are no automatic retries, repairs or staged prompt substitutions. Effective parameters remain visible before launch and in the journal. Other providers retain native settings; models without an advertised effort selector retain the available controls shown in their settings.
+
+Parallel execution starts one prompt per model; each model completes its prompts sequentially. Concurrency does not lower the requested reasoning effort. Maximum settings allow more reasoning and output but do not guarantee a better or successful result.
+
+**Automatique — reprises adaptatives** remains an explicit option. It uses maximum advertised output but adapts reasoning to previous failures, including starting at low effort when the history indicates exhaustion. Models with a fixed reasoning budget use up to 16,384 tokens, capped at one third of output.
 
 The mode allows **at most three calls per prompt and model**, including initial generation, recoveries and runtime repairs. Exhausted reasoning or incomplete output triggers a lower-reasoning retry; received code is saved and reused. Temporary transport/provider errors wait before retrying, respecting `Retry-After` up to two minutes. Sandbox errors trigger repairs from saved code. Invalid credentials, insufficient credits, rejected parameters, filtering and in-flight duplicates stop explicitly. A failed save or unavailable sandbox never triggers another paid repair.
 

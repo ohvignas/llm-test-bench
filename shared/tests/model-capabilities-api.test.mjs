@@ -117,3 +117,25 @@ test('learned policy is refreshed and applied in the real automatic adapter',asy
   assert.ok(fetchCount>before);assert.equal(requests.at(-1).reasoning.effort,'low');
  }finally{delete apiModel.bench_policy;}
 });
+
+test('comparison sends maximum effort to the completion endpoint even after a learned low-effort failure',async()=>{
+ const {runBatch}=await import('../../prompt-gallery/services/batchRunner.js');
+ const {DEFAULT_BATCH_MODE,batchGenerationOptions}=await import('../../prompt-gallery/services/batchMode.js');
+ const previousReasoning=apiModel.reasoning;
+ apiModel.reasoning={mandatory:true,supported_efforts:['low','xhigh','max','high']};
+ apiModel.bench_policy={recovery_level:2,effort:'low',max_tokens:2048};
+ try {
+  await raw.fetchModels({refresh:true,strict:true});
+  const options=batchGenerationOptions({mode:DEFAULT_BATCH_MODE,profile:'code',override:{profile:'manual',reasoningEffort:'low',totalTokens:2048}});
+  const before=requests.length;
+  const result=await runBatch({prompts:[{id:'compare-fixture',prompt:'Identical full comparison prompt',tags:[]}],
+   model:{providerId:'openrouter',modelId:'vendor/model',generationOptions:options},options:{mode:DEFAULT_BATCH_MODE},deps:{
+    generate:async(userPrompt,{model,onStats})=>adapter.streamChat({modelId:model.modelId,appTitle:'Prompt Gallery',userPrompt,generationOptions:model.generationOptions,onStats}),
+    save:async()=>({id:'comparison-result'}),
+   }});
+  assert.equal(result.saved,1);assert.equal(requests.length,before+1);
+  assert.equal(requests.at(-1).max_tokens,64000);
+  assert.deepEqual(requests.at(-1).reasoning,{effort:'max'});
+  assert.equal(requests.at(-1).messages.at(-1).content,'Identical full comparison prompt');
+ }finally{apiModel.reasoning=previousReasoning;delete apiModel.bench_policy;}
+});

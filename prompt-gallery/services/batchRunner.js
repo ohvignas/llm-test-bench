@@ -17,6 +17,7 @@ import { progressivePlan, runProgressiveGeneration } from './progressiveGenerati
 
 import { runVerifiedGeneration } from './verifiedGeneration.js';
 import { runAutomaticGeneration } from './automaticGeneration.js';
+import { batchGenerationOptions } from './batchMode.js';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -72,6 +73,13 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
     throw new Error('La reprise doit cibler un seul résultat en mode Automatique ou Vérifié.');
   }
   const mode = opts.mode || (opts.heal ? 'runtime-heal' : 'quick');
+  if (mode === 'comparison') {
+    opts.apiRetries = 0;
+    model = {...model, generationOptions: {
+      ...batchGenerationOptions({mode}),
+      reviewedMaxTokens: model.generationOptions?.reviewedMaxTokens,
+    }};
+  }
   const emit = (event) => { try { onEvent?.(event); } catch (e) { /* never let a listener break the run */ } };
   const stop = () => { try { return !!shouldStop?.(); } catch (e) { return false; } };
   const pause = () => { try { return !!shouldPause?.(); } catch (e) { return false; } };

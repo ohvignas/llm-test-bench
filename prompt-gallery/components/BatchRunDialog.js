@@ -12,6 +12,7 @@ import { BatchGenerationLog } from './BatchGenerationLog.js';
 import { createBatchJournal, logModelKey, safeLogText } from '../services/batchGenerationLog.js';
 import { HtmlLightbox } from './BatchReview.js';
 import { DEFAULT_HTML_BUDGET, restoreGenerationSettings } from '../services/generationBudget.js';
+import { DEFAULT_BATCH_MODE, batchGenerationOptions } from '../services/batchMode.js';
 import {resolveModelSettings} from '../../shared/services/model-capabilities.js';
 import {clearFailedGenerationBlocks} from '../../shared/services/generation-spend-guard.js';
 import {ModelSettingsPanel} from './ModelSettingsPanel.js';
@@ -144,7 +145,7 @@ export function BatchRunDialog({
   const selectedPrompts = useMemo(() => resumeFrom ? [resumeFrom.prompt] : promptChoices.selected, [resumeFrom, promptChoices]);
 
   // Options
-  const [mode, setMode] = useState('automatic');
+  const [mode, setMode] = useState(resumeSource ? 'automatic' : DEFAULT_BATCH_MODE);
   const [progressive, setProgressive] = useState(true);
   const [healAttempts, setHealAttempts] = useState(1);
   const [maxRepairRounds, setMaxRepairRounds] = useState(1);
@@ -227,8 +228,8 @@ export function BatchRunDialog({
     const isOpenRouter=isOpenRouterModel(selected);
     if(!isOpenRouter)return {model:selected,isOpenRouter:false};
     const api=catalogue.find(m=>(m.modelId||m.id)===selected.modelId)||original;
-    const override=mode==='automatic'?{}:settingsOverrides[batchModelKey(selected)]||{};
-    try {return {model:selected,isOpenRouter:true,settings:resolveModelSettings({model:api,profile:mode==='automatic'?'automatic':settingsProfile,...override,budget:{totalTokens,reasoningTokens,...override}})};}
+    const options=batchGenerationOptions({mode,profile:settingsProfile,override:settingsOverrides[batchModelKey(selected)],budget:{totalTokens,reasoningTokens}});
+    try {return {model:selected,isOpenRouter:true,settings:resolveModelSettings({model:api,...options})};}
     catch(error) {return {model:selected,isOpenRouter:true,error:error.message};}
   });
   const previewReports=settingsReports();
@@ -244,9 +245,9 @@ export function BatchRunDialog({
     if (!skipExisting) return false;
     try { return !!deps.hasExistingForModel?.(prompt, selectedModel); } catch { return false; }
   };
-  const plannedCalls = mode === 'quick' ? runModels.reduce((total, selectedModel) => total + selectedPrompts.reduce((count, prompt) => {
+  const plannedCalls = ['quick','comparison'].includes(mode) ? runModels.reduce((total, selectedModel) => total + selectedPrompts.reduce((count, prompt) => {
     if (shouldSkip(prompt, selectedModel)) return count;
-    return count + (progressive ? progressivePlan(prompt).length || 1 : 1);
+    return count + (mode === 'quick' && progressive ? progressivePlan(prompt).length || 1 : 1);
   }, 0), 0) : null;
   const stageTokenLimit = (stage, report) => {
     const configured = report.settings?.params.max_tokens ?? report.settings?.params.max_completion_tokens;
@@ -413,9 +414,9 @@ export function BatchRunDialog({
     } catch(error) {startingRef.current=false;if(mountedRef.current)addToast(error.message,'error');return;}
     const configured=reports.map(report=>{
       if(!report.isOpenRouter)return report.model;
-      const override=mode==='automatic'?{}:settingsOverrides[batchModelKey(report.model)]||{};
+      const options=batchGenerationOptions({mode,profile:settingsProfile,override:settingsOverrides[batchModelKey(report.model)],budget:{totalTokens,reasoningTokens}});
       const shown=previewReports.find(r=>batchModelKey(r.model)===batchModelKey(report.model))?.settings;
-      return {...report.model,generationOptions:{profile:mode==='automatic'?'automatic':settingsProfile,...override,budget:{totalTokens,reasoningTokens,...override},
+      return {...report.model,generationOptions:{...options,
         reviewedMaxTokens:shown?.params.max_tokens??shown?.params.max_completion_tokens??report.settings.params.max_tokens??report.settings.params.max_completion_tokens}};
     });
     const plan = planBatchLanes({ prompts: list, models: configured, runId });
@@ -669,7 +670,7 @@ export function BatchRunDialog({
   };
   const prepareNewRun = () => {
     setResumeFrom(null);
-    setMode('automatic');
+    setMode(DEFAULT_BATCH_MODE);
     setPhase('config');
     onRestore?.();
   };
@@ -677,8 +678,8 @@ export function BatchRunDialog({
     const prompt = runList[index], selectedModel = logModels[prompt.laneIndex || 0];
     setResumeFrom(null); setBatchModels([selectedModel]);
     setSelectedIds(new Set([prompt.id])); setPromptSet(promptSetOf(prompt));
-    setPromptSearch(''); setSkipExisting(false); setMode('automatic'); setPhase('config'); onRestore?.();
-    addToast('Reprise automatique préparée pour ce modèle uniquement ; aucun appel envoyé avant le lancement.', 'info');
+    setPromptSearch(''); setSkipExisting(false); setMode(DEFAULT_BATCH_MODE); setPhase('config'); onRestore?.();
+    addToast('Nouvel essai au maximum préparé pour ce modèle uniquement ; aucun appel envoyé avant le lancement.', 'info');
   };
 
   // ── Renderers ──
@@ -832,13 +833,22 @@ export function BatchRunDialog({
       <div class="batch-section">
         <div class="batch-section-head"><span><i class="fa-solid fa-wand-magic-sparkles"></i> Mode de génération</span></div>
         <div class="batch-options">
+          ${!resumeFrom && html`<label class="batch-opt batch-mode-opt">
+            <input type="radio" name="batch-mode" value="comparison" checked=${mode === 'comparison'} onChange=${() => setMode('comparison')} />
+            <span><strong>Comparaison — capacité maximale</strong><small>Prompt complet identique, sortie maximale et effort le plus élevé accepté par chaque modèle. Un seul appel par prompt et modèle.</small></span>
+          </label>`}
+          ${mode === 'comparison' && html`<section class="batch-prompt-selection" aria-label="Protocole de comparaison">
+            <strong>Évaluer le résultat initial de chaque modèle à son effort maximal.</strong>
+            <p>Les anciens réglages économes et les réductions apprises après un échec ne sont pas appliqués. Le prompt reste complet : aucune construction par étapes, correction ou relance automatique. Le code reçu est enregistré pour être évalué.</p>
+            <p>Les modèles peuvent traiter les mêmes prompts en parallèle ; chacun termine un prompt avant le suivant. Le nombre de générations simultanées ne modifie pas l’effort demandé.</p>
+          </section>`}
           <label class="batch-opt batch-mode-opt">
             <input type="radio" name="batch-mode" value="automatic" checked=${mode === 'automatic'} onChange=${() => setMode('automatic')} />
-            <span><strong>Automatique — puissance et reprise</strong><small>Réglages puissants adaptés à l’API, vérification du code et reprises selon l’erreur. Pour tous les prompts.</small></span>
+            <span><strong>Automatique — reprises adaptatives</strong><small>Vérification du code et reprises selon l’erreur. L’effort peut être réduit selon les échecs précédents.</small></span>
           </label>
           ${mode === 'automatic' && html`<section class="batch-prompt-selection" aria-label="Fonctionnement automatique">
             <strong>Choisis tes modèles et tes prompts, puis lance le lot.</strong>
-            <p>Sortie maximale annoncée par OpenRouter et effort très élevé lorsque disponible. Si le raisonnement épuise la sortie, l’effort est réduit pour la reprise. Si du code existe, il sert de point de départ aux corrections.</p>
+            <p>Sortie maximale annoncée par OpenRouter. L’effort tient compte des échecs déjà observés et peut être faible dès le premier appel. Si le raisonnement épuise la sortie, l’effort peut être réduit pour la reprise. Si du code existe, il sert de point de départ aux corrections.</p>
             <p><strong>Maximum 3 appels par prompt et modèle, corrections et relances comprises.</strong> Chaque appel peut être facturé. Saturation ou coupure : attente et reprise. Erreur de clé, crédit insuffisant ou filtrage : arrêt expliqué. Aucun changement de modèle. Les autres modèles continuent.</p>
             <p>La vérification automatique détecte les erreurs du bac à sable ; elle ne certifie pas toutes les fonctionnalités ni la qualité visuelle. Chaque adaptation et son coût sont consignés dans le journal.</p>
           </section>`}
@@ -909,7 +919,7 @@ export function BatchRunDialog({
           ${mode !== 'automatic' && html`
           <label class="batch-opt">
             <span>Nouvelles tentatives après erreur de connexion</span>
-            <select class="form-input batch-num" disabled=${spendProtection} value=${spendProtection?0:apiRetries} onChange=${(e) => setApiRetries(Number(e.target.value))}>
+            <select class="form-input batch-num" disabled=${spendProtection || mode === 'comparison'} value=${spendProtection || mode === 'comparison'?0:apiRetries} onChange=${(e) => setApiRetries(Number(e.target.value))}>
               ${[0, 1, 2, 3].map(n => html`<option key=${n} value=${n}>${n}</option>`)}
             </select>
           </label>
@@ -918,15 +928,16 @@ export function BatchRunDialog({
           ${spendProtection && isMulti && laneMode === 'parallel' && html`<div class="batch-note">Les autres modèles continuent leurs générations, vérifications et corrections. Les versions déjà enregistrées sont conservées.</div>`}
           <p class="batch-opt-hint">Un appel interrompu, vide ou filtré peut rester facturé. Les coûts affichés viennent de l’API. Les relances après un échec sont bloquées dans ce navigateur et dans le serveur local, même après actualisation.</p>
           <button class="btn btn-sm" onClick=${async()=>{try{await clearFailedGenerationBlocks();addToast('Relances autorisées : un nouvel appel pourra être facturé.','info');}catch(error){addToast(error.message,'error');}}}>Autoriser les relances après échec (nouveau coût possible)</button>
-          <label class="batch-opt"><span>Adaptation aux capacités API</span>
+          ${mode !== 'comparison' && html`<label class="batch-opt"><span>Adaptation aux capacités API</span>
             <select class="form-input" value=${settingsProfile} onChange=${e=>{setSettingsProfile(e.target.value);setSettingsOverrides({});}}>
               <option value="benchmark">Comparaison — sortie maximale et effort très élevé</option><option value="maximum">Effort maximal — risque de coût élevé</option><option value="code">Économe — sortie limitée et raisonnement réduit</option><option value="manual">Budget personnalisé — plafonné par l’API</option>
             </select></label>
           <p class="batch-opt-hint">Le profil Comparaison utilise la sortie maximale de chaque modèle et un effort très élevé, ou élevé selon les capacités API. Le profil Effort maximal utilise le niveau le plus élevé annoncé. Le profil Économe réduit le raisonnement et la sortie. Les réglages effectifs sont affichés ci-dessous ; les modèles peuvent avoir des limites différentes. Un plafond élevé autorise des appels plus longs et plus coûteux sans imposer de tout consommer. Aucun appel payant n’est lancé par l’actualisation.</p>
           ${settingsProfile==='manual'&&html`<label class="batch-opt"><span>Budget total demandé par appel</span><input class="form-input" type="number" min="1" value=${totalTokens} onInput=${e=>{const value=Number(e.target.value);if(Number.isSafeInteger(value)&&value>0)setTotalTokens(value);}}/></label>
             <label class="batch-opt"><span>Budget de raisonnement demandé (si l’API l’accepte)</span><input class="form-input" type="number" min="1" value=${reasoningTokens} onInput=${e=>{const value=Number(e.target.value);if(Number.isSafeInteger(value)&&value>0)setReasoningTokens(value);}}/></label>`}
-          ${progressiveActive && html`<p class="batch-opt-hint">Les étapes GTA VI respectent le profil Comparaison, Effort maximal ou les réglages personnalisés ci-dessous. Le plafond réduit par étape s’applique uniquement au profil Économe. La construction par étapes change le protocole : utilisez le même mode pour tous les modèles comparés.</p>`}
+          ${progressiveActive && html`<p class="batch-opt-hint">Les étapes GTA VI respectent le profil Comparaison, Effort maximal ou les réglages personnalisés ci-dessous. Le plafond réduit par étape s’applique uniquement au profil Économe. La construction par étapes change le protocole : utilisez le même mode pour tous les modèles comparés.</p>`}`}
           <${ModelSettingsPanel} reports=${previewReports} loading=${settingsLoading} error=${settingsError}
+            readOnly=${mode === 'comparison'}
             onRefresh=${()=>refreshCapabilities().catch(()=>{})} onOverride=${overrideSettings} onReset=${()=>setSettingsOverrides({})}/>
           `}
           ${mode === 'automatic' && html`<details><summary>Réglages initiaux des modèles</summary>

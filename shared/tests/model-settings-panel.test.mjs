@@ -53,3 +53,11 @@ test('an intermediate empty or invalid number does not erase the last confirmed 
   for(const value of ['', '-1', '1.5', 'garbage']) input.props.onInput({target:{value}});
   assert.deepEqual(patches,[]);
 });
+
+test('comparison displays the exact maximum settings without editable economy overrides',()=>{
+ const api=normalizeOpenRouterModel({id:'fixture',supported_parameters:['max_tokens','reasoning'],top_provider:{max_completion_tokens:128000},reasoning:{mandatory:true,supported_efforts:['low','max']}});
+ const tree=ModelSettingsPanel({reports:[{model:{providerId:'openrouter',modelId:'fixture'},isOpenRouter:true,settings:resolveModelSettings({model:api,profile:'maximum'})}],readOnly:true});
+ const controls=descendants(tree).filter(node=>['input','select'].includes(node.type));
+ assert.deepEqual(controls.map(c=>c.props.value),[128000,'max']);
+ assert.ok(controls.every(c=>c.props.disabled===true));
+});
