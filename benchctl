@@ -10,8 +10,12 @@ if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help', 'journal'):
     from server.diagnostics import main
     main(sys.argv[1:] if len(sys.argv) > 1 else ['--help'])
 else:
-    command = ['docker', 'compose', 'exec', '-T', 'bench', 'python', '-m', 'server.diagnostics', *sys.argv[1:]]
+    # Send only this checked-in diagnostic program, never credentials or a user
+    # supplied command. This also reads old containers while a safe update waits.
+    program = (ROOT / 'server/diagnostics.py').read_text()
+    command = ['docker', 'compose', 'exec', '-T', 'bench', 'python', '-c',
+               "import sys; __package__='server'; exec(compile(sys.stdin.read(), '<benchctl>', 'exec'))", *sys.argv[1:]]
     try:
-        raise SystemExit(subprocess.call(command, cwd=ROOT))
+        raise SystemExit(subprocess.run(command, cwd=ROOT, input=program, text=True).returncode)
     except FileNotFoundError:
         raise SystemExit('Docker est requis. En installation Python : python -m server.diagnostics --help')
