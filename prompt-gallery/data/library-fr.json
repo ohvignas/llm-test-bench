@@ -691,6 +691,18 @@
       "title": "Simulateur de vol relaxant — version avancée",
       "description": "Survoler des paysages procéduraux avec des commandes souples, plusieurs caméras et une ambiance apaisante. Variante avancée avec des exigences fonctionnelles et techniques détaillées.",
       "notes": "À surveiller : continuité du terrain, fluidité du vol, commandes et déclenchement volontaire du son. Vérifier également chaque exigence numérotée de la consigne originale."
+    },
+    "games-gta-vi": {
+      "title": "GTA VI — personnages 3D réalistes, ambiance GTA IV",
+      "description": "Un quartier jouable inspiré visuellement de GTA IV : humains 3D détaillés et animés, façades soignées, une voiture et une mission. JavaScript/WebGL 2 sans Three.js ; priorité à la qualité visible.",
+      "notes": "Vérifier de près : visage en volume, proportions humaines, contours arrondis et articulations, vêtements détaillés, animation sans glissement des pieds ; rejeter les mannequins cubiques. Vérifier aussi façades, ombres, caméra, collisions, conduite, livraison et pause. Le photoréalisme est un objectif à juger sur le résultat, pas une garantie. Références visuelles et limites du format : docs/gta-visual-brief.md.",
+      "aliases": [
+        "GTA 6",
+        "GTA IV",
+        "GTA 4",
+        "Grand Theft Auto",
+        "personnages 3D"
+      ]
     }
   }
 }
