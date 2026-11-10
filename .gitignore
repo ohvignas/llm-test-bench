@@ -17,3 +17,4 @@ secrets/
 *.sqlite*
 *.db
 node_modules/
+/work/

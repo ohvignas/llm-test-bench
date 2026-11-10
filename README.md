@@ -28,7 +28,7 @@ Le **service de contrôle Mastra est un composant de confiance avec accès au so
 
 Les fichiers texte sont sauvegardés chiffrés dans SQLite (100 fichiers, 1 Mio par fichier, 8 Mio au total). **Télécharger les sources** exporte un ZIP ; **Reprendre** et le chat réutilisent ces sources, même si aucune page n’a encore compilé. Les binaires et `node_modules` ne sont pas des points de reprise. Le dernier aperçu construit reste conservé après une erreur. La reprise du mode agent reconstruit le projet ; la reprise du mode à appel unique garde son comportement de continuation HTML.
 
-La commande d’installation Compose construit les trois images nécessaires et lance automatiquement les services. Le socket standard est `/var/run/docker.sock`, y compris dans Docker Desktop. Si votre moteur utilise un autre socket, définir `DOCKER_SOCKET_PATH` dans `.env`. Aucun accès à Docker n’est donné aux projets générés.
+La commande d’installation Compose construit les trois images nécessaires et lance automatiquement les services. Le socket standard est `/var/run/docker.sock`, y compris dans Docker Desktop. Si votre moteur utilise un autre socket, définir `DOCKER_SOCKET_PATH` dans `.env`. Le contrôleur utilise l’UID 10001, propriétaire du secret de contrôle privé, avec le groupe du socket Docker. Sous Linux, si ce groupe diffère de 0, définir `DOCKER_SOCKET_GID` avec le résultat de `stat -c '%g' /var/run/docker.sock`. Aucun accès à Docker n’est donné aux projets générés.
 
 Diagnostic local sans navigateur :
 

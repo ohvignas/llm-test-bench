@@ -37,6 +37,8 @@ def parser():
     s=sub.add_parser('jobs');s.add_argument('--json',action='store_true')
     for name in ('agent-show','agent-stop'):
         s=sub.add_parser(name);s.add_argument('execution');s.add_argument('--json',action='store_true')
+    s=sub.add_parser('agent-start');s.add_argument('--execute',action='store_true',required=True)
+    s.add_argument('--input-json',action='store_true',required=True);s.add_argument('--json',action='store_true')
     sub.add_parser('self-test')
     return p
 
@@ -48,6 +50,12 @@ def main(argv=None):
     p=parser();args=p.parse_args(argslist)
     if args.command=='self-test':
         raise SystemExit(subprocess.call([sys.executable,'-m','unittest','discover','-s','server/tests','-v'],cwd=ROOT))
+    if args.command=='agent-start':
+        from .operator_socket import send_plan
+        try:
+            result=send_plan(json.loads(sys.stdin.read(1024*1024+1)))
+        except (ValueError,OSError) as error:p.exit(1,redact(error)+'\n')
+        print(redact_json(result,limit=None));return
     app=create_app();store=Store(app.config['DATA_DIR'])
     try:
         with app.app_context():

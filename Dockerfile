@@ -11,4 +11,4 @@ COPY --chown=bench:bench . .
 USER 10001:10001
 EXPOSE 8080
 HEALTHCHECK --interval=20s --timeout=5s --start-period=10s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz',timeout=3)"
-CMD ["gunicorn", "--no-control-socket", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "64", "--timeout", "600", "server.app:create_app()"]
+CMD ["gunicorn", "--config", "python:server.gunicorn_conf", "--no-control-socket", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "64", "--timeout", "600", "server.app:create_app()"]

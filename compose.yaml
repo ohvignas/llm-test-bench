@@ -37,6 +37,10 @@ services:
   mastra:
     build: ./agent-runtime
     image: llm-bench-mastra:latest
+    # Same UID as the owner of the mode-0600 control token; the socket group
+    # grants Docker access without making the token readable by other users.
+    user: "10001:10001"
+    group_add: ["${DOCKER_SOCKET_GID:-0}"]
     networks: [agent-control]
     depends_on:
       agent-sandbox-image:

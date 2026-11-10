@@ -13,6 +13,14 @@ elif args and args[0]=='journal':
     main(args)
 else:
     input_data=None
+    if '--plan-file' in args:
+        index=args.index('--plan-file')
+        try:
+            path=Path(args[index+1]);input_data=path.read_text()
+            if not 0<len(input_data.encode())<=1024*1024:raise ValueError('Plan vide ou supérieur à 1 Mio.')
+            json.loads(input_data)
+        except (IndexError,OSError,ValueError) as error:raise SystemExit(str(error))
+        args[index:index+2]=['--input-json']
     if '--prompt-file' in args:
         index=args.index('--prompt-file')
         try:
