@@ -35,6 +35,10 @@ def parser():
     s=sub.add_parser('logs');s.add_argument('job');s.add_argument('--limit',type=int,default=30);s.add_argument('--follow',action='store_true');s.add_argument('--seconds',type=int,default=60);s.add_argument('--json',action='store_true')
     s=sub.add_parser('result');s.add_argument('job');s.add_argument('--item',required=True)
     s=sub.add_parser('jobs');s.add_argument('--json',action='store_true')
+    for name in ('agent-show','agent-stop'):
+        s=sub.add_parser(name);s.add_argument('execution');s.add_argument('--json',action='store_true')
+    s=sub.add_parser('agent-start');s.add_argument('--execute',action='store_true',required=True)
+    s.add_argument('--input-json',action='store_true',required=True);s.add_argument('--json',action='store_true')
     sub.add_parser('self-test')
     return p
 
@@ -46,11 +50,26 @@ def main(argv=None):
     p=parser();args=p.parse_args(argslist)
     if args.command=='self-test':
         raise SystemExit(subprocess.call([sys.executable,'-m','unittest','discover','-s','server/tests','-v'],cwd=ROOT))
+    if args.command=='agent-start':
+        from .operator_socket import send_plan
+        try:
+            result=send_plan(json.loads(sys.stdin.read(1024*1024+1)))
+        except (ValueError,OSError) as error:p.exit(1,redact(error)+'\n')
+        print(redact_json(result,limit=None));return
     app=create_app();store=Store(app.config['DATA_DIR'])
     try:
         with app.app_context():
             command=args.command
-            if command=='models':
+            if command in ('agent-show','agent-stop'):
+                from .agents import agent_record,stop_agent
+                if len(args.execution)!=32 or any(c not in 'abcdef0123456789' for c in args.execution):raise ValueError('Identifiant d’exécution invalide.')
+                row=db().execute('SELECT * FROM browser_executions WHERE id=?',(args.execution,)).fetchone()
+                if not row:raise ValueError('Exécution introuvable.')
+                if command=='agent-stop':
+                    db().execute('UPDATE browser_executions SET cancel_requested=1 WHERE id=?',(args.execution,))
+                    db().execute('UPDATE generation_activity SET cancel_requested=1 WHERE id IN (SELECT activity_id FROM agent_steps WHERE execution_id=?)',(args.execution,));db().commit();stop_agent(args.execution)
+                result={'id':args.execution,'context':json.loads(row['context']),'state':row['state'],'agent':agent_record(args.execution)}
+            elif command=='models':
                 models=catalogue();learned=policies()
                 result=[{k:m.get(k) for k in ('id','name','reasoning','top_provider','pricing')}|{'bench_policy':learned.get(m['id'])}
                         for m in models.values() if (not args.id or m['id']==args.id) and args.query.lower() in (m['id']+' '+m.get('name','')).lower()]

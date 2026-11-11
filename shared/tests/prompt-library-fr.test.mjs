@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
+import {batchPromptChoices} from '../../prompt-gallery/services/batchPromptSearch.js';
 const dataUrl=new URL('../../prompt-gallery/data/',import.meta.url);
 globalThis.fetch=async path=>{
   try{return Response.json(JSON.parse(await readFile(new URL(String(path).replace('./data/',''),dataUrl),'utf8')));}
@@ -48,4 +49,17 @@ test('personal titles and descriptions override the translated seed without chan
   assert.equal(airport.title,'Mon aéroport');
   assert.equal(airport.description,'Ma description personnalisée');
   assert.equal(lib.promptFolderId(airport),'airport-operations-simulator');
+});
+test('batch selection exposes the same complete merged library as the Prompts page',async()=>{
+ const user={prompts:[{id:'my-prompt',title:'Mon essai personnel',prompt:'Test'},
+   {id:'my-import',set:'imported',title:'Mon prompt importé',prompt:'Import'}]};
+ const root={async getDirectoryHandle(){return{async getFileHandle(){return{async getFile(){return{text:async()=>JSON.stringify(user)}}}}}}};
+ const merged=await lib.getLibrary(root);
+ const batch=batchPromptChoices({prompts:merged});
+ assert.equal(batch.visible.length,165);
+ assert.deepEqual(batch.visible.map(p=>p.id),merged.map(p=>p.id));
+ const search=batchPromptChoices({prompts:merged,setId:'flagship',query:'GTA VI'});
+ assert.deepEqual(search.visible.map(p=>p.id),['games-gta-vi']);
+ const chosen=new Set(['games-gta-vi','my-prompt','my-import']);
+ assert.equal(batchPromptChoices({prompts:merged,setId:'web',selectedIds:chosen}).selected.length,3);
 });

@@ -1,4 +1,6 @@
 .git
+**/node_modules
+agent-runtime
 .venv
 __pycache__
 **/__pycache__
@@ -13,3 +15,4 @@ secrets
 .DS_Store
 backup
 backups
+work

@@ -88,6 +88,42 @@ class LocalIntegrationTests(unittest.TestCase):
             self.assertFalse(retry.json['requestSent'])
             self.assertEqual(call.call_count,1)
 
+    def test_explicit_retry_is_one_use_scoped_and_preserves_active_and_filtered_calls(self):
+        from server.spend_guard import reserve, finish
+        with self.app.app_context():
+            first=reserve(self.chat())
+            peer=reserve(self.chat(model='peer/model'))
+            finish(first,False)
+            retried=reserve(self.chat(),explicit_retry='a'*32)
+            self.assertEqual(first,retried)
+            self.assertIsNone(reserve(self.chat(),explicit_retry='b'*32))
+            self.assertIsNone(reserve(self.chat(model='peer/model'),explicit_retry='c'*32))
+            finish(retried,False)
+            self.assertIsNone(reserve(self.chat(),explicit_retry='a'*32))
+            self.assertEqual(reserve(self.chat(),explicit_retry='d'*32),first)
+            finish(first,False,filtered=True)
+            self.assertIsNone(reserve(self.chat(),explicit_retry='e'*32))
+            finish(peer,True)
+
+    def test_credit_error_is_diagnosable_and_explicit_retry_requires_csrf_and_no_duplicate_nonce(self):
+        from server.storage import db
+        upstream=Mock(status_code=402,headers={})
+        upstream.json.return_value={'error':{'message':'can only afford 116356 dummy-private-key','code':402}}
+        with patch('server.proxy.requests.request',return_value=upstream) as call:
+            self.assertEqual(self.post_chat(self.chat()).status_code,402)
+            with self.app.app_context():
+                detail=json.loads(db().execute('SELECT error FROM generation_activity ORDER BY started DESC').fetchone()[0])
+                self.assertEqual(detail,{'http_status':402,'kind':'credit_required','affordable_tokens':116356})
+            headers={**self.headers,'X-Bench-Retry':'a'*32}
+            self.assertEqual(self.client.post('/api/openrouter/chat/completions',headers={'X-Bench-Retry':'a'*32},json=self.chat()).status_code,403)
+            self.assertEqual(self.client.post('/api/openrouter/chat/completions',headers=headers,json=self.chat()).status_code,402)
+            self.assertNotIn('X-Bench-Retry',call.call_args.kwargs['headers'])
+            blocked=self.client.post('/api/openrouter/chat/completions',headers=headers,json=self.chat())
+            self.assertEqual(blocked.status_code,409)
+            self.assertFalse(blocked.json['requestSent'])
+            self.assertEqual(call.call_count,2)
+            self.assertEqual(self.client.post('/api/openrouter/chat/completions',headers={**self.headers,'X-Bench-Retry':'bad'},json=self.chat()).status_code,400)
+
     def test_invalid_automatic_policy_is_unsent(self):
         with patch('server.proxy.requests.request') as call:
             for value in ['invalid',json.dumps({'id':'auto-run-1234567890','limit':100})]:
@@ -95,6 +131,32 @@ class LocalIntegrationTests(unittest.TestCase):
                 self.assertEqual(response.status_code,400)
                 self.assertFalse(response.json['requestSent'])
             call.assert_not_called()
+
+    def test_retry_reset_is_observable_from_other_sessions_without_exposing_request_data(self):
+        from server.spend_guard import reserve, finish
+        with self.app.app_context():
+            identity=reserve(self.chat())
+            finish(identity,False)
+        other=self.app.test_client()
+        self.assertEqual(other.get('/api/openrouter/retry-blocks').status_code,401)
+        other.post('/api/auth/login',headers={'Origin':self.headers['Origin']},
+                   json={'username':'owner','password':'dummy-password-for-tests'})
+        self.assertEqual(other.get('/api/openrouter/retry-blocks').json,{'resetRevision':''})
+        with patch('server.proxy.requests.request') as call:
+            self.assertEqual(self.client.delete('/api/openrouter/retry-blocks').status_code,403)
+            reset=self.client.delete('/api/openrouter/retry-blocks',headers=self.headers)
+            self.assertEqual(reset.status_code,200)
+            revision=reset.json['resetRevision']
+            self.assertRegex(revision,r'^[a-f0-9]{32}$')
+            self.assertEqual(other.get('/api/openrouter/retry-blocks').json,{'resetRevision':revision})
+            with self.app.app_context():
+                self.assertIsNotNone(reserve(self.chat()))
+            call.assert_not_called()
+        # The marker is stable across refreshes and a server restart.
+        restarted=create_app(self.config)
+        from server.spend_guard import reset_revision
+        with restarted.app_context():
+            self.assertEqual(reset_revision(),revision)
 
     def test_project_bytes_and_vault_survive_restart_and_backup_restore(self):
         contents = {

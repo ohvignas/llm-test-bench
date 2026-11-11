@@ -10,6 +10,7 @@ const apiModel={id:'vendor/model',name:'Model',context_length:1000000,top_provid
 let fetchCount=0,requests=[];
 globalThis.fetch=async(url,init={})=>{
  if(url==='/api/auth/status')return Response.json({authenticated:true,apiKeyConfigured:true,csrfToken:'test-csrf'});
+ if(url==='/api/openrouter/retry-blocks')return Response.json({resetRevision:''});
  if(url==='/api/openrouter/models'){fetchCount++;return Response.json({data:[apiModel]});}
  if(url==='/api/openrouter/chat/completions'){requests.push(JSON.parse(init.body));return Response.json({choices:[{message:{content:'<html>ok</html>'},finish_reason:'stop'}],usage:{cost:.012}});}
  throw new Error('Unexpected test URL '+url);
@@ -116,4 +117,45 @@ test('learned policy is refreshed and applied in the real automatic adapter',asy
   await adapter.streamChat({modelId:'vendor/model',appTitle:'Prompt Gallery',userPrompt:'learned-policy-fixture',generationOptions:{profile:'automatic',automatic:{id:crypto.randomUUID(),limit:3}}});
   assert.ok(fetchCount>before);assert.equal(requests.at(-1).reasoning.effort,'low');
  }finally{delete apiModel.bench_policy;}
+});
+
+test('comparison sends maximum effort to the completion endpoint even after a learned low-effort failure',async()=>{
+ const {runBatch}=await import('../../prompt-gallery/services/batchRunner.js');
+ const {DEFAULT_BATCH_MODE,batchGenerationOptions}=await import('../../prompt-gallery/services/batchMode.js');
+ const previousReasoning=apiModel.reasoning;
+ apiModel.reasoning={mandatory:true,supported_efforts:['low','xhigh','max','high']};
+ apiModel.bench_policy={recovery_level:2,effort:'low',max_tokens:2048};
+ try {
+  await raw.fetchModels({refresh:true,strict:true});
+  const options=batchGenerationOptions({mode:'comparison',profile:'code',override:{profile:'manual',reasoningEffort:'low',totalTokens:2048}});
+  const before=requests.length;
+  const result=await runBatch({prompts:[{id:'compare-fixture',prompt:'Identical full comparison prompt',tags:[]}],
+   model:{providerId:'openrouter',modelId:'vendor/model',generationOptions:options},options:{mode:'comparison'},deps:{
+    generate:async(userPrompt,{model,onStats})=>adapter.streamChat({modelId:model.modelId,appTitle:'Prompt Gallery',userPrompt,generationOptions:model.generationOptions,onStats}),
+    save:async()=>({id:'comparison-result'}),
+   }});
+  assert.equal(result.saved,1);assert.equal(requests.length,before+1);
+  assert.equal(requests.at(-1).max_tokens,64000);
+  assert.deepEqual(requests.at(-1).reasoning,{effort:'max'});
+  assert.equal(requests.at(-1).messages.at(-1).content,'Identical full comparison prompt');
+ }finally{apiModel.reasoning=previousReasoning;delete apiModel.bench_policy;}
+});
+
+test('explicit retry sends a one-use local header, keeps maximal effort and uses the reviewed token limit',async()=>{
+ const previous=globalThis.fetch, sent=[];
+ globalThis.fetch=async(url,init)=>{
+  if(url==='/api/openrouter/chat/completions'){
+   sent.push({headers:new Headers(init.headers),body:JSON.parse(init.body)});
+   if(sent.length===1)return Response.json({error:{message:'can only afford 50000',code:402}},{status:402});
+  }
+  return previous(url,init);
+ };
+ const args={modelId:'vendor/model',appTitle:'Prompt Gallery',userPrompt:'manual-credit-retry',generationOptions:{profile:'maximum'}};
+ try{
+  await assert.rejects(adapter.streamChat(args),e=>e.status===402);
+  await adapter.streamChat({...args,generationOptions:{profile:'maximum',reviewedMaxTokens:45000,explicitRetry:'b'.repeat(32)}});
+  assert.equal(sent.length,2);assert.equal(sent[1].headers.get('X-Bench-Retry'),'b'.repeat(32));
+  assert.equal(sent[1].body.max_tokens,45000);assert.equal(sent[1].body.reasoning.effort,'max');
+  assert.equal(sent[1].body.explicitRetry,undefined);
+ }finally{globalThis.fetch=previous;}
 });

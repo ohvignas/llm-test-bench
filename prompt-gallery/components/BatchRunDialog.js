@@ -6,26 +6,32 @@ import { ExecutorModelSelector } from '../../shared/components/ExecutorModelSele
 import { CellEditor } from '../../shared/components/CellEditor.js';
 import { BatchCosts } from './BatchCosts.js';
 import { BatchLiveComparison } from './BatchLiveComparison.js';
+import { BatchActivity } from './BatchActivity.js';
 import { costTotals, formatUsd } from '../services/batchCosts.js';
 import { executionMetrics, formatDuration } from '../services/executionMetrics.js';
 import { BatchGenerationLog } from './BatchGenerationLog.js';
 import { createBatchJournal, logModelKey, safeLogText } from '../services/batchGenerationLog.js';
 import { HtmlLightbox } from './BatchReview.js';
 import { DEFAULT_HTML_BUDGET, restoreGenerationSettings } from '../services/generationBudget.js';
+import { DEFAULT_BATCH_MODE, batchGenerationOptions } from '../services/batchMode.js';
 import {resolveModelSettings} from '../../shared/services/model-capabilities.js';
 import {clearFailedGenerationBlocks} from '../../shared/services/generation-spend-guard.js';
 import {ModelSettingsPanel} from './ModelSettingsPanel.js';
+import {AgentSettings} from './AgentSettings.js';
+import {readAgentLimits} from '../services/agentSettings.js';
 import { batchPromptChoices, setVisibleSelection } from '../services/batchPromptSearch.js';
 import { runBatch } from '../services/batchRunner.js';
+import {retryProposal, manualRetryModel, applyRetrySummaries, createRetryQueue} from '../services/manualRetry.js';
 import { prepareGenerationResume } from '../services/resumeGeneration.js';
 import { progressivePlan } from '../services/progressiveGeneration.js';
 import { getInFlight, subscribeInFlight } from '../../shared/services/generation-telemetry.js';
 import { batchLiveStatus, batchItemRunning } from '../services/batchLiveProgress.js';
-import { PROMPT_SETS, promptSetOf } from '../services/library.js';
+import { PROMPT_SETS, promptSetOf, promptSetLabel } from '../services/library.js';
 import {
   addBatchModel,
   batchModelKey,
   combineSummaries,
+  restoreLaneMode,
   planBatchLanes,
   runLanes,
   snapshotModel,
@@ -34,7 +40,7 @@ import {
 // The multi-model list and lane mode outlive the dialog, so a rerun of the same
 // comparison is one click.
 const MODELS_KEY = 'prompt-gallery-batch-models';
-const LANE_MODE_KEY = 'prompt-gallery-batch-lane-mode';
+const LANE_MODE_KEY = 'prompt-gallery-batch-lane-mode-v2';
 // Keep saved per-model choices; versioned defaults migrate the old economy profile once.
 const SETTINGS_KEY = 'prompt-gallery-model-adaptation-v2';
 
@@ -77,7 +83,7 @@ const STATUS_META = {
 };
 
 export function BatchRunDialog({
-  prompts,               // filtered library prompts available to run
+  prompts,               // Complete merged library, shared with the Prompts page.
   model,                 // { providerId, modelId, label }
   allModels,             // for the in-dialog model picker
   modelsLoading,
@@ -128,23 +134,24 @@ export function BatchRunDialog({
   const [selectedIds, setSelectedIds] = useState(() => new Set());
 
   // Categories filter the library; the launch selection is shared across them.
-  const [promptSet, setPromptSet] = useState('core');
+  const [promptSet, setPromptSet] = useState('all');
   const [promptSearch, setPromptSearch] = useState('');
   const availableSets = useMemo(
-    () => PROMPT_SETS
+    () => [{id:'all', label:'Tous les prompts', icon:'fa-list', count:prompts.length,
+      hint:'Toute la bibliothèque, y compris vos prompts ajoutés et importés'}, ...PROMPT_SETS
       .map(s => ({ ...s, count: prompts.filter(p => promptSetOf(p) === s.id).length }))
-      .filter(s => s.id === 'core' || s.count > 0),
+      .filter(s => s.id === 'core' || s.count > 0)],
     [prompts],
   );
-  const setPrompts = useMemo(() => prompts.filter(p => promptSetOf(p) === promptSet), [prompts, promptSet]);
-  const activeSetMeta = availableSets.find(s => s.id === promptSet);
   const promptChoices = useMemo(() => batchPromptChoices({prompts,setId:promptSet,query:promptSearch,selectedIds}),
     [prompts,promptSet,promptSearch,selectedIds]);
+  const activeSetMeta = availableSets.find(s => s.id === promptChoices.effectiveSet);
   const visiblePrompts = promptChoices.visible;
   const selectedPrompts = useMemo(() => resumeFrom ? [resumeFrom.prompt] : promptChoices.selected, [resumeFrom, promptChoices]);
 
   // Options
-  const [mode, setMode] = useState('automatic');
+  const [mode, setMode] = useState(resumeSource ? 'automatic' : DEFAULT_BATCH_MODE);
+  const [agentLimits,setAgentLimits]=useState(readAgentLimits);
   const [progressive, setProgressive] = useState(true);
   const [healAttempts, setHealAttempts] = useState(1);
   const [maxRepairRounds, setMaxRepairRounds] = useState(1);
@@ -168,7 +175,7 @@ export function BatchRunDialog({
     const stored = readStored(MODELS_KEY, []);
     return Array.isArray(stored) ? stored.filter(m => m?.providerId && m?.modelId) : [];
   });
-  const [laneMode, setLaneMode] = useState(() => (readStored(LANE_MODE_KEY, 'parallel') === 'sequential' ? 'sequential' : 'parallel'));
+  const [laneMode, setLaneMode] = useState(() => restoreLaneMode(readStored(LANE_MODE_KEY, null)));
   useEffect(() => writeStored(MODELS_KEY, batchModels), [batchModels]);
   useEffect(() => writeStored(LANE_MODE_KEY, laneMode), [laneMode]);
 
@@ -182,6 +189,12 @@ export function BatchRunDialog({
   const [fullscreenIndex, setFullscreenIndex] = useState(-1);
   const [fullscreenLoading, setFullscreenLoading] = useState(false);
   const [summary, setSummary] = useState(null);
+  const [retryReview, setRetryReview] = useState(null);
+  const [retryTokens, setRetryTokens] = useState(0);
+  const retryQueueRef = useRef(createRetryQueue());
+  const retrySummariesRef = useRef([]);
+  const mainRunningRef = useRef(false);
+  const configuredModelsRef = useRef([]);
   const [pauseState, setPauseState] = useState('running'); // running | pausing | paused
   const [pauseContext, setPauseContext] = useState(null);
   const [rateClock, setRateClock] = useState(() => Date.now());
@@ -227,8 +240,8 @@ export function BatchRunDialog({
     const isOpenRouter=isOpenRouterModel(selected);
     if(!isOpenRouter)return {model:selected,isOpenRouter:false};
     const api=catalogue.find(m=>(m.modelId||m.id)===selected.modelId)||original;
-    const override=mode==='automatic'?{}:settingsOverrides[batchModelKey(selected)]||{};
-    try {return {model:selected,isOpenRouter:true,settings:resolveModelSettings({model:api,profile:mode==='automatic'?'automatic':settingsProfile,...override,budget:{totalTokens,reasoningTokens,...override}})};}
+    const options=batchGenerationOptions({mode,profile:settingsProfile,override:settingsOverrides[batchModelKey(selected)],budget:{totalTokens,reasoningTokens}});
+    try {return {model:selected,isOpenRouter:true,settings:resolveModelSettings({model:api,...options})};}
     catch(error) {return {model:selected,isOpenRouter:true,error:error.message};}
   });
   const previewReports=settingsReports();
@@ -244,9 +257,9 @@ export function BatchRunDialog({
     if (!skipExisting) return false;
     try { return !!deps.hasExistingForModel?.(prompt, selectedModel); } catch { return false; }
   };
-  const plannedCalls = mode === 'quick' ? runModels.reduce((total, selectedModel) => total + selectedPrompts.reduce((count, prompt) => {
+  const plannedCalls = ['quick','comparison'].includes(mode) ? runModels.reduce((total, selectedModel) => total + selectedPrompts.reduce((count, prompt) => {
     if (shouldSkip(prompt, selectedModel)) return count;
-    return count + (progressive ? progressivePlan(prompt).length || 1 : 1);
+    return count + (mode === 'quick' && progressive ? progressivePlan(prompt).length || 1 : 1);
   }, 0), 0) : null;
   const stageTokenLimit = (stage, report) => {
     const configured = report.settings?.params.max_tokens ?? report.settings?.params.max_completion_tokens;
@@ -288,9 +301,11 @@ export function BatchRunDialog({
 
   useEffect(() => {
     if (phase !== 'running') return;
-    journalRef.current?.observeCalls(liveCalls, rateClock);
+    const contexts = new Map(costCalls.filter(call => call.telemetryId).map(call =>
+      [call.telemetryId, {index:call.index, title:journalRunListRef.current[call.index]?.title}]));
+    journalRef.current?.observeCalls(liveCalls, rateClock, contexts);
     syncJournal();
-  }, [liveCalls, rateClock, phase, syncJournal]);
+  }, [liveCalls, rateClock, phase, syncJournal, costCalls]);
 
   const handleEvent = useCallback((event) => {
     journalRef.current?.event(event, {model:event.model, index:event.index, title:journalRunListRef.current[event.index]?.title});
@@ -413,12 +428,17 @@ export function BatchRunDialog({
     } catch(error) {startingRef.current=false;if(mountedRef.current)addToast(error.message,'error');return;}
     const configured=reports.map(report=>{
       if(!report.isOpenRouter)return report.model;
-      const override=mode==='automatic'?{}:settingsOverrides[batchModelKey(report.model)]||{};
+      const options=batchGenerationOptions({mode,profile:settingsProfile,override:settingsOverrides[batchModelKey(report.model)],budget:{totalTokens,reasoningTokens}});
       const shown=previewReports.find(r=>batchModelKey(r.model)===batchModelKey(report.model))?.settings;
-      return {...report.model,generationOptions:{profile:mode==='automatic'?'automatic':settingsProfile,...override,budget:{totalTokens,reasoningTokens,...override},
+      return {...report.model,generationOptions:{...options,
+        ...(mode==='agent'?{agentLimits}:{}),
         reviewedMaxTokens:shown?.params.max_tokens??shown?.params.max_completion_tokens??report.settings.params.max_tokens??report.settings.params.max_completion_tokens}};
     });
     const plan = planBatchLanes({ prompts: list, models: configured, runId });
+    configuredModelsRef.current = plan.lanes.map(lane => lane.model);
+    retrySummariesRef.current = [];
+    setRetryReview(null);
+    mainRunningRef.current = true;
     const startedAt = Date.now();
     journalStartedAtRef.current = startedAt;
     setBatchFinishedAt(null);
@@ -450,8 +470,8 @@ export function BatchRunDialog({
     setPauseContext(null);
     setPhase('running');
 
-    // Each lane is one model over the whole list, reporting into its own slice
-    // of the run list. Its 'done' is held back: the summary covers every lane.
+    // A task is one prompt or a model's whole list, depending on concurrency.
+    // Its events retain their absolute positions in the model-grouped list.
     let safetyTripped=false;
     const runOne = async (lane, { shouldStop, onFailure }) => {
       runningLanesRef.current += 1;
@@ -507,15 +527,21 @@ export function BatchRunDialog({
         shouldStop: () => stopRef.current, stopOnFailure: spendProtection,
         onFailure: (lane) => {
           safetyTripped = true;
-          journalRef.current?.event({type:'control',message:`Protection des dépenses : arrêt des nouveaux appels pour ${lane.model.label || lane.model.modelId}. Les autres modèles continuent. Les résultats enregistrés peuvent être repris.`});
+          const scope = laneMode === 'all-parallel'
+            ? `${lane.prompts[0].title} · ${lane.model.label || lane.model.modelId}. Les autres projets et modèles continuent.`
+            : `${lane.model.label || lane.model.modelId}. Les autres modèles continuent.`;
+          journalRef.current?.event({type:'control',message:`Protection des dépenses : arrêt des nouveaux appels pour ${scope} Les résultats enregistrés peuvent être repris.`});
           syncJournal();
         },
       });
-      setSummary({...combineSummaries(summaries.filter(Boolean)),protectionStopped:safetyTripped});
-      setItems(rows=>rows.map(row=>row.status==='queued'?{...row,status:'not-started'}:row));
+      setSummary(applyRetrySummaries({...combineSummaries(summaries.filter(Boolean)),protectionStopped:safetyTripped}, retrySummariesRef.current));
+      setItems(rows=>rows.map((row,index)=>row.status==='queued' && !retryQueueRef.current.has(index)?{...row,status:'not-started'}:row));
     } catch (e) {
       addToast('Erreur d’exécution par lot : ' + e.message, 'error');
     } finally {
+      mainRunningRef.current = false;
+      startingRef.current=false;
+      if (retryQueueRef.current.size === 0) {
       pauseRequestedRef.current = false;
       releasePaused();
       setPauseState('running');
@@ -523,10 +549,10 @@ export function BatchRunDialog({
       setActiveIndex(-1);
       setBatchFinishedAt(Date.now());
       setPhase('done');
-      startingRef.current=false;
+      }
     }
   }, [canRun, hasDirectory, selectedPrompts, runModels, laneMode, mode, progressive, healAttempts, maxRepairRounds, saveBothOnHeal,
-      skipExisting, delaySec, apiRetries, spendProtection, totalTokens, reasoningTokens, settingsProfile, settingsOverrides, apiCatalogue, allModels, showLiveOutput, runId, deps, refreshCapabilities, handleEvent, waitAtPauseBoundary, addToast, resumeFrom]);
+      skipExisting, delaySec, apiRetries, spendProtection, agentLimits, totalTokens, reasoningTokens, settingsProfile, settingsOverrides, apiCatalogue, allModels, showLiveOutput, runId, deps, refreshCapabilities, handleEvent, waitAtPauseBoundary, addToast, resumeFrom]);
 
   const pause = useCallback(() => {
     if (pauseRequestedRef.current || stopRef.current) return;
@@ -583,7 +609,8 @@ export function BatchRunDialog({
   const rowTitle = (p) => (p ? (runIsMulti && p.modelLabel ? `${p.title} · ${p.modelLabel}` : p.title) : '');
   const inspectedTitle = inspectedIndex >= 0 ? rowTitle(runList[inspectedIndex]) : '';
   const liveStatus = inspectedIndex >= 0
-    ? batchLiveStatus(liveCalls, runModels[runList[inspectedIndex]?.laneIndex ?? 0], rateClock) : null;
+    ? batchLiveStatus(liveCalls, runModels[runList[inspectedIndex]?.laneIndex ?? 0], rateClock,
+      costCalls.filter(call => call.index === inspectedIndex).map(call => call.telemetryId).filter(Boolean)) : null;
   const fullscreenHtml = fullscreenIndex >= 0 ? (outputs[fullscreenIndex] || '') : '';
   const fullscreenTitle = fullscreenIndex >= 0 ? (rowTitle(runList[fullscreenIndex]) || 'Generation') : '';
   const fullscreenIsActive = phase === 'running' && batchItemRunning(items[fullscreenIndex]);
@@ -600,7 +627,7 @@ export function BatchRunDialog({
   }, [phase]);
 
   const inspectOutput = useCallback((index) => {
-    if (index < 0 || (!outputs[index] && !batchItemRunning(items[index]))) return;
+    if (index < 0 || (!outputs[index] && !batchItemRunning(items[index]) && items[index]?.status !== 'error')) return;
     followActiveRef.current = index === activeIndexRef.current;
     setInspectedIndex(index);
     const item = journalRunListRef.current[index];
@@ -668,18 +695,79 @@ export function BatchRunDialog({
     } catch (error) { addToast(error.message, 'error'); }
   };
   const prepareNewRun = () => {
+    setRetryReview(null);
     setResumeFrom(null);
-    setMode('automatic');
+    setMode(DEFAULT_BATCH_MODE);
     setPhase('config');
     onRestore?.();
   };
-  const prepareRetry = index => {
-    const prompt = runList[index], selectedModel = logModels[prompt.laneIndex || 0];
-    setResumeFrom(null); setBatchModels([selectedModel]);
-    setSelectedIds(new Set([prompt.id])); setPromptSet(promptSetOf(prompt));
-    setPromptSearch(''); setSkipExisting(false); setMode('automatic'); setPhase('config'); onRestore?.();
-    addToast('Reprise automatique préparée pour ce modèle uniquement ; aucun appel envoyé avant le lancement.', 'info');
+
+  const reviewRetry = index => {
+    const item = items[index];
+    if (!item || !['error','stopped','not-started'].includes(item.status) || retryQueueRef.current.has(index)) return;
+    const selectedModel = configuredModelsRef.current[runList[index].laneIndex || 0];
+    const report = outputStats[index]?.settings;
+    const maximum = selectedModel?.generationOptions?.reviewedMaxTokens || report?.maxOutputTokens || 128000;
+    const proposal = retryProposal(item.message, maximum);
+    setRetryTokens(proposal.maximum);
+    setRetryReview({index, ...proposal});
+    onRestore?.();
   };
+
+  const launchRetry = async () => {
+    if (!retryReview) return;
+    const {index, maximum} = retryReview;
+    const previous = items[index];
+    if (!previous || !['error','stopped','not-started'].includes(previous.status) || retryQueueRef.current.has(index)) return;
+    let selectedModel;
+    try {
+      selectedModel = manualRetryModel(configuredModelsRef.current[runList[index].laneIndex || 0], Number(retryTokens), maximum, crypto.randomUUID().replaceAll('-', ''));
+    } catch (error) { addToast(error.message, 'error'); return; }
+    setRetryReview(null);
+    if (phase !== 'running') {
+      stopRef.current = false;
+      deps.beginRun?.();
+    }
+    setPhase('running'); setBatchFinishedAt(null);
+    setItems(rows => rows.map((row, i) => i === index ? {...row, status:'queued', message:''} : row));
+    journalRef.current?.event({type:'control',message:`Relance manuelle de ${selectedModel.label || selectedModel.modelId} · ${runList[index].title} · effort maximal · plafond ${retryTokens} tokens · un seul appel.`});
+    syncJournal();
+    try {
+      await retryQueueRef.current.run(index, async () => {
+        runningLanesRef.current++;
+        try {
+          const result = await runBatch({prompts:[runList[index]], model:selectedModel,
+            options:{mode:'comparison', progressive:false, apiRetries:0, skipExisting:false, runId:selectedModel.batchRunId}, deps,
+            shouldStop:() => stopRef.current, shouldPause:() => pauseRequestedRef.current, waitIfPaused:waitAtPauseBoundary,
+            onEvent:event => {if (event.type !== 'done') handleEvent({...event, model:selectedModel, index});}});
+          const adjustment = {result, wasError:previous.status === 'error'};
+          retrySummariesRef.current.push(adjustment);
+          if (!mainRunningRef.current) setSummary(current => applyRetrySummaries(current, [adjustment]));
+        } catch(error) {
+          handleEvent({type:'item', status:'error', index, model:selectedModel, message:error.message});
+        } finally { runningLanesRef.current--; }
+      });
+    } finally {
+      if (!mainRunningRef.current && retryQueueRef.current.size === 0) {
+        pauseRequestedRef.current=false; releasePaused(); setPauseState('running');
+        setActiveIndex(-1); setBatchFinishedAt(Date.now()); setPhase('done');
+      }
+    }
+  };
+
+  const retryAllowed = index => !items[index]?.savedIds?.length && ['error','stopped','not-started'].includes(items[index]?.status);
+  const renderRetryReview = () => retryReview && html`<section class="batch-retry-review" aria-label="Relancer une génération">
+    <strong>Relancer ce modèle · ${runList[retryReview.index]?.modelLabel}</strong>
+    <p>${runList[retryReview.index]?.title}</p>
+    <p class="batch-error-detail">${items[retryReview.index]?.message}</p>
+    ${retryReview.affordable && html`<p>Crédit insuffisant pour ${retryReview.maximum.toLocaleString('fr-FR')} tokens. OpenRouter annonçait ${retryReview.affordable.toLocaleString('fr-FR')} tokens possibles ; après recharge, gardez le plafond maximal. Le solde peut changer pendant les autres appels.</p><button class="btn btn-sm" onClick=${()=>setRetryTokens(retryReview.recommended)}>Adapter au dernier crédit annoncé (marge de 5 %)</button>`}
+    <label>Plafond de sortie de cette relance (raisonnement compris)
+      <input class="form-input" type="number" min="256" max=${retryReview.maximum} value=${retryTokens} onInput=${event=>setRetryTokens(event.target.value)} />
+    </label>
+    <p>Effort maximal conservé. Un seul appel pour cette ligne ; les autres modèles et résultats sont conservés. Cette relance peut être facturée.</p>
+    <div class="batch-output-tabs"><button class="btn" onClick=${()=>setRetryReview(null)}>Annuler la relance</button>
+      <button class="btn btn-primary" onClick=${launchRetry}>Confirmer et relancer ce modèle</button></div>
+  </section>`;
 
   // ── Renderers ──
 
@@ -742,18 +830,21 @@ export function BatchRunDialog({
               `)}
             </div>
           `}
-        ${isMulti && html`
-          <div class="batch-options batch-lane-modes" role="radiogroup" aria-label="Mode d’exécution des modèles">
+          <div class="batch-options batch-lane-modes" role="radiogroup" aria-label="Mode d’exécution des projets et modèles">
+            <label class="batch-opt batch-mode-opt">
+              <input type="radio" name="batch-lane-mode" value="all-parallel" checked=${laneMode === 'all-parallel'} onChange=${() => setLaneMode('all-parallel')} />
+              <span><strong>Tous les projets et modèles simultanément</strong><small>Chaque prompt démarre sur chaque modèle sans attendre les autres projets. Les réglages de qualité restent identiques.</small></span>
+            </label>
             <label class="batch-opt batch-mode-opt">
               <input type="radio" name="batch-lane-mode" value="parallel" checked=${laneMode === 'parallel'} onChange=${() => setLaneMode('parallel')} />
-              <span><strong>Simultanément</strong><small>Tous les modèles traitent la liste en parallèle. Plus rapide pour les agents CLI et les modèles hébergés.</small></span>
+              <span><strong>Modèles simultanés, projets successifs</strong><small>Chaque modèle traite un seul prompt à la fois, puis passe au suivant.</small></span>
             </label>
             <label class="batch-opt batch-mode-opt">
               <input type="radio" name="batch-lane-mode" value="sequential" checked=${laneMode === 'sequential'} onChange=${() => setLaneMode('sequential')} />
               <span><strong>L’un après l’autre</strong><small>Terminer un modèle avant le suivant. Utile lorsque les modèles partagent le même GPU local.</small></span>
             </label>
           </div>
-        `}
+          ${laneMode === 'all-parallel' && html`<div class="batch-note">${selectedPrompts.length * runModels.length} génération(s) prévue(s) en parallèle. Les limites de connexion du navigateur et du fournisseur peuvent mettre des requêtes en attente.</div>`}
         ${isMulti && html`<div class="batch-note"><i class="fa-solid fa-layer-group"></i> Chaque modèle est enregistré dans une exécution distincte, regroupée dans Exécutions pour la comparaison.</div>`}
       </div>
 
@@ -779,35 +870,35 @@ export function BatchRunDialog({
               <button
                 key=${s.id}
                 type="button"
-                class=${`library-cat-chip ${promptSet === s.id ? 'active' : ''}`}
-                aria-pressed=${promptSet === s.id}
+                class=${`library-cat-chip ${promptChoices.effectiveSet === s.id ? 'active' : ''}`}
+                aria-pressed=${promptChoices.effectiveSet === s.id}
                 title=${s.hint}
-                onClick=${() => setPromptSet(s.id)}
-              ><i class=${`fa-solid ${s.icon}`}></i>${s.label}<span class="batch-set-count">${promptChoices.selectedBySet[s.id]||0}/${s.count}</span></button>
+                onClick=${() => {setPromptSet(s.id);setPromptSearch('');}}
+              ><i class=${`fa-solid ${s.icon}`}></i>${s.label}<span class="batch-set-count">${s.id === 'all' ? selectedCount : promptChoices.selectedBySet[s.id]||0}/${s.count}</span></button>
             `)}
             ${activeSetMeta?.hint && html`<span class="batch-set-hint">${activeSetMeta.hint}. Vous pouvez réunir plusieurs catégories dans le même lot.</span>`}
           </div>
         `}
         <div class="batch-prompt-search">
-          <label for="batch-prompt-search">Rechercher un prompt</label>
+          <label for="batch-prompt-search">Rechercher dans tous les prompts</label>
           <div class="batch-prompt-search-input">
             <input id="batch-prompt-search" class="form-input" type="search" value=${promptSearch} maxLength="200"
               placeholder="Titre, nom d’origine, description ou étiquette…" onInput=${e => setPromptSearch(e.target.value)} />
             ${promptSearch && html`<button class="btn btn-sm" onClick=${() => setPromptSearch('')}>Effacer la recherche</button>`}
           </div>
-          ${promptSearch.trim() && html`<div class="batch-search-summary" role="status">${visiblePrompts.length} résultat(s) dans ${activeSetMeta?.label || 'cette série'}, sur ${setPrompts.length} prompts. La recherche ne modifie pas la sélection du lot.</div>`}
+          <div class="batch-search-summary" role="status">${promptSearch.trim()
+            ? `${visiblePrompts.length} résultat(s) dans toute la bibliothèque (${prompts.length} prompts).`
+            : `${visiblePrompts.length} prompt(s) affiché(s) sur ${prompts.length} dans la bibliothèque${promptChoices.effectiveSet === 'all' ? '.' : ` · filtre : ${activeSetMeta?.label || promptSet}.`}`}
+            ${' '}La sélection du lot est conservée quand vous changez de filtre.</div>
         </div>
         <div class="batch-prompt-list">
           ${visiblePrompts.length === 0
-            ? html`<div class="batch-empty">${promptSearch.trim() ? 'Aucun résultat dans cette série.' : 'Aucun prompt à exécuter dans cette série.'}
-                ${promptSearch.trim() && availableSets.filter(s => s.id !== promptSet && promptChoices.matchingSets[s.id]).map(s => html`
-                  <button key=${s.id} class="btn btn-sm" onClick=${() => setPromptSet(s.id)}>Voir ${promptChoices.matchingSets[s.id]} résultat(s) dans ${s.label}</button>
-                `)}
-              </div>`
+            ? html`<div class="batch-empty">${promptSearch.trim() ? 'Aucun résultat dans la bibliothèque.' : 'Aucun prompt à exécuter dans cette série.'}</div>`
             : visiblePrompts.map(p => html`
               <label class="batch-prompt-row" key=${p.id}>
-                <input type="checkbox" checked=${selectedIds.has(p.id)} onChange=${() => toggleOne(p.id)} />
+                <input type="checkbox" aria-label=${p.title} checked=${selectedIds.has(p.id)} onChange=${() => toggleOne(p.id)} />
                 <span class="batch-prompt-title" title=${p.title}>${p.title}</span>
+                ${promptChoices.effectiveSet === 'all' && html`<span class="batch-prompt-badge">${promptSetLabel(promptSetOf(p))}</span>`}
                 ${!isMulti && runModels[0] && (() => { try { return deps.hasExistingForModel?.(p, runModels[0]); } catch (e) { return false; } })()
                   ? html`<span class="batch-prompt-badge" title="Dispose déjà d’une génération pour ce modèle">déjà exécuté</span>`
                   : null}
@@ -823,22 +914,37 @@ export function BatchRunDialog({
         <div class="batch-section-head"><strong>Sélection du lot : ${selectedCount} prompt(s)</strong>
           <button class="btn btn-xs" disabled=${!selectedCount} onClick=${()=>setSelectedIds(new Set())}>Vider la sélection</button></div>
         ${selectedCount?html`<p>Tous les prompts ci-dessous seront exécutés, quelle que soit la catégorie ou la recherche affichée.</p>
-          <ul>${selectedPrompts.map(p=>html`<li key=${p.id}><span class="batch-selection-set">${PROMPT_SETS.find(set=>set.id===promptSetOf(p))?.label||'Base'}</span><span>${p.title}</span>
+          <ul>${selectedPrompts.map(p=>html`<li key=${p.id}><span class="batch-selection-set">${promptSetLabel(promptSetOf(p))}</span><span>${p.title}</span>
             <button class="btn btn-xs" aria-label=${`Retirer ${p.title} de la sélection`} onClick=${()=>toggleOne(p.id)}>Retirer</button></li>`)}</ul>`
-          :html`<p>Cochez les prompts à tester. Vous pouvez en choisir dans Base, Avancés, Sites web et Simulations complexes.</p>`}
+          :html`<p>Cochez les prompts à tester dans la bibliothèque complète ou recherchez-les par titre et description. Vous pouvez mélanger toutes les séries.</p>`}
       </section>
 
       `}
       <div class="batch-section">
         <div class="batch-section-head"><span><i class="fa-solid fa-wand-magic-sparkles"></i> Mode de génération</span></div>
         <div class="batch-options">
+          ${!resumeFrom&&html`<label class="batch-opt batch-mode-opt">
+            <input type="radio" name="batch-mode" value="agent" checked=${mode==='agent'} onChange=${()=>setMode('agent')}/>
+            <span><strong>Agent Mastra — créer, construire et corriger</strong><small>Un agent indépendant par prompt et modèle, avec les mêmes outils et limites pour comparer les résultats.</small></span>
+          </label>`}
+          ${mode==='agent'&&html`<${AgentSettings} value=${agentLimits} onChange=${setAgentLimits}/><p class="batch-opt-hint">Maximum du lot : ${selectedCount*runModels.length*agentLimits.maxSteps} appels et ${(selectedCount*runModels.length*agentLimits.budgetUsd).toLocaleString('fr-FR')} $US. Ce sont des plafonds ; le total facturé est celui communiqué par OpenRouter. Les réglages effectifs de chaque modèle figurent ci-dessous.</p>`}
+          ${mode==='agent'&&runModels.some(m=>!isOpenRouterModel(m))&&html`<p class="bench-inline-error">L’agent Mastra utilise OpenRouter dans cette version Docker. Retirez les fournisseurs locaux de ce lot ou choisissez un mode de génération classique.</p>`}
+          ${!resumeFrom && html`<label class="batch-opt batch-mode-opt">
+            <input type="radio" name="batch-mode" value="comparison" checked=${mode === 'comparison'} onChange=${() => setMode('comparison')} />
+            <span><strong>Comparaison — capacité maximale</strong><small>Prompt complet identique, sortie maximale et effort le plus élevé accepté par chaque modèle. Un seul appel par prompt et modèle.</small></span>
+          </label>`}
+          ${mode === 'comparison' && html`<section class="batch-prompt-selection" aria-label="Protocole de comparaison">
+            <strong>Évaluer le résultat initial de chaque modèle à son effort maximal.</strong>
+            <p>Les anciens réglages économes et les réductions apprises après un échec ne sont pas appliqués. Le prompt reste complet : aucune construction par étapes, correction ou relance automatique. Le code reçu est enregistré pour être évalué.</p>
+            <p>${laneMode === 'all-parallel' ? 'Tous les prompts démarrent sur tous les modèles sans attendre la fin des autres projets.' : laneMode === 'parallel' ? 'Les modèles démarrent ensemble ; chaque modèle termine un prompt avant le suivant.' : 'Les modèles et leurs prompts passent l’un après l’autre.'} Le nombre de générations simultanées ne modifie pas l’effort demandé.</p>
+          </section>`}
           <label class="batch-opt batch-mode-opt">
             <input type="radio" name="batch-mode" value="automatic" checked=${mode === 'automatic'} onChange=${() => setMode('automatic')} />
-            <span><strong>Automatique — puissance et reprise</strong><small>Réglages puissants adaptés à l’API, vérification du code et reprises selon l’erreur. Pour tous les prompts.</small></span>
+            <span><strong>Automatique — reprises adaptatives</strong><small>Vérification du code et reprises selon l’erreur. L’effort peut être réduit selon les échecs précédents.</small></span>
           </label>
           ${mode === 'automatic' && html`<section class="batch-prompt-selection" aria-label="Fonctionnement automatique">
             <strong>Choisis tes modèles et tes prompts, puis lance le lot.</strong>
-            <p>Sortie maximale annoncée par OpenRouter et effort très élevé lorsque disponible. Si le raisonnement épuise la sortie, l’effort est réduit pour la reprise. Si du code existe, il sert de point de départ aux corrections.</p>
+            <p>Sortie maximale annoncée par OpenRouter. L’effort tient compte des échecs déjà observés et peut être faible dès le premier appel. Si le raisonnement épuise la sortie, l’effort peut être réduit pour la reprise. Si du code existe, il sert de point de départ aux corrections.</p>
             <p><strong>Maximum 3 appels par prompt et modèle, corrections et relances comprises.</strong> Chaque appel peut être facturé. Saturation ou coupure : attente et reprise. Erreur de clé, crédit insuffisant ou filtrage : arrêt expliqué. Aucun changement de modèle. Les autres modèles continuent.</p>
             <p>La vérification automatique détecte les erreurs du bac à sable ; elle ne certifie pas toutes les fonctionnalités ni la qualité visuelle. Chaque adaptation et son coût sont consignés dans le journal.</p>
           </section>`}
@@ -909,24 +1015,25 @@ export function BatchRunDialog({
           ${mode !== 'automatic' && html`
           <label class="batch-opt">
             <span>Nouvelles tentatives après erreur de connexion</span>
-            <select class="form-input batch-num" disabled=${spendProtection} value=${spendProtection?0:apiRetries} onChange=${(e) => setApiRetries(Number(e.target.value))}>
+            <select class="form-input batch-num" disabled=${spendProtection || mode === 'comparison'} value=${spendProtection || mode === 'comparison'?0:apiRetries} onChange=${(e) => setApiRetries(Number(e.target.value))}>
               ${[0, 1, 2, 3].map(n => html`<option key=${n} value=${n}>${n}</option>`)}
             </select>
           </label>
           <div class="batch-opt-hint">Les nouvelles tentatives sont désactivées par défaut. Une réponse vide ou incomplète ne sera jamais relancée automatiquement.</div>
-          <label class="batch-opt"><input type="checkbox" checked=${spendProtection} onChange=${e=>setSpendProtection(e.target.checked)}/><span>Protection des dépenses : arrêter uniquement le modèle en échec, sans nouvelle tentative automatique</span></label>
-          ${spendProtection && isMulti && laneMode === 'parallel' && html`<div class="batch-note">Les autres modèles continuent leurs générations, vérifications et corrections. Les versions déjà enregistrées sont conservées.</div>`}
+          <label class="batch-opt"><input type="checkbox" checked=${spendProtection} onChange=${e=>setSpendProtection(e.target.checked)}/><span>Protection des dépenses : arrêter uniquement ${laneMode === 'all-parallel' ? 'le projet du modèle' : 'le modèle'} en échec, sans nouvelle tentative automatique</span></label>
+          ${spendProtection && laneMode !== 'sequential' && html`<div class="batch-note">Les autres ${laneMode === 'all-parallel' ? 'projets et modèles' : 'modèles'} continuent leurs générations, vérifications et corrections. Les versions déjà enregistrées sont conservées.</div>`}
           <p class="batch-opt-hint">Un appel interrompu, vide ou filtré peut rester facturé. Les coûts affichés viennent de l’API. Les relances après un échec sont bloquées dans ce navigateur et dans le serveur local, même après actualisation.</p>
           <button class="btn btn-sm" onClick=${async()=>{try{await clearFailedGenerationBlocks();addToast('Relances autorisées : un nouvel appel pourra être facturé.','info');}catch(error){addToast(error.message,'error');}}}>Autoriser les relances après échec (nouveau coût possible)</button>
-          <label class="batch-opt"><span>Adaptation aux capacités API</span>
+          ${mode !== 'comparison' && html`<label class="batch-opt"><span>Adaptation aux capacités API</span>
             <select class="form-input" value=${settingsProfile} onChange=${e=>{setSettingsProfile(e.target.value);setSettingsOverrides({});}}>
               <option value="benchmark">Comparaison — sortie maximale et effort très élevé</option><option value="maximum">Effort maximal — risque de coût élevé</option><option value="code">Économe — sortie limitée et raisonnement réduit</option><option value="manual">Budget personnalisé — plafonné par l’API</option>
             </select></label>
           <p class="batch-opt-hint">Le profil Comparaison utilise la sortie maximale de chaque modèle et un effort très élevé, ou élevé selon les capacités API. Le profil Effort maximal utilise le niveau le plus élevé annoncé. Le profil Économe réduit le raisonnement et la sortie. Les réglages effectifs sont affichés ci-dessous ; les modèles peuvent avoir des limites différentes. Un plafond élevé autorise des appels plus longs et plus coûteux sans imposer de tout consommer. Aucun appel payant n’est lancé par l’actualisation.</p>
           ${settingsProfile==='manual'&&html`<label class="batch-opt"><span>Budget total demandé par appel</span><input class="form-input" type="number" min="1" value=${totalTokens} onInput=${e=>{const value=Number(e.target.value);if(Number.isSafeInteger(value)&&value>0)setTotalTokens(value);}}/></label>
             <label class="batch-opt"><span>Budget de raisonnement demandé (si l’API l’accepte)</span><input class="form-input" type="number" min="1" value=${reasoningTokens} onInput=${e=>{const value=Number(e.target.value);if(Number.isSafeInteger(value)&&value>0)setReasoningTokens(value);}}/></label>`}
-          ${progressiveActive && html`<p class="batch-opt-hint">Les étapes GTA VI respectent le profil Comparaison, Effort maximal ou les réglages personnalisés ci-dessous. Le plafond réduit par étape s’applique uniquement au profil Économe. La construction par étapes change le protocole : utilisez le même mode pour tous les modèles comparés.</p>`}
+          ${progressiveActive && html`<p class="batch-opt-hint">Les étapes GTA VI respectent le profil Comparaison, Effort maximal ou les réglages personnalisés ci-dessous. Le plafond réduit par étape s’applique uniquement au profil Économe. La construction par étapes change le protocole : utilisez le même mode pour tous les modèles comparés.</p>`}`}
           <${ModelSettingsPanel} reports=${previewReports} loading=${settingsLoading} error=${settingsError}
+            readOnly=${mode === 'comparison'}
             onRefresh=${()=>refreshCapabilities().catch(()=>{})} onOverride=${overrideSettings} onReset=${()=>setSettingsOverrides({})}/>
           `}
           ${mode === 'automatic' && html`<details><summary>Réglages initiaux des modèles</summary>
@@ -944,8 +1051,8 @@ export function BatchRunDialog({
 
     <div class="modal-footer">
       <button class="btn" onClick=${onClose}>Annuler</button>
-      <button class="btn btn-primary btn-generate" onClick=${start} disabled=${!canRun || !hasDirectory || selectedCount === 0 || settingsLoading || previewReports.some(r=>r.error)}>
-        <i class="fa-solid fa-play"></i> ${resumeFrom ? 'Reprendre' : 'Lancer'} ${selectedCount} prompt${selectedCount === 1 ? '' : 's'}${isMulti ? ` × ${runModels.length} modèles` : ''}${mode==='automatic'?` · jusqu’à ${selectedCount*runModels.length*3} appels`:plannedCalls !== null ? ` · ${plannedCalls} appel${plannedCalls === 1 ? '' : 's'} prévu${plannedCalls === 1 ? '' : 's'}` : ''}
+      <button class="btn btn-primary btn-generate" onClick=${start} disabled=${!canRun || !hasDirectory || selectedCount === 0 || settingsLoading || previewReports.some(r=>r.error)||(mode==='agent'&&runModels.some(m=>!isOpenRouterModel(m)))}>
+        <i class="fa-solid fa-play"></i> ${resumeFrom ? 'Reprendre' : 'Lancer'} ${selectedCount} prompt${selectedCount === 1 ? '' : 's'}${isMulti ? ` × ${runModels.length} modèles` : ''}${mode==='agent'?` · agents Mastra`:mode==='automatic'?` · jusqu’à ${selectedCount*runModels.length*3} appels`:plannedCalls !== null ? ` · ${plannedCalls} appel${plannedCalls === 1 ? '' : 's'} prévu${plannedCalls === 1 ? '' : 's'}` : ''}
       </button>
     </div>
   `;
@@ -1003,7 +1110,8 @@ export function BatchRunDialog({
       </div>
 
       <${BatchCosts} calls=${costCalls} startedAt=${journalStartedAtRef.current} />
-      ${runIsMulti && html`<div class="batch-note">${laneMode==='sequential'?'Les modèles passent l’un après l’autre.':'Les modèles tournent en parallèle.'} Sélectionnez une ligne pour changer l’aperçu et le flux HTML affichés.</div>`}
+      ${renderRetryReview()}
+      <div class="batch-note">${laneMode === 'all-parallel' ? 'Les projets et les modèles tournent en parallèle.' : laneMode === 'sequential' ? 'Les modèles passent l’un après l’autre.' : 'Les modèles tournent en parallèle ; leurs projets passent l’un après l’autre.'} Sélectionnez une ligne pour changer l’aperçu et le flux HTML affichés.</div>
 
       ${pauseState !== 'running' && html`
         <div class=${`batch-pause-state ${pauseState}`} role="status" aria-live="polite">
@@ -1028,10 +1136,11 @@ export function BatchRunDialog({
             const m = STATUS_META[it.status] || STATUS_META.queued;
             const isActive = batchItemRunning(it);
             const isInspected = idx === inspectedIndex;
-            const canInspect = showLiveOutput && (!!outputs[idx] || isActive);
+            const canInspect = it.status === 'error' || showLiveOutput && (!!outputs[idx] || isActive);
             const canOpenFullscreen = isActive || !!outputs[idx] || !!it.savedIds?.length;
             const rowLive = it.status === 'generating'
-              ? batchLiveStatus(liveCalls, runModels[p.laneIndex ?? 0], rateClock) : null;
+              ? batchLiveStatus(liveCalls, runModels[p.laneIndex ?? 0], rateClock,
+                costCalls.filter(call => call.index === idx).map(call => call.telemetryId).filter(Boolean)) : null;
             return html`
               <div
                 class=${`batch-run-item ${m.cls} ${isActive ? 'is-active' : ''} ${isInspected ? 'is-inspected' : ''} ${canInspect ? 'is-inspectable' : ''}`}
@@ -1039,7 +1148,7 @@ export function BatchRunDialog({
                 role=${canInspect ? 'button' : undefined}
                 tabIndex=${canInspect ? 0 : undefined}
                 aria-current=${isInspected ? 'true' : undefined}
-                title=${canInspect ? (isActive ? 'Voir la génération en direct' : 'Examiner cette génération pendant l’exécution du lot') : ''}
+                title=${it.status === 'error' ? it.message : canInspect ? (isActive ? 'Voir la génération en direct' : 'Examiner cette génération pendant l’exécution du lot') : ''}
                 onClick=${canInspect ? () => inspectOutput(idx) : undefined}
                 onKeyDown=${canInspect ? (event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -1063,10 +1172,12 @@ export function BatchRunDialog({
                       <i class="fa-solid fa-expand"></i>
                     </button>` : null}
                 </span>
+                ${retryAllowed(idx) && html`<button class="btn btn-xs" onClick=${event=>{event.stopPropagation();reviewRetry(idx);}}>Relancer ce modèle</button>`}
               </div>
             `;
           })}
           <div ref=${listEndRef}></div>
+          ${items[inspectedIndex]?.status === 'error' && html`<p class="batch-error-detail" role="alert">${items[inspectedIndex].message}</p>`}
         </div>
         ${outputView === 'log' ? renderJournal() : showLiveOutput
           ? html`
@@ -1105,6 +1216,9 @@ export function BatchRunDialog({
       </div>
 
       ${outputView === 'preview' && showLiveOutput && html`
+        <${BatchActivity} model=${runModels[runList[inspectedIndex]?.laneIndex ?? 0]} index=${inspectedIndex}
+          calls=${costCalls.filter(call => call.index === inspectedIndex)} liveCalls=${liveCalls} entries=${logEntries} now=${rateClock}
+          statusLabel=${liveStatus?.label || STATUS_META[items[inspectedIndex]?.status]?.label || 'En attente'}/>
         <section class="batch-code-stream" aria-label="Sortie HTML en direct">
           <div class="batch-code-stream-head">
             <span><i class="fa-solid fa-code"></i> ${viewingActive && pauseState === 'running' ? 'Flux HTML en direct' : 'HTML généré'}${inspectedTitle ? ` · ${inspectedTitle}` : ''}</span>
@@ -1150,10 +1264,11 @@ export function BatchRunDialog({
             <span><strong>${summary?.repairRounds || 0}</strong> cycles de correction</span>
           </div>
         ` : null}
-        ${summary?.stopped ? html`<div class="batch-note"><i class="fa-solid fa-hand"></i> ${summary.protectionStopped?'Protection des dépenses : les modèles en échec ont été arrêtés indépendamment. Les autres ont pu continuer. Les résultats enregistrés restent disponibles.':'Exécution interrompue.'}</div>` : null}
+        ${summary?.stopped ? html`<div class="batch-note"><i class="fa-solid fa-hand"></i> ${summary.protectionStopped?'Protection des dépenses : les tâches en échec ont été arrêtées indépendamment. Les autres ont pu continuer. Les résultats enregistrés restent disponibles.':'Exécution interrompue.'}</div>` : null}
       </div>
 
       <${BatchCosts} calls=${costCalls} done=${true} startedAt=${journalStartedAtRef.current} finishedAt=${batchFinishedAt} />
+      ${renderRetryReview()}
       <div class="batch-run-list batch-run-list-done">
         ${runList.map((p, idx) => {
           const it = items[idx] || { status: 'queued' };
@@ -1173,7 +1288,7 @@ export function BatchRunDialog({
                   <button class="btn btn-xs" onClick=${() => prepareResume(idx)}>Reprendre / corriger</button>
                   <button class="batch-fullscreen-button" title="Ouvrir la génération interactive en plein écran"
                     onClick=${() => openFullscreen(idx)}><i class="fa-solid fa-expand"></i></button>` : null}
-                ${!it.savedIds?.length && ['error','stopped','not-started'].includes(it.status) && html`<button class="btn btn-xs" onClick=${() => prepareRetry(idx)}>Préparer un nouvel essai</button>`}
+                ${retryAllowed(idx) && html`<button class="btn btn-xs" onClick=${() => reviewRetry(idx)}>Relancer ce modèle</button>`}
               </span>
             </div>
           `;
@@ -1216,9 +1331,10 @@ export function BatchRunDialog({
         <summary>Durée du lot : ${formatDuration(timing.elapsedMs)} · ${totals.requestCount} appel(s) API · Total confirmé : ${confirmedCost} · Détails</summary>
         <${BatchCosts} calls=${costCalls} done=${phase === 'done'} startedAt=${journalStartedAtRef.current} finishedAt=${batchFinishedAt}/>
       </details>
+      ${renderRetryReview()}
       <${BatchLiveComparison} models=${logModels} runList=${runList} items=${items} outputs=${outputs} costCalls=${costCalls}
-        liveCalls=${liveCalls} now=${rateClock} done=${phase === 'done'} paused=${pauseState === 'paused'} theme=${theme}
-        onFullscreen=${openFullscreen} showLiveOutput=${showLiveOutput}/>
+        liveCalls=${liveCalls} entries=${logEntries} now=${rateClock} done=${phase === 'done'} paused=${pauseState === 'paused'} theme=${theme}
+        onFullscreen=${openFullscreen} onRetry=${reviewRetry} showLiveOutput=${showLiveOutput}/>
       ${phase === 'running' ? renderRunControls() : html`<div class="modal-footer"><button class="btn" onClick=${prepareNewRun}>Nouvelle exécution</button><button class="btn" onClick=${() => {onOpenGallery?.();onClose();}}>Voir dans la galerie</button></div>`}
     </section>`;
   };
@@ -1242,7 +1358,7 @@ export function BatchRunDialog({
             `}
             </div>
           </div>
-          ${phase === 'config' ? renderConfig() : phase === 'running' ? renderRunning() : renderDone()}
+          <${Fragment} key=${phase}>${phase === 'config' ? renderConfig() : phase === 'running' ? renderRunning() : renderDone()}</${Fragment}>
         </div>
       </div>`}
       ${fullscreenIndex >= 0 && html`

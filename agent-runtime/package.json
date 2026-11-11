@@ -1,0 +1,14 @@
+{
+  "name": "llm-bench-mastra-runtime",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {"node": ">=22.13.0"},
+  "scripts": {"test": "node --test tests/*.test.mjs", "start": "node src/server.mjs"},
+  "dependencies": {
+    "@mastra/core": "1.82.0",
+    "@openrouter/ai-sdk-provider": "3.1.0",
+    "ai": "7.0.166",
+    "zod": "4.1.8"
+  }
+}

@@ -2,13 +2,13 @@
 import json
 import re
 
-from flask import Blueprint, Response, abort, jsonify, request, stream_with_context
+from flask import Blueprint, Response, abort, g, jsonify, request, stream_with_context
 import requests
 from werkzeug.exceptions import HTTPException
 
 from .auth import json_object
-from .storage import api_key
-from .spend_guard import reserve, finish, clear_failed
+from .storage import api_key, db
+from .spend_guard import reserve, finish, clear_failed, reset_revision
 from .activity import Activity
 from .model_policy import policies
 
@@ -44,10 +44,19 @@ def relay():
                 raise ValueError('Invalid automatic run')
         except (ValueError, TypeError):
             return unsent_error(400, 'Configuration automatique invalide.')
-    identity = reserve(payload, automatic) if chat else None
+    explicit_retry = request.headers.get('X-Bench-Retry') if chat else None
+    if explicit_retry is not None and (automatic or not re.fullmatch(r'[a-f0-9]{32}', explicit_retry)):
+        return unsent_error(400, 'Identifiant de relance manuelle invalide.')
+    identity = reserve(payload, automatic, explicit_retry) if chat else None
     if chat and identity is None:
         return unsent_error(409, 'Appel bloqué : ce prompt et ce modèle sont déjà en cours ou ont échoué. Aucun nouvel appel envoyé. Modifiez le prompt, ou autorisez volontairement les relances dans les options du lot.')
     activity = Activity(payload, automatic) if chat else None
+    if activity:
+        g.bench_activity_id = activity.id
+        execution_id = request.environ.get('bench.execution_id') or request.environ.get('bench.agent_execution_id')
+        if execution_id:
+            db().execute('UPDATE browser_executions SET activity_id=? WHERE id=?', (activity.id, execution_id))
+            db().commit()
     stream = bool(chat and payload.get('stream'))
     headers = {'Accept': 'text/event-stream' if stream else 'application/json',
                'Content-Type': 'application/json'}
@@ -66,7 +75,6 @@ def relay():
     if not 200 <= upstream.status_code < 300:
         if identity:
             finish(identity, False, filtered=upstream.status_code == 403)
-            activity.finish('error')
         status = upstream.status_code
         try:
             error_body = upstream.json()
@@ -83,6 +91,8 @@ def relay():
             message = 'OpenRouter a renvoyé une erreur illisible.'
         finally:
             upstream.close()
+        if activity:
+            activity.reject(status, message)
         response = jsonify({'error': {'message': message[:2000], 'code': status}, 'upstreamStatus': status})
         response.status_code = status if 400 <= status < 600 else 502
         retry_after = upstream.headers.get('Retry-After', '')
@@ -195,5 +205,10 @@ def relay():
 @proxy.delete('/api/openrouter/retry-blocks')
 def clear_retry_blocks():
     # The application boundary enforces authentication, Origin and CSRF.
-    clear_failed()
-    return jsonify({'ok': True})
+    return jsonify({'ok': True, 'resetRevision': clear_failed()})
+
+
+@proxy.get('/api/openrouter/retry-blocks')
+def retry_blocks_status():
+    # Only the reset marker, never fingerprints, prompts, or credentials.
+    return jsonify({'resetRevision': reset_revision()})

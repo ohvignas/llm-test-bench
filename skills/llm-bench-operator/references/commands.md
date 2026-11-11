@@ -49,3 +49,24 @@ Correction d’un résultat :
 Le modèle d’origine est repris sauf si `--model` est fourni. La sortie originale est conservée. Le nouveau plan doit être exécuté avec `run JOB --execute`.
 
 Les manifestations et checkpoints sont dans `/data/cli-jobs/JOB/`, hors de l’API fichiers. Les résultats sont copiés dans `/data/files/prompt-gallery/` avec des métadonnées de lot et de coûts. Ils sont visibles dans la galerie après actualisation. `job.items[].result` contient `DOSSIER/VARIANTE`. La clé reste chiffrée dans le stockage serveur ; aucune commande ne l’affiche.
+
+## Agents Mastra de l’interface
+
+`status --json` indique aussi les agents encore actifs entre deux appels au modèle. `agent-show IDENTIFIANT_EXECUTION --json` expose leurs outils, limites et factures par étape. `agent-stop IDENTIFIANT_EXECUTION --json` arrête seulement cet agent et son fournisseur. Utiliser l’identifiant d’exécution de `active_agents`, différent des identifiants d’activité des appels API. Les sources chiffrées sont exportables dans l’interface via Télécharger les sources. Les commandes CLI historiques `plan/run` restent le protocole à appel direct, distinct du mode Mastra.
+
+### Lancer un vrai lot Mastra depuis la CLI
+
+Préparer un fichier UTF-8 JSON contenant `budgetUsd` et `executions`. Chaque exécution doit contenir :
+
+- `id` : identifiant aléatoire unique de 32 caractères hexadécimaux, conservé lors d’un renvoi du même plan ;
+- `context` : `engine: "mastra"`, `groupId` partagé par le lot, `promptId`, `title`, `modelLabel`, et `agentLimits: {maxSteps, budgetUsd}` ;
+- `request` : identifiant exact `model` obtenu du catalogue, `messages`, `stream: true`, `max_tokens` et effort acceptés par le modèle.
+
+La somme des budgets individuels doit être inférieure ou égale au budget total. Vérifier le fichier complet avant :
+
+```sh
+./benchctl agent-start --plan-file /chemin/plan-mastra.json --execute --json
+./benchctl agent-show IDENTIFIANT_EXECUTION --json
+```
+
+`agent-start` lance les agents dans le même worker que les appels de l’interface, par un socket Unix interne en mode 0600. Il ne publie aucune route HTTP d’administration et ne lit pas de cookie. Les appels restent visibles dans Exécutions/Comparer après fermeture du terminal. Réenvoyer le même plan garde les mêmes identifiants et n’envoie pas deux fois les générations existantes. Une nouvelle tentative après échec doit être un nouveau plan explicitement revu ; aucun budget n’est relevé automatiquement.

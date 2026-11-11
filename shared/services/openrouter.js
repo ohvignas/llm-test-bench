@@ -14,6 +14,8 @@
 // preserve that behaviour while we work through the wider settings migration.
 import { normalizeOpenRouterModel, generationFeedback } from './model-capabilities.js';
 import { withHttpDetails } from './provider-errors.js';
+import { createReasoningSummary,providerSummaryParts } from './reasoning-summary.js';
+import { durableGeneration } from './durable-generation.js';
 import './settings-sync.js';
 import { applyParams, withUsageReporting, createRunStats } from './gen-params.js';
 import { withTelemetry, messagesText } from './generation-telemetry.js';
@@ -447,13 +449,15 @@ function requireCompletionContent(content, stats, settings) {
 
 // ── Generic streaming chat completion ──
 
-async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onChunk, params, onStats, telemetry, signal, settings, automatic }) {
+async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onChunk, params, onStats, telemetry, signal, settings, automatic, explicitRetry, executionContext }) {
   signal?.throwIfAborted();
   const apiKey = await getApiKeyForRequest();
   if (!apiKey) throw Object.assign(new Error('OpenRouter API key not set'), {requestSent:false});
   if (!userPrompt) throw Object.assign(new Error('Prompt is empty'), {requestSent:false});
 
   const stats = createRunStats(undefined, telemetry);
+  const reasoningSummary = createReasoningSummary();
+  let lastSummaryAt = 0, reasoningSignals = 0, agentSteps;
   let body = applyParams({
     model: modelId,
     messages: [
@@ -465,7 +469,10 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
   if (onStats || telemetry) body = withUsageReporting(body, 'openrouter');
 
   telemetry?.mark('dispatched');
-  const res = await providerFetch(`${API_BASE}/chat/completions`, {
+  const res = SERVER_VAULT && onChunk && executionContext
+    ? await durableGeneration({body, context:executionContext, automatic, explicitRetry, signal,
+      onId:id => onStats?.({executionId:id})})
+    : await providerFetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
     signal,
     headers: {
@@ -474,6 +481,7 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
       'HTTP-Referer': window.location.origin,
       'X-Title': appTitle || 'DevTools Hub',
       ...(SERVER_VAULT && automatic ? {'X-Bench-Automatic':JSON.stringify(automatic)} : {}),
+      ...(SERVER_VAULT && explicitRetry ? {'X-Bench-Retry':explicitRetry} : {}),
     },
     body: JSON.stringify(body),
   });
@@ -500,20 +508,28 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
       // A provider can report an error after HTTP 200 and after partial output.
       // Surface it instead of leaving the batch looking successful or idle.
       if (parsed.usage) stats.setUsage(parsed.usage);
+      if(parsed.bench_agent_steps){agentSteps=parsed.bench_agent_steps;onStats?.({agentSteps,agentEvents:parsed.bench_agent_events||[]});}
       const error = parsed.error || parsed.choices?.[0]?.error;
       if (error) {
         const failure=new Error(typeof error === 'string' ? error : error.message || 'Le fournisseur a interrompu la génération.');
         if(Number.isInteger(Number(error.code))&&Number(error.code)>=400)failure.status=Number(error.code);
         if(error.code==='content_filter'||error.code==='content_policy_violation')failure.code='CONTENT_FILTERED';
+        if(error.requestSent === false)failure.requestSent=false;
         throw failure;
       }
       const choice = parsed.choices?.[0];
-      if (choice?.delta?.reasoning || choice?.delta?.reasoning_content || choice?.delta?.reasoning_details?.length) {
+      if (parsed.bench_reasoning_events || choice?.delta?.reasoning || choice?.delta?.reasoning_content || choice?.delta?.reasoning_details?.length) {
+        reasoningSignals = parsed.bench_reasoning_events || reasoningSignals + 1;
         telemetry?.activity?.('reasoning');
         stats.markReasoning();
       }
+      if (reasoningSummary.add(providerSummaryParts(choice?.delta,modelId)) && Date.now() - lastSummaryAt >= 300) {
+        lastSummaryAt = Date.now();
+        onStats?.({reasoningSummary:reasoningSummary.snapshot(), reasoningSignals});
+      }
       if (choice?.finish_reason) stats.setFinishReason(choice.finish_reason);
       const delta = choice?.delta?.content;
+      if(parsed.bench_output_reset)full='';
       if (delta) {
         stats.markFirstToken();
         full += delta;
@@ -543,7 +559,8 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
       }
     } finally {
       try { await reader.cancel(); } catch { /* already closed */ }
-      resultStats = {...stats.finish(),responseChars:full.length};
+      resultStats = {...stats.finish(),responseChars:full.length,reasoningSignals,...(agentSteps?{agentSteps}:{}),
+        ...(reasoningSummary.snapshot() ? {reasoningSummary:reasoningSummary.snapshot()} : {})};
       onStats?.(resultStats);
     }
     requireCompletionContent(full, resultStats, settings);
@@ -553,10 +570,12 @@ async function streamChatRaw({ systemPrompt, userPrompt, modelId, appTitle, onCh
   // Non-streaming response
   const data = await res.json();
   const content = data.choices?.[0]?.message?.content || '';
+  reasoningSummary.add(providerSummaryParts(data.choices?.[0]?.message,modelId));
   if (data.choices?.[0]?.message?.reasoning) stats.markReasoning();
   stats.setFinishReason(data.choices?.[0]?.finish_reason);
   stats.setUsage(data.usage);
-  const resultStats = {...stats.finish(),responseChars:content.length};
+  const resultStats = {...stats.finish(),responseChars:content.length,
+    ...(reasoningSummary.snapshot() ? {reasoningSummary:reasoningSummary.snapshot()} : {})};
   onStats?.(resultStats);
   requireCompletionContent(content, resultStats, settings);
   return content;

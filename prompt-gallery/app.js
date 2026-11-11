@@ -766,7 +766,7 @@ function App() {
           (stats) => {
             generationCall = updateCostCall(generationCall, stats);
             setResponseMetrics(current => current.call?.id === generationCall.id
-              ? { ...current, stats, call:generationCall } : current);
+              ? { ...current, stats:{...current.stats,...stats,agentEvents:[...(current.stats?.agentEvents||[]),...(stats.agentEvents||[])].slice(-30)}, call:generationCall } : current);
           },
           undefined,
           { signal: abort.signal },
@@ -1308,7 +1308,12 @@ function App() {
       await openrouter.generateHtml(generationPrompt, target.providerId, target.modelId, (partial) => {
         finalHtml = stripCodeFences(partial);
         onChunk?.(finalHtml);
-      }, onStats, target.params, { signal: batchAbortRef.current.signal, generationOptions: target.generationOptions });
+      }, onStats, target.params, { signal: batchAbortRef.current.signal, generationOptions: {
+        ...target.generationOptions,
+        executionContext:{promptId:promptItem?.id || '',title:promptItem?.title || 'Création personnalisée',
+          groupId:mdl?.batchGroupId || mdl?.batchRunId || batchIdRef.current,
+          runId:mdl?.batchRunId || batchIdRef.current,modelLabel:mdl?.label || mdl?.modelId},
+      } });
       return finalHtml;
     },
     runSandbox: (h) => runHtmlSandbox(h),
@@ -1398,11 +1403,11 @@ function App() {
         return;
       }
     } catch (e) { /* fall through — save will surface any real problem */ }
-    await refreshGenerations();
+    await Promise.all([refreshGenerations(), refreshLibrary()]);
     batchIdRef.current = `batch-${Date.now().toString(36)}`;
     setBatchPresentation('modal');
     setShowBatchDialog(true);
-  }, [showBatchDialog, rootHandle, handlePickDirectory, refreshGenerations, addToast]);
+  }, [showBatchDialog, rootHandle, handlePickDirectory, refreshGenerations, refreshLibrary, addToast]);
 
   const handleResumeGeneration = useCallback(async id => {
     if (batchRunning) { addToast('Un lot est encore en cours. Attendez sa fin avant de préparer une reprise.', 'info'); return; }
@@ -1553,8 +1558,11 @@ function App() {
       case 'compare':
         return html`<${CompareView}
           generations=${generations}
+          prompts=${libraryPrompts}
           loadHtml=${loadHtml}
           compareIds=${compareIds}
+          executionProject=${decodeRouteParam(route.param)}
+          onExecutionProjectChange=${key=>navigate(key ? 'compare/'+encodeURIComponent(key) : 'compare')}
           onCompareIdsChange=${setCompareIds}
           onOpen=${(id) => navigate(generationRoute(id))}
         />`;
@@ -1562,6 +1570,7 @@ function App() {
       case 'runs':
         return html`<${RunsView}
           generations=${generations}
+          prompts=${libraryPrompts}
           loadHtml=${loadHtml}
           hasDirectory=${!!rootHandle}
           onPickDirectory=${handlePickDirectory}
@@ -1589,6 +1598,7 @@ function App() {
               responseTiming=${responseMetrics.timing}
               responseCosts=${responseMetrics.call ? [responseMetrics.call] : responseMetrics.billing?.calls || []}
               isGenerating=${isGenerating}
+              agentEnabled=${backend!=='agent'&&(selectedProviderId==='openrouter'||modelProviders.getProvider(selectedProviderId)?.type==='openrouter')}
               theme=${theme}
               onMorph=${crossAppHandoffsEnabled(undefined, 'code-morph-lab-v3') ? handleMorphCurrent : null}
               onSavePromptToLibrary=${() => handleOpenPromptForm({ prompt })}
@@ -1722,7 +1732,7 @@ function App() {
           resumeSource=${batchResumeSource}
           onRunningChange=${setBatchRunning}
           presentation=${batchPresentation === 'modal' ? 'modal' : batchPresentation === 'live' && route.name === 'compare' ? 'compare' : 'minimized'}
-          onOpenComparison=${() => { setBatchPresentation('live'); navigate('compare'); }}
+          onOpenComparison=${() => { setBatchPresentation(document.documentElement.dataset.secureVault==='on' ? 'minimized' : 'live'); navigate('compare'); }}
           onMinimize=${() => setBatchPresentation('minimized')}
           onRestore=${() => setBatchPresentation('modal')}
           prompts=${libraryPrompts}

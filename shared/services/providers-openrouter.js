@@ -1,7 +1,7 @@
 // OpenRouter provider adapter
 // Wraps the existing shared/services/openrouter.js behind the unified provider adapter contract
 
-import {generationSpendGuard} from './generation-spend-guard.js';
+import {generationSpendGuard,syncFailedGenerationBlocks} from './generation-spend-guard.js';
 import {resolveModelSettings,generationFeedback} from './model-capabilities.js';
 import {
   getModelCapabilities,
@@ -100,11 +100,16 @@ export async function streamChat({ provider, modelId, systemPrompt, userPrompt, 
     telemetry,
     signal,
     automatic:generationOptions?.automatic,
+    explicitRetry:generationOptions?.explicitRetry,
+    executionContext:generationOptions?.executionContext,
   });
     generationOptions?.validateResult?.(result);
     return result;
   };
-  try { return await (settings ? generationSpendGuard().run({modelId,systemPrompt,userPrompt,params,automatic:generationOptions?.automatic},invoke) : invoke()); } catch (error) {
+  try {
+    if(settings)await syncFailedGenerationBlocks();
+    return await (settings ? generationSpendGuard().run({modelId,systemPrompt,userPrompt,params,automatic:generationOptions?.automatic,explicitRetry:generationOptions?.explicitRetry},invoke) : invoke());
+  } catch (error) {
     if (settings && [400,404,422].includes(error.status)) {
       error.retryable = false;
       error.message += ' Réglages refusés : actualisez les capacités API avant une relance manuelle. Aucun appel automatique.';

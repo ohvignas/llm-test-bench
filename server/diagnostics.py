@@ -42,8 +42,14 @@ def status(root):
                 item['duration_seconds'] = round((now if item['state'] in ACTIVE else row['updated']) - row['started'], 1)
                 item['last_signal_seconds'] = round(max(0, now-row['updated']), 1)
                 item['settings'], item['usage'] = json.loads(row['settings']), json.loads(row['usage'])
+                item['error'] = json.loads(row['error']) if 'error' in row.keys() else {}
                 calls.append(item)
         https = 0
+        agent_sessions=[]
+        if con.execute("SELECT 1 FROM sqlite_master WHERE name='agent_runs'").fetchone():
+            for row in con.execute('''SELECT e.id,e.state,e.worker,e.context,e.created FROM browser_executions e
+                    JOIN agent_runs a ON a.execution_id=e.id WHERE e.state IN ('queued','running','connecting','waiting','reasoning','writing')'''):
+                if active_worker(row['worker']):agent_sessions.append({'id':row['id'],'state':row['state'],'title':redact(json.loads(row['context']).get('title'))})
         for name in ('/proc/net/tcp', '/proc/net/tcp6'):
             try:
                 for line in Path(name).read_text().splitlines()[1:]:
@@ -51,7 +57,7 @@ def status(root):
                     https += parts[3] == '01' and parts[2].endswith(':01BB')
             except OSError:
                 pass
-        return {'active_calls': len(active), 'https_connections': https, 'calls': calls,
+        return {'active_calls': max(len(active),len(agent_sessions)), 'active_agents':agent_sessions,'https_connections': https, 'calls': calls,
                 'legacy_active_calls': max(0, len(active)-sum(c['state'] in ACTIVE for c in calls)),
                 'failed_blocks': sum(r['state'] in ('failed', 'filtered', 'exhausted') for r in guards),
                 'live_tracking_available': bool(has_activity)}

@@ -4,7 +4,13 @@
 
 Give several AI models the same prompt, run generations in parallel, preview their websites side by side, and keep results and available timing/token/cost metrics. Bring your own OpenRouter API key.
 
-Batches default to **Automatique — puissance et reprise**. Select your models and prompts, then launch. OpenRouter settings come from the API: maximum advertised output and `xhigh` reasoning when supported, otherwise `high` or the strongest accepted effort. Models with a fixed reasoning budget use up to 16,384 tokens, capped at one third of output. Other providers keep native settings.
+New OpenRouter generations and batches default to **Agent Mastra**. Each prompt/model pair has its own offline Docker workspace and tools for source files, commands, Vite builds and Chromium startup tests. The default limits are **8 model calls and USD 10 per prompt/model**, editable before launch. Each step is separately billed and persisted; missing invoices prevent another automatic step. The server reserves conservatively using catalogue prices, preserves reviewed reasoning/output settings and disables hidden SDK retries. These are ceilings, not a success guarantee.
+
+The trusted Mastra controller has Docker socket access and no published host port. It runs as UID 10001, the owner of the private control token, with the Docker socket group added. On Linux, set `DOCKER_SOCKET_GID` in `.env` if `stat -c '%g' /var/run/docker.sock` returns a group other than 0. Generated commands run only in separate containers without networking, host mounts, credentials or the Docker socket. The OpenRouter key remains in the Python vault; scoped ephemeral provider tokens fix the model and parameters. Text source checkpoints are encrypted in SQLite and can be resumed, adjusted in chat, or exported as ZIP. The build environment includes Vite, TypeScript, React, Three.js and Babylon.js; additional packages cannot be downloaded inside the offline sandbox. Startup checks do not certify every interaction or visual quality.
+
+The explicit **Comparaison — capacité maximale** mode retains the original single-call benchmark with full prompts and maximal settings. Parallel mode can start all prompt/model pairs together; a failure does not cancel other pairs. Browser reloads leave server-owned agents running and visible in Runs and Compare.
+
+**Automatique — reprises adaptatives** remains an explicit option. It uses maximum advertised output but adapts reasoning to previous failures, including starting at low effort when the history indicates exhaustion. Models with a fixed reasoning budget use up to 16,384 tokens, capped at one third of output.
 
 The mode allows **at most three calls per prompt and model**, including initial generation, recoveries and runtime repairs. Exhausted reasoning or incomplete output triggers a lower-reasoning retry; received code is saved and reused. Temporary transport/provider errors wait before retrying, respecting `Retry-After` up to two minutes. Sandbox errors trigger repairs from saved code. Invalid credentials, insufficient credits, rejected parameters, filtering and in-flight duplicates stop explicitly. A failed save or unavailable sandbox never triggers another paid repair.
 
@@ -19,7 +25,7 @@ This MIT-licensed fork of [Techdread/llm-test-bench](https://github.com/Techdrea
 - A current browser; Chrome or Edge is recommended for folder access and screen recording.
 - Internet access for initial downloads and remote model calls. OpenRouter inference does not require a local GPU.
 
-Docker handles Python, dependencies and SQLite; you do not need host Python, Node.js or a separate database server. No credentials belong in an environment file. The code is MIT-licensed; Docker Desktop has its own licensing terms. OpenRouter model calls may cost money.
+Docker handles Python, Node.js, Mastra, Chromium, dependencies and SQLite; you do not need host Python, Node.js or a separate database server. No credentials belong in an environment file. The code is MIT-licensed; Docker Desktop has its own licensing terms. OpenRouter model calls may cost money.
 
 ## Quick start
 
@@ -99,7 +105,7 @@ Original project by Techdread/Peter Edwards. Original notices and vendored-libra
 
 ## French prompt library
 
-The library contains 163 prompts: 92 core, 39 advanced, 8 flagship simulations and 24 original French website briefs in **Prompts → Sites web** (also available in **Lots**). Cards have French titles, descriptions and evaluation notes; expanding a card reveals the actual model instruction. The three former GTA variants are consolidated into **GTA VI — monde ouvert hyperréaliste**, under **Base → Jeux et graphismes**. It requests native JavaScript with direct WebGL 2 rendering, without Three.js or an external engine. TypeScript may be used during design, but the delivered standalone HTML must include executable, compiled JavaScript. Historical generated results, original prompts and costs are retained. Personal descriptions can be edited.
+The library contains 163 prompts: 92 core, 39 advanced, 8 flagship simulations and 24 original French website briefs in **Prompts → Sites web** (also available in **Lots**). Cards have French titles, descriptions and evaluation notes; expanding a card reveals the actual model instruction. The three former GTA variants are consolidated into **GTA VI — personnages 3D réalistes, ambiance GTA IV**, under **Base → Jeux et graphismes**. It requests native JavaScript with direct WebGL 2 rendering, without Three.js or an external engine. TypeScript may be used during design, but the delivered standalone HTML must include executable, compiled JavaScript. Historical generated results, original prompts and costs are retained. Personal descriptions can be edited.
 
 The new website set covers storefronts, portfolios, reservations, dashboards, forms, CSV handling and accessible interactions. Every brief requests a standalone HTML document with fictional data and no external network calls. Checkpoints and sample numeric results support manual verification; they are not a new automated scoring suite.
 
@@ -125,7 +131,9 @@ The Docker edition reserves each model/message fingerprint in SQLite before cont
 
 ### Build GTA VI in stages
 
-In **Lots → Rapide**, **Construire le prompt GTA VI par étapes** is enabled by default. The single GTA VI brief has six native JavaScript/WebGL 2 stages: playable city, visuals and weather, vehicles, action and police, missions, then saving and final checks. The first produces a limited playable version; later stages build on the preceding HTML. Each stage is a separate potentially billable call for each selected model. The launch button and plan show the expected number of calls, excluding skipped prompts; stopping or failing can reduce that count. The plan lists each stage’s objective and token ceiling.
+The [visual brief](docs/gta-visual-brief.md) prioritizes detailed human characters and a small polished scene inspired by GTA IV screenshots. The request includes a textual visual description, not photographs or 3D assets. A prompt alone does not guarantee photorealistic characters or commercial-game quality.
+
+In **Lots → Rapide**, **Construire le prompt GTA VI par étapes** is enabled by default. The single GTA VI brief has six native JavaScript/WebGL 2 stages: detailed human and first street, neighbourhood and lighting, sedan and pedestrians, patrol and HUD, delivery mission, then polish and final checks. The first already asks for a sculpted face, rounded meshes, clothing and human animation in a playable street; later stages build on the preceding HTML. Each stage is a separate potentially billable call for each selected model. The launch button and plan show the expected number of calls, excluding skipped prompts; stopping or failing can reduce that count. The plan lists each stage’s objective and token ceiling.
 
 On OpenRouter, stages respect the selected comparison, maximum or custom settings. Only the economy profile applies the 12,288-token stage ceiling, further capped by lower user settings or API limits. Other providers keep their native settings. Every completed HTML document is saved before the next call. Construction stops at its first failure, keeping earlier versions in the gallery and actual reported costs in the journal. Completion of the whole plan is not guaranteed. Uncheck the option to send the original prompt in one call. Personally edited prompts, other prompts and the runtime-heal/verified modes keep their existing behavior.
 

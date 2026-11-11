@@ -10,8 +10,10 @@ export function liveComparisonCards({models = [], runList = [], items = [], outp
         ?? indices.findLast(index => items[index]?.status && !['queued', 'not-started'].includes(items[index].status))
         ?? indices[0];
     const index = selected ?? -1;
-    return {model, laneIndex, index, prompt:runList[index], item:items[index] || {status:'queued'},
-      output:outputs[index] || '', calls:calls.filter(call => call.index === index)};
+    const item=items[index] || {status:'queued'},attempts=calls.filter(call=>call.index===index);
+    return {model, laneIndex, index, prompt:runList[index], item,
+      output:outputs[index] || '', calls:attempts,
+      currentCalls:item.executionId?attempts.filter(call=>call.id===item.executionId):attempts};
   });
 }
 

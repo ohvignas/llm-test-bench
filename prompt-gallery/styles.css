@@ -1,3 +1,4 @@
+@import url('./bench-workspace.css');
 /* ── Prompt Gallery App-Specific Styles ── */
 
 html,
@@ -1395,6 +1396,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
+  overflow-y: auto;
 }
 
 .compare-selector {
@@ -2472,6 +2474,20 @@ button.create-run-label:hover { text-decoration: underline; }
 .live-model-preview, .live-model-empty { width: 100%; height: clamp(180px, 25vh, 360px); border: 0; display: block; background: white; }
 .live-model-empty { display: grid; place-content: center; padding: 20px; background: var(--bg-secondary); color: var(--text-muted); text-align: center; }
 .live-model-code { min-height: 135px; }
+.batch-activity { border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; min-width: 0; }
+.live-model-pane > .batch-activity { border-width: 1px 0; border-radius: 0; }
+.batch-activity-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 9px 12px; background: var(--bg-tertiary); font-size: 12px; }
+.batch-activity-head > span { color: var(--accent); }
+.batch-activity-body { padding: 10px 12px; font-size: 12px; }
+.batch-activity-body p { margin: 0 0 8px; color: var(--text-muted); line-height: 1.5; }
+.batch-activity-summary-label { display: block; margin-bottom: 6px; }
+.batch-activity-summary { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto; line-height: 1.6; margin-bottom: 10px; }
+.batch-activity-events { list-style: none; padding: 0; margin: 8px 0 0; max-height: 150px; overflow: auto; }
+.batch-activity-events li { display: flex; align-items: baseline; gap: 8px; padding: 5px 0; border-top: 1px solid var(--border-color); }
+.batch-activity-events time { color: var(--text-muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.batch-activity-events span { overflow-wrap: anywhere; }
+.batch-activity-body .batch-activity-warning { color: var(--warning, #dba64d); }
+.batch-activity-body .batch-activity-error { color: var(--danger, #e45454); }
 @media (max-width: 900px) { .live-comparison-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) {
   .live-comparison-grid { grid-template-columns: minmax(0, 1fr); }
@@ -2866,7 +2882,7 @@ button.create-run-label:hover { text-decoration: underline; }
 .runs-view {
   display: flex; flex-direction: column; gap: 12px;
   padding: 16px; max-width: 1400px; margin: 0 auto; width: 100%;
-  height: 100%; box-sizing: border-box; overflow: hidden;
+  height: 100%; box-sizing: border-box; overflow: auto;
 }
 .runs-toolbar {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
@@ -3109,3 +3125,21 @@ button.create-run-label:hover { text-decoration: underline; }
 .execution-summary li { display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px 12px; padding:4px 0; }
 .execution-summary small { color:var(--text-secondary); font-size:11px; }
 .execution-summary-compact { padding:6px 10px; font-size:12px; flex-shrink:0; border-bottom:1px solid var(--border-color); overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
+
+/* Manual recovery keeps the active batch visible and its other calls alive. */
+.batch-retry-review { margin: 16px 0; padding: 16px; border: 1px solid var(--accent); border-radius: 10px; background: var(--bg-secondary); }
+.batch-retry-review p { margin: 8px 0; }
+.batch-retry-review label { display: block; margin: 12px 0; }
+.batch-retry-review input { display: block; max-width: 220px; margin-top: 6px; }
+.batch-error-detail { padding: 10px; color: var(--danger); overflow-wrap: anywhere; white-space: normal; user-select: text; }
+.batch-run-item > .btn { flex-shrink: 0; }
+/* Persisted executions and per-prompt comparisons. */
+
+/* Project navigation uses the batch workspace, not a second results browser. */
+.execution-project-tabs { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.execution-project-tabs > button { display:flex; flex-direction:column; align-items:flex-start; gap:4px; max-width:360px; white-space:normal; text-align:left; }
+.execution-project-tabs small, .execution-project-row small { display:block; font-size:12px; font-weight:400; opacity:.8; }
+.execution-project-tabs label { display:flex; flex-direction:column; gap:4px; margin-left:auto; font-size:12px; }
+.execution-project-row .runs-row-model { white-space:normal; }
+.execution-legacy-history { font-size:12px; flex-shrink:0; }
+.execution-legacy-history > summary { cursor:pointer; padding:10px; color:var(--text-secondary); }

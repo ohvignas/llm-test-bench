@@ -17,6 +17,7 @@ import { progressivePlan, runProgressiveGeneration } from './progressiveGenerati
 
 import { runVerifiedGeneration } from './verifiedGeneration.js';
 import { runAutomaticGeneration } from './automaticGeneration.js';
+import { batchGenerationOptions } from './batchMode.js';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -72,6 +73,15 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
     throw new Error('La reprise doit cibler un seul résultat en mode Automatique ou Vérifié.');
   }
   const mode = opts.mode || (opts.heal ? 'runtime-heal' : 'quick');
+  if(mode==='agent'){opts.apiRetries=0;opts.heal=false;opts.progressive=false;}
+  if (mode === 'comparison') {
+    opts.apiRetries = 0;
+    model = {...model, generationOptions: {
+      ...batchGenerationOptions({mode}),
+      reviewedMaxTokens: model.generationOptions?.reviewedMaxTokens,
+      explicitRetry: model.generationOptions?.explicitRetry,
+    }};
+  }
   const emit = (event) => { try { onEvent?.(event); } catch (e) { /* never let a listener break the run */ } };
   const stop = () => { try { return !!shouldStop?.(); } catch (e) { return false; } };
   const pause = () => { try { return !!shouldPause?.(); } catch (e) { return false; } };
@@ -103,8 +113,8 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
   for (let i = 0; i < prompts.length; i++) {
     await pauseGate({ phase: 'before-prompt', index: i, prompt: prompts[i] });
     if (stop()) { summary.stopped = true; emit({ type: 'item', index: i, status: 'stopped' }); break; }
-    const deps = withPromptCosts(providedDeps, event => emit({...event,index:i}));
     const p = prompts[i];
+    const deps = withPromptCosts(providedDeps, event => emit({...event,index:i}), p);
     emit({ type: 'item', index: i, status: 'start' });
 
     // Skip prompts that already have a variant for this model (resume support).
@@ -240,6 +250,7 @@ export async function runBatch({ prompts, model, options, deps: providedDeps, on
         emit({ type: 'item', index: i, status: 'generating', attempt });
         genHtml = await deps.generate(p.prompt, {
           model,
+          promptItem: p,
           onChunk: (partial) => emit({ type: 'chunk', index: i, html: partial }),
           onStats: stats => emit({ type: 'stats', index: i, stats }),
         });

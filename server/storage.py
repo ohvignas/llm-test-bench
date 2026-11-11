@@ -55,18 +55,44 @@ def initialize(app):
             CREATE TABLE IF NOT EXISTS automatic_runs (
                 id TEXT PRIMARY KEY, model_hash TEXT NOT NULL, calls INTEGER NOT NULL,
                 pending TEXT, created_at INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS manual_retries (
+                id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, created_at INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS generation_activity (
                 id TEXT PRIMARY KEY, model TEXT NOT NULL, worker TEXT NOT NULL,
                 started REAL NOT NULL, updated REAL NOT NULL, state TEXT NOT NULL,
                 output_chars INTEGER NOT NULL DEFAULT 0, reasoning_events INTEGER NOT NULL DEFAULT 0,
                 finish_reason TEXT, usage TEXT NOT NULL DEFAULT '{}', settings TEXT NOT NULL DEFAULT '{}',
                 cancel_requested INTEGER NOT NULL DEFAULT 0);
+            CREATE TABLE IF NOT EXISTS browser_executions (
+                id TEXT PRIMARY KEY, request_hash TEXT NOT NULL, model TEXT NOT NULL,
+                created REAL NOT NULL, updated REAL NOT NULL, worker TEXT NOT NULL,
+                state TEXT NOT NULL, context TEXT NOT NULL, activity_id TEXT,
+                output TEXT NOT NULL DEFAULT '', summary TEXT NOT NULL DEFAULT '',
+                error TEXT NOT NULL DEFAULT '{}', cancel_requested INTEGER NOT NULL DEFAULT 0);
             CREATE TABLE IF NOT EXISTS model_policies (
                 model TEXT PRIMARY KEY, effort TEXT, max_tokens INTEGER);
+            CREATE TABLE IF NOT EXISTS agent_runs (
+                execution_id TEXT PRIMARY KEY, limits TEXT NOT NULL,
+                events TEXT NOT NULL DEFAULT '[]', sources BLOB);
+            CREATE TABLE IF NOT EXISTS agent_steps (
+                execution_id TEXT NOT NULL, step INTEGER NOT NULL, activity_id TEXT NOT NULL UNIQUE,
+                PRIMARY KEY (execution_id,step));
             CREATE TABLE IF NOT EXISTS login_attempts (
                 address TEXT NOT NULL, attempted_at INTEGER NOT NULL);
             CREATE INDEX IF NOT EXISTS login_attempt_time ON login_attempts(attempted_at);
         ''')
+        if 'error' not in {row[1] for row in connection.execute('PRAGMA table_info(generation_activity)')}:
+            connection.execute("ALTER TABLE generation_activity ADD COLUMN error TEXT NOT NULL DEFAULT '{}'")
+        columns = {row[1] for row in connection.execute('PRAGMA table_info(browser_executions)')}
+        if 'request_payload' not in columns:
+            connection.execute('ALTER TABLE browser_executions ADD COLUMN request_payload BLOB')
+        if 'parent_id' not in columns:
+            connection.execute('ALTER TABLE browser_executions ADD COLUMN parent_id TEXT')
+        if 'user_instruction' not in columns:
+            connection.execute('ALTER TABLE browser_executions ADD COLUMN user_instruction BLOB')
+        if 'output_revision' not in columns:
+            connection.execute('ALTER TABLE browser_executions ADD COLUMN output_revision INTEGER NOT NULL DEFAULT 0')
+        connection.execute('CREATE UNIQUE INDEX IF NOT EXISTS one_execution_recovery ON browser_executions(parent_id) WHERE parent_id IS NOT NULL')
     database.chmod(0o600)
     @app.teardown_appcontext
     def close_connection(_error):

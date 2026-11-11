@@ -3,6 +3,7 @@ import {secureMode,secureFetch} from './secure-session.js';
 // Only SHA-256 fingerprints are persisted: no prompts, responses or credentials.
 const KEY='prompt-gallery-failed-calls-v1';
 const AUTO_KEY='prompt-gallery-automatic-runs-v1';
+const RESET_KEY='prompt-gallery-retry-reset-v1';
 const stable=value=>value&&typeof value==='object'?(Array.isArray(value)?value.map(stable):Object.fromEntries(Object.keys(value).sort().map(k=>[k,stable(value[k])]))):value;
 const failure=(code,message)=>Object.assign(new Error(message),{code,retryable:false});
 const digest=async value=>Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(stable(value))))),b=>b.toString(16).padStart(2,'0')).join('');
@@ -16,14 +17,24 @@ export function createSpendGuard(storage) {
  };
  return {
   clear(){storage.removeItem(KEY);},
-  async run({modelId,systemPrompt,userPrompt,params,automatic},operation) {
+  syncReset(revision){
+   if(!revision)return;
+   if(!/^[a-f0-9]{32}$/.test(revision))throw failure('SPEND_GUARD_UNAVAILABLE','Réinitialisation des blocages invalide.');
+   if(storage.getItem(RESET_KEY)===revision)return;
+   // A reset is an explicit operator action. Other browsers consume it once.
+   // In-memory duplicates and active server reservations remain protected.
+   storage.removeItem(KEY);
+   storage.setItem(RESET_KEY,revision);
+  },
+  async run({modelId,systemPrompt,userPrompt,params,automatic,explicitRetry},operation) {
    const base=await digest({modelId,systemPrompt,userPrompt});
    const exact=await digest({base,params});
    try {
     if(pending.has(exact))throw failure('GENERATION_IN_FLIGHT','Cet appel est déjà en cours. Aucun second appel envoyé.');
     const records=read();
     if(automatic && (automatic.limit!==3 || !/^[a-zA-Z0-9-]{16,80}$/.test(automatic.id)))throw failure('AUTOMATIC_LIMIT','Configuration automatique invalide.');
-    if(records.some(r=>(r.base===base&&(r.filtered||r.pending)) || (!automatic&&r.exact===exact)))throw failure('PAID_RETRY_BLOCKED','Relance bloquée : appel en cours, interrompu ou déjà échoué. Aucun second appel envoyé. Vérifiez les réglages ou préparez une reprise.');
+    if(explicitRetry && (automatic || !/^[a-f0-9]{32}$/.test(explicitRetry)))throw failure('MANUAL_RETRY_INVALID','Relance manuelle invalide.');
+    if(records.some(r=>(r.base===base&&(r.filtered||r.pending)) || (!automatic&&!explicitRetry&&r.exact===exact)))throw failure('PAID_RETRY_BLOCKED','Relance bloquée : appel en cours, interrompu ou déjà échoué. Aucun second appel envoyé. Vérifiez les réglages ou préparez une reprise.');
     if(automatic) {
       let runs;
       try {runs=JSON.parse(storage.getItem(AUTO_KEY)||'[]');if(!Array.isArray(runs))throw new Error();}
@@ -39,7 +50,13 @@ export function createSpendGuard(storage) {
    pending.add(exact);
    try {const result=await operation();storage.setItem(KEY,JSON.stringify(read().filter(r=>r.exact!==exact)));return result;}
    catch(error) {
-    try {storage.setItem(KEY,JSON.stringify([...read().filter(r=>r.exact!==exact),{base,exact,filtered:error.code==='CONTENT_FILTERED'||error.status===403,at:Date.now()}].slice(-100)));}
+    try {
+     if(error.requestSent===false) {
+      // A refused preflight is not another paid failure. Keep prior failures,
+      // but release the temporary reservation made for this unsent attempt.
+      storage.setItem(KEY,JSON.stringify(read().filter(r=>!(r.exact===exact&&r.pending))));
+     } else storage.setItem(KEY,JSON.stringify([...read().filter(r=>r.exact!==exact),{base,exact,filtered:error.code==='CONTENT_FILTERED'||error.status===403,at:Date.now()}].slice(-100)));
+    }
     catch {/* Keep the original upstream error and its billed usage. */}
     error.retryable=false;
     throw error;
@@ -55,10 +72,21 @@ export function createSpendGuard(storage) {
 }
 let defaultGuard;
 export function generationSpendGuard(){return defaultGuard??=createSpendGuard(globalThis.localStorage);}
+export async function syncFailedGenerationBlocks(){
+ if(!secureMode())return;
+ try {
+  const response=await secureFetch('/api/openrouter/retry-blocks',{cache:'no-store'});
+  if(!response.ok)throw new Error('Impossible de vérifier les blocages du serveur. Aucun appel envoyé.');
+  const result=await response.json();
+  generationSpendGuard().syncReset(result.resetRevision);
+ } catch(error) {error.requestSent=false;error.retryable=false;throw error;}
+}
 export async function clearFailedGenerationBlocks(){
  if(secureMode()){
   const response=await secureFetch('/api/openrouter/retry-blocks',{method:'DELETE'});
   if(!response.ok)throw new Error('Impossible de réinitialiser les blocages du serveur.');
+  const result=await response.json();
+  generationSpendGuard().syncReset(result.resetRevision);
  }
  generationSpendGuard().clear();
 }

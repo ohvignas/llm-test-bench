@@ -3,6 +3,8 @@ import { useLazyHtml } from './useLazyHtml.js';
 import { withPreviewStorage } from '../../shared/services/preview-storage.js';
 import { useMemo, useState } from 'preact/hooks';
 import { ExecutionSummary } from './ExecutionSummary.js';
+import { ExecutionBrowser } from './ExecutionBrowser.js';
+import { secureMode } from '../../shared/services/secure-session.js';
 import { RatingWidget } from './RatingWidget.js';
 import { ratingOf } from '../services/rating.js';
 import {
@@ -41,13 +43,14 @@ function ComparePane({ generation, loadHtml }) {
   ></iframe>`;
 }
 
-export function CompareView({ generations, compareIds, onCompareIdsChange, onOpen, loadHtml }) {
+export function CompareView({ generations, compareIds, onCompareIdsChange, onOpen, loadHtml, executionProject, onExecutionProjectChange,prompts }) {
   const [selecting, setSelecting] = useState(true);
   const [search, setSearch] = useState('');
   const [filterModel, setFilterModel] = useState('');
   const [minRating, setMinRating] = useState(0);
   const [sortBy, setSortBy] = useState('date-desc');
   const [showArchived, setShowArchived] = useState(false);
+  const [browseSaved, setBrowseSaved] = useState(false);
 
   const byId = useMemo(() => new Map(generations.map(g => [g.id, g])), [generations]);
   const facets = useMemo(() => collectGalleryFacets(generations), [generations]);
@@ -100,9 +103,11 @@ export function CompareView({ generations, compareIds, onCompareIdsChange, onOpe
     setSelecting(true);
   };
 
+  if (secureMode() && !browseSaved) return html`<${ExecutionBrowser} view="compare" selectedProject=${executionProject} onProjectChange=${onExecutionProjectChange} onBrowseSaved=${()=>setBrowseSaved(true)} prompts=${prompts} />`;
   if (selecting || compareIds.length < 2) {
     return html`
       <div class="compare-view">
+        ${secureMode() && html`<button class="btn btn-sm" onClick=${()=>setBrowseSaved(false)}>← Revenir aux lots en direct</button>`}
         <div class="compare-controls">
           <div class="filter-bar">
             <div class="filter-search-wrapper">

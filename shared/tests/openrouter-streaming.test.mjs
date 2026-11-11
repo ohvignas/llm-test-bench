@@ -15,6 +15,36 @@ const args = {modelId:'dummy/model',systemPrompt:'test',userPrompt:'test',onChun
 const encoder = new TextEncoder();
 const bounded = promise => Promise.race([promise, new Promise(resolve=>setTimeout(()=>resolve('still waiting'),100))]);
 
+test('public summary streams before code and survives final usage without exposing raw reasoning', async () => {
+  let controller;
+  const updates=[],chunks=[];
+  globalThis.fetch=async()=>new Response(new ReadableStream({start(c){controller=c;}}));
+  const pending=raw.streamChat({...args,onChunk:text=>chunks.push(text),onStats:stats=>updates.push(stats)});
+  while(!controller)await new Promise(resolve=>setImmediate(resolve));
+  const event=value=>controller.enqueue(encoder.encode('data: '+JSON.stringify(value)+'\n\n'));
+  event({choices:[{delta:{reasoning:'PRIVATE RAW',reasoning_details:[
+    {type:'reasoning.text',text:'PRIVATE DETAIL'}, {type:'reasoning.encrypted',data:'ENCRYPTED DATA'},
+    {type:'reasoning.summary',id:'public',summary:'Préparation du décor.'},
+  ]}}]});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(updates.at(-1).reasoningSummary.text,'Préparation du décor.');
+  assert.deepEqual(chunks,[]);
+  event({choices:[{delta:{reasoning_details:[{type:'reasoning.summary',id:'public',summary:' Animation prévue.'}]}}]});
+  event({choices:[{delta:{content:'<html>game</html>'},finish_reason:'stop'}],usage:{cost:.05}});
+  controller.enqueue(encoder.encode('data: [DONE]\n\n'));controller.close();
+  assert.equal(await pending,'<html>game</html>');
+  assert.equal(updates.at(-1).reasoningSummary.text,'Préparation du décor. Animation prévue.');
+  assert.equal(updates.at(-1).cost,.05);assert.equal(updates.at(-1).reasoningSignals,2);
+  assert.doesNotMatch(JSON.stringify({updates,chunks}),/PRIVATE|ENCRYPTED/);
+});
+
+test('a failed summary-only stream keeps its public summary and billed usage',async()=>{
+ let finalStats;
+ globalThis.fetch=async()=>new Response('data: {"choices":[{"delta":{"reasoning_details":[{"type":"reasoning.summary","summary":"Plan de la scène"}]},"finish_reason":"length"}],"usage":{"completion_tokens":50,"completion_tokens_details":{"reasoning_tokens":50},"cost":0.01}}\n\ndata: [DONE]\n\n');
+ await assert.rejects(raw.streamChat({...args,onStats:stats=>{finalStats=stats;}}),error=>error.code==='OUTPUT_TOKEN_LIMIT');
+ assert.equal(finalStats.reasoningSummary.text,'Plan de la scène');assert.equal(finalStats.cost,.01);
+});
+
 test('a local proxy preflight block is identified as unsent while upstream failures remain unknown', async () => {
   globalThis.fetch = async () => Response.json({error:'Request blocked before upstream',requestSent:false}, {status:409});
   await assert.rejects(raw.streamChat(args), error => error.requestSent === false && error.status === 409);

@@ -2,15 +2,22 @@ services:
   bench:
     build: .
     image: llm-test-bench-local:latest
+    networks: [default, agent-control]
     ports:
       - "127.0.0.1:${BENCH_PORT:-8085}:8080"
     environment:
       PUBLIC_ORIGIN: "http://127.0.0.1:${BENCH_PORT:-8085}"
       DATA_DIR: /data
       SECRETS_DIR: /secrets
+      MASTRA_URL: http://mastra:8090
+      AGENT_CONTROL_DIR: /agent-control
     volumes:
       - bench-data:/data
       - bench-secrets:/secrets
+      - agent-control:/agent-control
+    depends_on:
+      mastra:
+        condition: service_healthy
     restart: unless-stopped
     read_only: true
     tmpfs:
@@ -19,6 +26,44 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+  agent-sandbox-image:
+    build: ./agent-runtime/sandbox
+    image: llm-bench-agent-sandbox:latest
+    command: ["true"]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+  mastra:
+    build: ./agent-runtime
+    image: llm-bench-mastra:latest
+    # Same UID as the owner of the mode-0600 control token; the socket group
+    # grants Docker access without making the token readable by other users.
+    user: "10001:10001"
+    group_add: ["${DOCKER_SOCKET_GID:-0}"]
+    networks: [agent-control]
+    depends_on:
+      agent-sandbox-image:
+        condition: service_completed_successfully
+    volumes:
+      # Privileged control plane only. Never mounted into generated projects.
+      - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+      - agent-control:/agent-control:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8090/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 4s
+      retries: 5
 volumes:
   bench-data:
   bench-secrets:
+  agent-control:
+networks:
+  agent-control:
+    internal: true

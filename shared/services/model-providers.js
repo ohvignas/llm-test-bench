@@ -593,11 +593,15 @@ export async function streamChat({
   return withTelemetry(telemetryFields({
     entry: 'streamChat', provider, modelId, appTitle, params, streamed: !!onChunk,
     promptText: joinPrompt(systemPrompt, userPrompt), telemetryMeta, signal,
-  }), (telemetry) => raceAbort(adapter.streamChat({
+  }), (telemetry) => {
+    // Correlate concurrent calls to the same model with their own UI task.
+    if (telemetry?.id) onStats?.({telemetryId:telemetry.id});
+    return raceAbort(adapter.streamChat({
     provider, modelId, systemPrompt, userPrompt, appTitle, params, onStats,
     onChunk: telemetry ? telemetry.wrapOnChunk(guardedChunk) : guardedChunk,
     telemetry, onAgentEvent, onAgentLive, signal, agentBudgets, generationOptions,
-  }), signal));
+    }), signal);
+  });
 }
 
 function abortError() {
