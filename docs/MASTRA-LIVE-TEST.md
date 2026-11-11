@@ -1,5 +1,7 @@
 # Vrai test OpenRouter / Mastra — 11 novembre 2026
 
+Après validation, l’utilisateur a demandé de vider tous ses projets et historiques locaux le 11 novembre 2026. Les résultats, sources, journaux et anciennes archives ont été supprimés ; les identifiants ci-dessous constituent donc une trace historique de la vérification. Le compte, les réglages, le coffre et la bibliothèque de prompts sont conservés.
+
 L’utilisateur a autorisé un petit lot réel Fable + Opus sur son compte. Plafond annoncé et appliqué : **0,50 $US au total**, soit 0,25 $US par agent. Aucun appel payant supplémentaire de correction n’a été lancé.
 
 Même consigne pour les deux modèles : petite page française « Compteur de test », valeur 0, boutons « +1 » et « Réinitialiser », responsive et sans réseau. Réglages de ce test uniquement : effort `low`, 2 048 tokens maximum par appel, 4 appels maximum par modèle. Les préférences habituelles de comparaison ne sont pas modifiées.
